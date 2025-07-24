@@ -25,7 +25,7 @@ Windows users might find Windows Subsystem Linux (WSL) to be the easier and pref
 ## Usage
 
 ```py
-from PyQrack import generate_tfim_samples
+from PyQrackIsing import generate_tfim_samples
 
 samples = generate_tfim_samples(
     J=-1.0,
