@@ -95,6 +95,7 @@ def main():
     # J, h = -1.0, 1.0
     # theta = -math.pi / 4
 
+    t = 5
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
     if len(sys.argv) > 2:
