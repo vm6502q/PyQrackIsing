@@ -52,7 +52,6 @@ setup(
         "Environment :: Console",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: LGPL-3.0",
         "Programming Language :: C++",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
