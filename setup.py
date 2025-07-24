@@ -28,7 +28,7 @@ class CMakeBuild(build_ext):
         self.spawn(['cmake', '--build', '.', '--config', 'Release'])
         if os.name == 'nt':
             os.chdir(extdir)
-            os.rename('Release/_pyqrack_ising.cp312-win_amd64.pyd', '_pyqrack_ising.cp312-win_amd64.pyd')
+            os.rename('Release/tfim_sampler.cp312-win_amd64.pyd', 'tfim_sampler.cp312-win_amd64.pyd')
             os.rmdir('Release')
         os.chdir(wd)
 
