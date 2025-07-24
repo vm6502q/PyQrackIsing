@@ -63,7 +63,7 @@ static inline double expected_closeness_weight(size_t n_rows, size_t n_cols, siz
     return 2.0 * mu_k - 1.0;
 }
 
-static inline std::vector<double> probability_by_hamming_weight(double J, double h, size_t z, double theta, double t, size_t n_qubits)
+static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
 {
     // critical angle
     const double theta_c = std::asin(h / (z * J));
@@ -102,7 +102,7 @@ static inline std::vector<double> probability_by_hamming_weight(double J, double
     return bias;
 }
 
-std::vector<std::string> generate_tfim_samples_cpp(double J, double h, size_t z, double theta, double t, size_t n_qubits, size_t shots) {
+std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z, double theta, double t, size_t n_qubits, size_t shots) {
     // lattice dimensions
     size_t n_rows = 1U;
     size_t n_cols = n_qubits;
@@ -188,7 +188,7 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, size_t z,
     return output;
 }
 
-double tfim_magnetization(double J, double h, size_t z, double theta, double t, size_t n_qubits) {
+double tfim_magnetization(double J, double h, double z, double theta, double t, size_t n_qubits) {
     const std::vector<double> bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits);
     double magnetization = 0.0;
     for (size_t q = 0U; q < bias.size(); ++q) {
@@ -199,7 +199,7 @@ double tfim_magnetization(double J, double h, size_t z, double theta, double t, 
     return magnetization;
 }
 
-double tfim_square_magnetization(double J, double h, size_t z, double theta, double t, size_t n_qubits) {
+double tfim_square_magnetization(double J, double h, double z, double theta, double t, size_t n_qubits) {
     const std::vector<double> bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits);
     double square_magnetization = 0.0;
     for (size_t q = 0U; q < bias.size(); ++q) {
