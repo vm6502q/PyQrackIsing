@@ -1,0 +1,38 @@
+[build-system]
+requires = [
+    "cmake",
+    "pybind11",
+    "setuptools"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyQrackIsing"
+version = "1.0.0"
+requires-python = ">=3.8"
+description = "Near-ideal closed-form solutions for transverse field Ising model (TFIM)"
+readme = {file = "README.txt", content-type = "text/markdown"}
+license = {text = "LGPL-3.0-or-later"}
+authors = [
+  {name = "Dan Strano", email = "stranoj@gmail.com"}
+]
+maintainers = [
+  {name = "Dan Strano", email = "stranoj@gmail.com"}
+]
+classifiers=[
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: LGPL-3.0-or-later",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/vm6502q/PyQrackIsing"
+Documentation = "https://github.com/vm6502q/PyQrackIsing/blob/main/README.md"
+Repository = "https://github.com/vm6502q/PyQrackIsing"
+Issues = "https://github.com/vm6502q/PyQrackIsing/issues"
