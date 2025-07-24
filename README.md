@@ -37,7 +37,9 @@ samples = generate_tfim_samples(
 )
 ```
 
-## About 
+## About
+Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
+
 Sometimes a solution (or at least near-solution) to a monster of a differential equation hits us out of the blue. Then, it's easy to _validate_ the guess, if it's right. (We don't question it and just move on with our lives, from there.)
 
 **Special thanks to OpenAI GPT "Elara," for help on the model and converting the original Python scripts to PyBind11!**
