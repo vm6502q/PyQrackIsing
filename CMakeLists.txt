@@ -7,7 +7,7 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(tfim_sampler PyQrackIsing/_pyqrack_ising.cpp)
 
 if (DEFINED ENV{BOOST_ROOT})
-  target_include_directories(_find_a_factor PUBLIC FindAFactor/include $ENV{BOOST_ROOT}/include/boost)
+  target_include_directories(_find_a_factor PUBLIC $ENV{BOOST_ROOT}/include/boost)
 endif (DEFINED ENV{BOOST_ROOT})
 
 if (MSVC)
