@@ -42,7 +42,7 @@ static inline double closeness_like_bits(BigInteger perm, size_t n_rows, size_t 
 }
 
 static inline double expected_closeness_weight(size_t n_rows, size_t n_cols, size_t hamming_weight) {
-    size_t L = n_rows * n_cols;
+    const size_t L = n_rows * n_cols;
     auto comb = [](size_t n, size_t k) {
         if ((k < 0) || (k > n)) {
             return 0ULL;
@@ -56,30 +56,19 @@ static inline double expected_closeness_weight(size_t n_rows, size_t n_cols, siz
         }
         return res;
     };
-    double same_pairs = comb(hamming_weight, 2U) + comb(L - hamming_weight, 2U);
-    double total_pairs = comb(L, 2U);
-    double mu_k = same_pairs / total_pairs;
+    const double same_pairs = comb(hamming_weight, 2U) + comb(L - hamming_weight, 2U);
+    const double total_pairs = comb(L, 2U);
+    const double mu_k = same_pairs / total_pairs;
+
     return 2.0 * mu_k - 1.0;
 }
 
-std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double theta, double t, size_t n_qubits, size_t shots) {
-    // lattice dimensions
-    size_t n_rows = 1U;
-    size_t n_cols = n_qubits;
-    for (size_t c = std::floor(std::sqrt(n_qubits)); c >= 1; --c) {
-        if ((n_qubits % c) == 0U) {
-            n_rows = n_qubits / c;
-            n_cols = c;
-            break;
-        }
-    }
-
+static inline std::vector<double> probability_by_hamming_weight(double J, double h, double theta, double t, size_t n_qubits)
+{
     // critical angle
-    size_t z = 4U;
-    double theta_c = std::asin(h / (z * J));
-    double delta_theta = theta - theta_c;
-
-    // compute bias vector
+    const size_t z = 4U;
+    const double theta_c = std::asin(h / (z * J));
+    const double delta_theta = theta - theta_c;
     std::vector<double> bias;
     if (std::abs(h) < 1e-12) {
         bias.assign(n_qubits + 1, 0.0);
@@ -87,15 +76,10 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double th
     } else if (std::abs(J) < 1e-12) {
         bias.assign(n_qubits + 1, 1.0 / (n_qubits + 1));
     } else {
-        double sin_delta = std::sin(delta_theta);
-        double omega = 1.5 * M_PI;
-        double t2 = 1.0;
-        double p = ((std::pow(2.0, std::abs(J / h) - 1.0)) *
-                    (1.0 + sin_delta * std::cos(J * omega * t + theta) /
-                     ((1.0 + std::sqrt(t / t2))))) - 0.5;
-        if (t2 <= 0) {
-            p = std::pow(2.0, std::abs(J / h));
-        }
+        const double sin_delta = std::sin(delta_theta);
+        const double omega = 1.5 * M_PI;
+        const double t2 = 1.0;
+        const double p = std::pow(2.0, std::abs(J / h) - 1.0) * (1.0 + sin_delta * std::cos(J * omega * t + theta) / (1.0 + std::sqrt(t / t2))) - 0.5;
         if (p >= 1024) {
             bias.assign(n_qubits + 1U, 0.0);
             bias[0] = 1.0;
@@ -115,6 +99,23 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double th
     if (J > 0) {
         std::reverse(bias.begin(), bias.end());
     }
+
+    return bias;
+}
+
+std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double theta, double t, size_t n_qubits, size_t shots) {
+    // lattice dimensions
+    size_t n_rows = 1U;
+    size_t n_cols = n_qubits;
+    for (size_t c = std::floor(std::sqrt(n_qubits)); c >= 1; --c) {
+        if ((n_qubits % c) == 0U) {
+            n_rows = n_qubits / c;
+            n_cols = c;
+            break;
+        }
+    }
+
+    const std::vector<double> bias = probability_by_hamming_weight(J, h, theta, t, n_qubits);
 
     // thresholds
     std::vector<double> thresholds(n_qubits + 1);
@@ -188,10 +189,38 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double th
     return output;
 }
 
+double tfim_magnetization(double J, double h, double theta, double t, size_t n_qubits) {
+    const std::vector<double> bias = probability_by_hamming_weight(J, h, theta, t, n_qubits);
+    double magnetization = 0.0;
+    for (size_t q = 0U; q < bias.size(); ++q) {
+        const double mag = (n_qubits - 2.0 * q) / n_qubits;
+        magnetization += bias[q] * mag;
+    }
+
+    return magnetization;
+}
+
+double tfim_square_magnetization(double J, double h, double theta, double t, size_t n_qubits) {
+    const std::vector<double> bias = probability_by_hamming_weight(J, h, theta, t, n_qubits);
+    double square_magnetization = 0.0;
+    for (size_t q = 0U; q < bias.size(); ++q) {
+        const double mag = (n_qubits - 2.0 * q) / n_qubits;
+        square_magnetization += bias[q] * mag * mag;
+    }
+
+    return square_magnetization;
+}
+
 PYBIND11_MODULE(tfim_sampler, m) {
     m.doc() = "PyQrackIsing TFIM sample generator";
     m.def("_generate_tfim_samples", &generate_tfim_samples_cpp,
           py::arg("J"), py::arg("h"), py::arg("theta"), py::arg("t"),
           py::arg("n_qubits"), py::arg("shots"));
+    m.def("_tfim_magnetization", &tfim_magnetization,
+          py::arg("J"), py::arg("h"), py::arg("theta"), py::arg("t"),
+          py::arg("n_qubits"));
+    m.def("_tfim_square_magnetization", &tfim_square_magnetization,
+          py::arg("J"), py::arg("h"), py::arg("theta"), py::arg("t"),
+          py::arg("n_qubits"));
 }
 
