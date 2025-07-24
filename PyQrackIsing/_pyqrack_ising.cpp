@@ -154,7 +154,7 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double th
         while (true) {
             BigInteger candidate = 0U;
             for (size_t pos : idx) {
-                candidate |= (1ULL << pos);
+                candidate |= (BigInteger("1") << pos);
             }
             tot_cprob += (1.0 + closeness_like_bits(candidate, n_rows, n_cols)) /
                          (1.0 + expected_closeness_weight(n_rows, n_cols, m));
