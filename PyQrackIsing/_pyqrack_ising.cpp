@@ -86,7 +86,7 @@ static inline std::vector<double> probability_by_hamming_weight(double J, double
             double tot_n = 0.0;
             bias.resize(n_qubits + 1);
             for (size_t q = 0U; q <= n_qubits; ++q) {
-                double n = 1.0 / (n_qubits * std::pow(2.0, p * q));
+                double n = 1.0 / ((n_qubits + 1) * std::pow(2.0, p * q));
                 bias[q] = n;
                 tot_n += n;
             }
@@ -191,8 +191,10 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
 double tfim_magnetization(double J, double h, double z, double theta, double t, size_t n_qubits) {
     const std::vector<double> bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits);
     double magnetization = 0.0;
-    for (size_t q = 0U; q < bias.size(); ++q) {
-        const double mag = (n_qubits - 2.0 * q) / n_qubits;
+    const int64_t nqs = (int64_t)n_qubits;
+    const double nqd = (double)n_qubits;
+    for (int64_t q = 0U; q < bias.size(); ++q) {
+        const double mag = (nqs - 2 * q) / nqd;
         magnetization += bias[q] * mag;
     }
 
@@ -202,8 +204,10 @@ double tfim_magnetization(double J, double h, double z, double theta, double t, 
 double tfim_square_magnetization(double J, double h, double z, double theta, double t, size_t n_qubits) {
     const std::vector<double> bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits);
     double square_magnetization = 0.0;
-    for (size_t q = 0U; q < bias.size(); ++q) {
-        const double mag = (n_qubits - 2.0 * q) / n_qubits;
+    const int64_t nqs = (int64_t)n_qubits;
+    const double nqd = (double)n_qubits;
+    for (int64_t q = 0U; q < bias.size(); ++q) {
+        const double mag = (nqs - 2 * q) / nqd;
         square_magnetization += bias[q] * mag * mag;
     }
 
