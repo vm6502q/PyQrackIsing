@@ -1,0 +1,2 @@
+include CMakeLists.txt
+include PyQrackIsing/_pyqrack_ising.cpp
