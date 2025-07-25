@@ -30,6 +30,7 @@ from PyQrackIsing import generate_tfim_samples
 samples = generate_tfim_samples(
     J=-1.0,
     h=2.0,
+    z=4,
     theta=0.174532925199432957,
     t=5,
     n_qubits=56,
