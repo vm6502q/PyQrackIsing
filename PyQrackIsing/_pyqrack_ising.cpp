@@ -67,7 +67,7 @@ static inline double expected_closeness_weight(size_t n_rows, size_t n_cols, siz
 static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
 {
     // critical angle
-    const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? h / (z * J) : 1.0)));
+    const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? h / (z * J) : (J > 0 ? 1.0 : -1.0))));
     const double delta_theta = theta - theta_c;
     std::vector<double> bias;
     if (std::abs(h) < 1e-12) {
