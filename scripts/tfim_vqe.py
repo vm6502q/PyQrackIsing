@@ -30,7 +30,7 @@ charge = 0  # Excess +/- elementary charge, beyond multiplicity
 
 # Hydrogen (and lighter):
 
-geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
+# geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
 # Helium (and lighter):
 
@@ -38,7 +38,7 @@ geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
 # Lithium (and lighter):
 
-# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 15.9))]  # LiH Molecule
+geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 15.9))]  # LiH Molecule
 
 # Carbon (and lighter):
 
@@ -306,13 +306,40 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
 
     return circuit
 
-# Step 5: Setup Qrack simulator and calculate energy expectation value
+# Step 5: Setup Qrack simulator and ansatz
 dev = qml.device("qrack.simulator", wires=n_qubits)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
+
+# Step 6: Bootstrap with TFIM!
 weights = np.zeros(n_qubits)
-opt = qml.AdamOptimizer(stepsize=(np.pi / 30))
 min_energy = circuit(weights)
-for i in range(80):
+for i in range(n_qubits):
+    w = 0
+
+    weights[i] = np.pi / 2
+    energy = circuit(weights)
+    if energy < min_energy:
+        min_energy = energy
+        w = np.pi / 2
+
+    weights[i] = -np.pi / 2
+    energy = circuit(weights)
+    if energy < min_energy:
+        min_energy = energy
+        w = -np.pi / 2
+
+    weights[i] = w
+
+    print(f"Step {i+1}: Energy = {min_energy}")
+
+print(f"Bootstrap Ground State Energy: {min_energy} Ha")
+print("Bootstrap parameters:")
+print(weights)
+
+# Step 7: Finish calculating energy expectation value with VQE
+opt = qml.AdamOptimizer(stepsize=(np.pi / 60))
+min_energy = circuit(weights)
+for i in range(20):
     weights = opt.step(lambda w: circuit(w), weights)
     energy = circuit(weights)
     print(f"Step {i+1}: Energy = {energy}")
