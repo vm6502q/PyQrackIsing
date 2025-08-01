@@ -270,7 +270,6 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     """
     z, J, h = estimate_local_parameters(qubit_hamiltonian, n_qubits)
     theta = tfim_ground_state_angles(n_qubits, J, h, z)
-    weights_shape = {"weights": n_qubits}
 
     if dev is None:
         dev = qml.device("default.qubit", wires=n_qubits)
@@ -305,16 +304,15 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
             qml.CZ(wires=[i, i + 1])
         return qml.expval(hamiltonian)
 
-    return circuit, weights_shape
+    return circuit
 
 # Step 5: Setup Qrack simulator and calculate energy expectation value
 dev = qml.device("qrack.simulator", wires=n_qubits)
-circuit, weights_shape = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
-weights = np.zeros(weights_shape["weights"])
-
-opt = qml.AdamOptimizer(stepsize=0.1)
+circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
+weights = np.zeros(n_qubits)
+opt = qml.AdamOptimizer(stepsize=(np.pi / 30))
 min_energy = circuit(weights)
-for i in range(100):
+for i in range(80):
     weights = opt.step(lambda w: circuit(w), weights)
     energy = circuit(weights)
     print(f"Step {i+1}: Energy = {energy}")
