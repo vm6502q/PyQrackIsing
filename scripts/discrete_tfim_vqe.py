@@ -313,9 +313,6 @@ weights = np.zeros(n_qubits)
 min_energy = circuit(weights)
 for i in range(n_qubits):
     w = 0
-    energy = circuit(weights)
-    if energy < min_energy:
-        min_energy = energy
 
     weights[i] = np.pi / 2
     energy = circuit(weights)
