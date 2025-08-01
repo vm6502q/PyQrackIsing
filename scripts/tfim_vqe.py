@@ -311,6 +311,14 @@ circuit, weights_shape = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 weights = np.zeros(weights_shape["weights"])
 
 opt = qml.AdamOptimizer(stepsize=0.1)
+min_energy = circuit(weights)
 for i in range(100):
     weights = opt.step(lambda w: circuit(w), weights)
-    print(f"Step {i}: Energy = {circuit(weights)}")
+    energy = circuit(weights)
+    print(f"Step {i+1}: Energy = {energy}")
+    if energy < min_energy:
+        min_energy = energy
+
+print(f"Optimized Ground State Energy: {min_energy} Ha")
+print("Optimized parameters:")
+print(weights)
