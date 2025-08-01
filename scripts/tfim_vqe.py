@@ -341,8 +341,8 @@ print(weights)
 
 # Step 7: Finish calculating energy expectation value with VQE
 best_weights = weights.copy()
-opt = qml.AdamOptimizer(stepsize=(np.pi / 120))
-for i in range(20):
+opt = qml.AdamOptimizer(stepsize=(np.pi / 15))
+for i in range(n_qubits):
     weights = opt.step(lambda w: circuit(w), weights)
     energy = circuit(weights)
     print(f"Step {i+1}: Energy = {energy}")
