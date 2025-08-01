@@ -331,7 +331,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
 # Step 6: Bootstrap with TFIM!
-weights = np.zeros(n_qubits, requires_grad="True")
+weights = np.zeros(n_qubits, requires_grad="False")
 min_energy = circuit(weights)
 for i in range(n_qubits):
     w = 0
