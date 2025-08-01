@@ -267,7 +267,7 @@ def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
 
     return ry_angles
 
-def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
+def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=False):
     """
     Estimate energy from TFIM-predicted RY angles.
     """
@@ -275,7 +275,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     theta = tfim_ground_state_angles(n_qubits, J, h, z)
 
     if dev is None:
-        dev = qml.device("default.qubit", wires=n_qubits)
+        dev = qml.device("lightning.qubit", wires=n_qubits)
 
     coeffs = []
     observables = []
@@ -299,6 +299,19 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
 
     hamiltonian = qml.Hamiltonian(coeffs, observables)
 
+    if is_near_clifford:
+        @qml.qnode(dev)
+        def circuit(delta):
+            for i in range(n_qubits):
+                qml.Hadamard(wires=i)
+                qml.RZ(theta[i] + delta[i], wires=i)
+                qml.Hadamard(wires=i)
+            for i in range(n_qubits - 1):
+                qml.CZ(wires=[i, i + 1])
+            return qml.expval(hamiltonian)
+
+        return circuit
+
     @qml.qnode(dev)
     def circuit(delta):
         for i in range(n_qubits):
@@ -310,7 +323,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     return circuit
 
 # Step 5: Setup Qrack simulator and ansatz
-dev = qml.device("qrack.simulator", wires=n_qubits)
+# dev = qml.device("qrack.simulator", wires=n_qubits)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
 # Step 6: Bootstrap with TFIM!
