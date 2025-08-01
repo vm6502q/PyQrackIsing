@@ -232,7 +232,7 @@ qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 
 def estimate_local_parameters(qubit_hamiltonian, n_qubits):
     z = np.zeros(n_qubits, dtype=int)
-    J = np.zeros(n_qubits)
+    J = np.zeros((n_qubits, n_qubits))
     h = np.zeros(n_qubits)
 
     for term, coeff in qubit_hamiltonian.terms.items():
@@ -245,8 +245,8 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
         elif len(term) == 2:
             (q1, p1), (q2, p2) = term
             if {p1, p2} <= {"Z"}:
-                J[q1] -= np.abs(coeff) / 2
-                J[q2] -= np.abs(coeff) / 2
+                J[q1, q2] -= np.abs(coeff) / 2
+                J[q2, q1] -= np.abs(coeff) / 2
                 z[q1] += 1
                 z[q2] += 1
             else:
@@ -254,13 +254,15 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
                 h[q2] += 0.25 * np.abs(coeff)
     return z, J, h
 
-def tfim_ground_state_angles(n_qubits, J_vec, h_vec, z_vec, t=10.0):
+def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
     ry_angles = np.zeros(n_qubits)
-    for i in range(n_qubits):
-        J=J_vec[i]
-        h=h_vec[i]
-        z=z_vec[i]
-        ry_angles[i] = np.arcsin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+    for q in range(n_qubits):
+        z = z_func[q]
+        J = sum(J_func[q, j] for j in range(n_qubits) if (j != q)) / z
+        h = h_func[q]
+
+        ry_angles[q] = np.arcsin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+
     return ry_angles
 
 def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
