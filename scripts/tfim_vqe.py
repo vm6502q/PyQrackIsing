@@ -232,12 +232,6 @@ qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 # Step 4: Setup localized TFIM from Hamiltonian
 
 def estimate_local_parameters(qubit_hamiltonian, n_qubits):
-    """
-    Estimate (z, J, h) per qubit from Hamiltonian.
-    z: number of ZZ neighbors
-    J: average ZZ coefficient
-    h: average X coefficient
-    """
     z = np.zeros(n_qubits, dtype=int)
     J = np.zeros(n_qubits)
     h = np.zeros(n_qubits)
@@ -247,19 +241,21 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
             q, pauli = term[0]
             if pauli == "X":
                 h[q] += np.abs(coeff)
+            elif pauli == "Y":
+                h[q] += 0.5 * np.abs(coeff)
         elif len(term) == 2:
             (q1, p1), (q2, p2) = term
-            if {p1, p2} == {"Z"}:
+            if {p1, p2} <= {"Z"}:
                 J[q1] += np.abs(coeff) / 2
                 J[q2] += np.abs(coeff) / 2
                 z[q1] += 1
                 z[q2] += 1
+            else:
+                h[q1] += 0.25 * np.abs(coeff)
+                h[q2] += 0.25 * np.abs(coeff)
     return z, J, h
 
 def tfim_ground_state_angles(n_qubits, J_vec, h_vec, z_vec, t=10.0):
-    """
-    Generate RY angles based on TFIM magnetization estimates.
-    """
     ry_angles = np.zeros(n_qubits)
     for i in range(n_qubits):
         m = tfim_magnetization(J=J_vec[i], h=h_vec[i], z=z_vec[i], theta=np.random.rand() * np.pi, t=t, n_qubits=1)
@@ -267,28 +263,19 @@ def tfim_ground_state_angles(n_qubits, J_vec, h_vec, z_vec, t=10.0):
         ry_angles[i] = 2.0 * np.arcsin(np.sqrt(p))
     return ry_angles
 
-def build_ansatz(angles, wires):
-    for i, angle in enumerate(angles):
-        qml.RY(angle, wires=wires[i])
-    for i in range(len(wires) - 1):
-        qml.CNOT(wires=[wires[i], wires[i+1]])
-
-def tfim_energy_estimate(qubit_hamiltonian, n_qubits, dev=None):
+def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, layers=1):
     """
     Estimate energy from TFIM-predicted RY angles.
     """
     z, J, h = estimate_local_parameters(qubit_hamiltonian, n_qubits)
     angles = tfim_ground_state_angles(n_qubits, J, h, z)
+    weights_shape = {"weights": (layers, n_qubits, 3)}
 
     if dev is None:
         dev = qml.device("default.qubit", wires=n_qubits)
 
-    # Step 4: Extract Qubit Terms for PennyLane
     coeffs = []
     observables = []
-    n_qubits = molecule.n_qubits  # Auto-detect qubit count
-    print(str(n_qubits) + " qubits...")
-
     for term, coefficient in qubit_hamiltonian.terms.items():
         pauli_operators = []
         for qubit_idx, pauli in term:
@@ -310,14 +297,20 @@ def tfim_energy_estimate(qubit_hamiltonian, n_qubits, dev=None):
     hamiltonian = qml.Hamiltonian(coeffs, observables)
 
     @qml.qnode(dev)
-    def circuit():
-        build_ansatz(angles, wires=range(n_qubits))
+    def circuit(weights):
+        for i, angle in enumerate(angles):
+            qml.RY(angle, wires=i)
+        qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
         return qml.expval(hamiltonian)
 
-    return circuit()
+    return circuit, weights_shape
 
 # Step 5: Setup Qrack simulator and calculate energy expectation value
 dev = qml.device("qrack.simulator", wires=n_qubits)
-energy = tfim_energy_estimate(qubit_hamiltonian, n_qubits, dev)
+circuit, weights_shape = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
+weights = np.random.randn(*weights_shape["weights"])
 
-print(f"Optimized Ground State Energy: {energy} Ha")
+opt = qml.AdamOptimizer(stepsize=0.1)
+for i in range(100):
+    weights = opt.step(lambda w: circuit(w), weights)
+    print(f"Step {i}: Energy = {circuit(weights)}")
