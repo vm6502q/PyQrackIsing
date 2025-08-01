@@ -8,7 +8,6 @@ import openfermion as of
 from openfermionpyscf import run_pyscf
 from openfermion.transforms import jordan_wigner
 
-from PyQrackIsing import tfim_magnetization
 
 # Step 0: Set environment variables (before running script)
 
