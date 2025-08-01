@@ -239,23 +239,25 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
         if len(term) == 1:
             q, pauli = term[0]
             if pauli == "X":
-                h[q] += np.abs(coeff)
+                h[q] += np.arctan(np.abs(coeff))
             elif pauli == "Y":
-                h[q] += 0.5 * np.abs(coeff)
+                h[q] += 0.5 * np.arctan(np.abs(coeff))
         elif len(term) == 2:
             (q1, p1), (q2, p2) = term
             if {p1, p2} <= {"Z"}:
-                J[q1, q2] -= np.abs(coeff) / 2
-                J[q2, q1] -= np.abs(coeff) / 2
+                J[q1, q2] -= 0.5 * np.arctan(coeff)
+                J[q2, q1] -= 0.5 * np.arctan(coeff)
                 z[q1] += 1
                 z[q2] += 1
             else:
-                h[q1] += 0.25 * np.abs(coeff)
-                h[q2] += 0.25 * np.abs(coeff)
+                h[q1] += 0.25 * np.arctan(np.abs(coeff))
+                h[q2] += 0.25 * np.arctan(np.abs(coeff))
+
     return z, J, h
 
 def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
     ry_angles = np.zeros(n_qubits)
+
     for q in range(n_qubits):
         z = z_func[q]
         J = sum(J_func[q, j] for j in range(n_qubits) if (j != q)) / z
