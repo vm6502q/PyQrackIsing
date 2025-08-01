@@ -4,6 +4,8 @@
 
 import pennylane as qml
 from pennylane import numpy as np
+from catalyst import qjit
+
 import openfermion as of
 from openfermionpyscf import run_pyscf
 from openfermion.transforms import jordan_wigner
@@ -231,9 +233,9 @@ qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 # Step 4: Setup localized TFIM from Hamiltonian
 
 def estimate_local_parameters(qubit_hamiltonian, n_qubits):
-    z = np.zeros(n_qubits, dtype=int)
-    J = np.zeros((n_qubits, n_qubits))
-    h = np.zeros(n_qubits)
+    z = np.zeros(n_qubits, dtype=int, requires_grad="False")
+    J = np.zeros((n_qubits, n_qubits), requires_grad="False")
+    h = np.zeros(n_qubits, requires_grad="False")
 
     for term, coeff in qubit_hamiltonian.terms.items():
         if len(term) == 1:
@@ -256,7 +258,7 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
     return z, J, h
 
 def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
-    ry_angles = np.zeros(n_qubits)
+    ry_angles = np.zeros(n_qubits, requires_grad="False")
 
     for q in range(n_qubits):
         z = z_func[q]
@@ -300,6 +302,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
     hamiltonian = qml.Hamiltonian(coeffs, observables)
 
     if is_near_clifford:
+        @qjit
         @qml.qnode(dev)
         def circuit(delta):
             for i in range(n_qubits):
@@ -312,6 +315,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 
         return circuit
 
+    @qjit
     @qml.qnode(dev)
     def circuit(delta):
         for i in range(n_qubits):
@@ -327,7 +331,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
 # Step 6: Bootstrap with TFIM!
-weights = np.zeros(n_qubits)
+weights = np.zeros(n_qubits, requires_grad="True")
 min_energy = circuit(weights)
 for i in range(n_qubits):
     w = 0
@@ -353,16 +357,16 @@ print("Bootstrap parameters:")
 print(weights)
 
 # Step 7: Finish calculating energy expectation value with VQE
-best_weights = weights.copy()
-opt = qml.AdamOptimizer(stepsize=(np.pi / 15))
-for i in range(n_qubits):
-    weights = opt.step(lambda w: circuit(w), weights)
-    energy = circuit(weights)
-    print(f"Step {i+1}: Energy = {energy}")
-    if energy < min_energy:
-        min_energy = energy
-        best_weights = weights.copy()
+# best_weights = weights.copy()
+# opt = qml.AdamOptimizer(stepsize=(np.pi / 15))
+# for i in range(n_qubits):
+#     weights = opt.step(lambda w: circuit(w), weights)
+#     energy = circuit(weights)
+#     print(f"Step {i+1}: Energy = {energy}")
+#     if energy < min_energy:
+#         min_energy = energy
+#         best_weights = weights.copy()
 
-print(f"Optimized Ground State Energy: {min_energy} Ha")
-print("Optimized parameters:")
-print(best_weights)
+# print(f"Optimized Ground State Energy: {min_energy} Ha")
+# print("Optimized parameters:")
+# print(best_weights)
