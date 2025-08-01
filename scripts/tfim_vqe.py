@@ -337,15 +337,16 @@ print("Bootstrap parameters:")
 print(weights)
 
 # Step 7: Finish calculating energy expectation value with VQE
-opt = qml.AdamOptimizer(stepsize=(np.pi / 60))
-min_energy = circuit(weights)
+best_weights = weights.copy()
+opt = qml.AdamOptimizer(stepsize=(np.pi / 120))
 for i in range(20):
     weights = opt.step(lambda w: circuit(w), weights)
     energy = circuit(weights)
     print(f"Step {i+1}: Energy = {energy}")
     if energy < min_energy:
         min_energy = energy
+        best_weights = weights.copy()
 
 print(f"Optimized Ground State Energy: {min_energy} Ha")
 print("Optimized parameters:")
-print(weights)
+print(best_weights)
