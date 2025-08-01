@@ -4,6 +4,7 @@
 
 import pennylane as qml
 from pennylane import numpy as np
+
 import openfermion as of
 from openfermionpyscf import run_pyscf
 from openfermion.transforms import jordan_wigner
@@ -20,8 +21,8 @@ from PyQrackIsing import tfim_magnetization
 
 # Step 1: Define the molecule (Hydrogen, Helium, Lithium, Carbon, Nitrogen, Oxygen)
 
-basis = "sto-3g"  # Minimal Basis Set
-# basis = '6-31g'  # Larger basis set
+# basis = "sto-3g"  # Minimal Basis Set
+basis = '6-31g'  # Larger basis set
 # basis = 'cc-pVDZ' # Even larger basis set!
 multiplicity = 1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
 # multiplicity = 2  # doublet, one unpaired electron (ex.: OH- radical)
@@ -246,8 +247,8 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
         elif len(term) == 2:
             (q1, p1), (q2, p2) = term
             if {p1, p2} <= {"Z"}:
-                J[q1] -= np.abs(coeff) / 2
-                J[q2] -= np.abs(coeff) / 2
+                J[q1] += np.abs(coeff) / 2
+                J[q2] += np.abs(coeff) / 2
                 z[q1] += 1
                 z[q2] += 1
             else:
@@ -270,6 +271,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     """
     z, J, h = estimate_local_parameters(qubit_hamiltonian, n_qubits)
     theta = tfim_ground_state_angles(n_qubits, J, h, z)
+    weights_shape = {"weights": n_qubits}
 
     if dev is None:
         dev = qml.device("default.qubit", wires=n_qubits)
@@ -304,18 +306,22 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
             qml.CZ(wires=[i, i + 1])
         return qml.expval(hamiltonian)
 
-    return circuit
+    return circuit, weights_shape
 
 # Step 5: Setup Qrack simulator and calculate energy expectation value
 dev = qml.device("qrack.simulator", wires=n_qubits)
-circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
-weights = np.zeros(n_qubits)
-opt = qml.AdamOptimizer(stepsize=(np.pi / 30))
+circuit, weights_shape = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
+weights = np.zeros(weights_shape["weights"])
+combos = 3 ** len(weights)
 min_energy = circuit(weights)
-for i in range(80):
-    weights = opt.step(lambda w: circuit(w), weights)
+for combo in range(combos):
+    c = combo
+    for i in range(len(weights)):
+        w = c % 3
+        c = c / 3
+        weights[i] = 0 if w == 0 else ((np.pi / 2) if w == 1 else (-np.pi / 2)) 
     energy = circuit(weights)
-    print(f"Step {i+1}: Energy = {energy}")
+    print(f"Step {combo + 1}: Energy = {energy}")
     if energy < min_energy:
         min_energy = energy
 
