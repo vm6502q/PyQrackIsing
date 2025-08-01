@@ -308,7 +308,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, layers=1):
 # Step 5: Setup Qrack simulator and calculate energy expectation value
 dev = qml.device("qrack.simulator", wires=n_qubits)
 circuit, weights_shape = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
-weights = np.random.randn(*weights_shape["weights"])
+weights = np.zeros(weights_shape["weights"])
 
 opt = qml.AdamOptimizer(stepsize=0.1)
 for i in range(100):
