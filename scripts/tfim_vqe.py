@@ -258,18 +258,19 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
 def tfim_ground_state_angles(n_qubits, J_vec, h_vec, z_vec, t=10.0):
     ry_angles = np.zeros(n_qubits)
     for i in range(n_qubits):
-        m = tfim_magnetization(J=J_vec[i], h=h_vec[i], z=z_vec[i], theta=np.random.rand() * np.pi, t=t, n_qubits=1)
-        p = np.clip((1.0 - m) / 2.0, 1e-6, 1 - 1e-6)
-        ry_angles[i] = 2.0 * np.arcsin(np.sqrt(p))
+        J=J_vec[i]
+        h=h_vec[i]
+        z=z_vec[i]
+        ry_angles[i] = np.arcsin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
     return ry_angles
 
-def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, layers=1):
+def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     """
     Estimate energy from TFIM-predicted RY angles.
     """
     z, J, h = estimate_local_parameters(qubit_hamiltonian, n_qubits)
-    angles = tfim_ground_state_angles(n_qubits, J, h, z)
-    weights_shape = {"weights": (layers, n_qubits, 3)}
+    theta = tfim_ground_state_angles(n_qubits, J, h, z)
+    weights_shape = {"weights": n_qubits}
 
     if dev is None:
         dev = qml.device("default.qubit", wires=n_qubits)
@@ -297,10 +298,11 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, layers=1):
     hamiltonian = qml.Hamiltonian(coeffs, observables)
 
     @qml.qnode(dev)
-    def circuit(weights):
-        for i, angle in enumerate(angles):
-            qml.RY(angle, wires=i)
-        qml.StronglyEntanglingLayers(weights, wires=range(n_qubits))
+    def circuit(delta):
+        for i in range(n_qubits):
+            qml.RY(theta[i] + delta[i], wires=i)
+        for i in range(n_qubits - 1):
+            qml.CZ(wires=[i, i + 1])
         return qml.expval(hamiltonian)
 
     return circuit, weights_shape
