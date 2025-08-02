@@ -231,7 +231,7 @@ print(str(n_qubits) + " qubits...")
 qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 
 # Step 4: Setup ansatz and simulator
-def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=False):
+def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None):
     """
     Estimate energy from TFIM-predicted RY angles.
     """
@@ -260,25 +260,13 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 
     hamiltonian = qml.Hamiltonian(coeffs, observables)
 
-    if is_near_clifford:
-        # @qjit
-        @qml.qnode(dev)
-        def circuit(delta):
-            for i in range(n_qubits):
-                qml.Hadamard(wires=i)
-                qml.RZ(delta[i], wires=i)
-                qml.Hadamard(wires=i)
-            for i in range(n_qubits - 1):
-                qml.CZ(wires=[i, i + 1])
-            return qml.expval(hamiltonian)
-
-        return circuit
-
     # @qjit
     @qml.qnode(dev)
     def circuit(theta):
         for i in range(n_qubits):
-            qml.RY(theta[i], wires=i)
+            if theta[i]:
+                qml.X(wires=i)
+                qml.Z(wires=i)
         for i in range(n_qubits - 1):
             qml.CZ(wires=[i, i + 1])
         return qml.expval(hamiltonian)
@@ -289,36 +277,17 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
 # Step 6: Bootstrap!
-weights = np.zeros(n_qubits)
+weights = np.zeros(n_qubits, dtype=bool, requires_grad="False")
 min_energy = circuit(weights)
 for i in range(n_qubits):
-    w = 0
-
-    weights[i] = -np.pi
+    weights[i] = True
     energy = circuit(weights)
     if energy < min_energy:
         min_energy = energy
-        w = -np.pi
-
-    weights[i] = w
-
+    else:
+        weights[i] = False
     print(f"Step {i+1}: Energy = {min_energy}")
 
 print(f"Bootstrap Ground State Energy: {min_energy} Ha")
 print("Bootstrap parameters:")
 print(weights)
-
-# Step 7: Finish calculating energy expectation value with VQE
-best_weights = weights.copy()
-opt = qml.AdamOptimizer(stepsize=(np.pi / 15))
-for i in range(n_qubits):
-    weights = opt.step(lambda w: circuit(w), weights)
-    energy = circuit(weights)
-    print(f"Step {i+1}: Energy = {energy}")
-    if energy < min_energy:
-        min_energy = energy
-        best_weights = weights.copy()
-
-print(f"Optimized Ground State Energy: {min_energy} Ha")
-print("Optimized parameters:")
-print(best_weights)
