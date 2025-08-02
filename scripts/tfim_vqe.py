@@ -288,7 +288,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 # dev = qml.device("qrack.simulator", wires=n_qubits) #, isSchmidtDecompose=False, isStabilizerHybrid=True)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
-# Step 6: Bootstrap with TFIM!
+# Step 6: Bootstrap!
 weights = np.zeros(n_qubits, requires_grad="False")
 min_energy = circuit(weights)
 for i in range(n_qubits):
