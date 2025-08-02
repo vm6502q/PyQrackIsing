@@ -230,52 +230,11 @@ print(str(n_qubits) + " qubits...")
 # Step 3: Convert to Qubit Hamiltonian (Jordan-Wigner)
 qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 
-# Step 4: Setup localized TFIM from Hamiltonian
-
-def estimate_local_parameters(qubit_hamiltonian, n_qubits):
-    z = np.zeros(n_qubits, dtype=int, requires_grad="False")
-    J = np.zeros((n_qubits, n_qubits), requires_grad="False")
-    h = np.zeros(n_qubits, requires_grad="False")
-
-    for term, coeff in qubit_hamiltonian.terms.items():
-        if len(term) == 1:
-            q, pauli = term[0]
-            if pauli == "X":
-                h[q] += np.abs(coeff)
-            elif pauli == "Y":
-                h[q] += 0.5 * np.abs(coeff)
-        elif len(term) == 2:
-            (q1, p1), (q2, p2) = term
-            if {p1, p2} <= {"Z"}:
-                J[q1, q2] -= 0.5 * coeff
-                J[q2, q1] -= 0.5 * coeff
-                z[q1] += 1
-                z[q2] += 1
-            else:
-                h[q1] += 0.25 * np.abs(coeff)
-                h[q2] += 0.25 * np.abs(coeff)
-
-    return z, J, h
-
-def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
-    ry_angles = np.zeros(n_qubits, requires_grad="False")
-
-    for q in range(n_qubits):
-        z = z_func[q]
-        J = sum(J_func[q, j] for j in range(n_qubits) if (j != q)) / z
-        h = h_func[q]
-
-        ry_angles[q] = np.arcsin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
-
-    return ry_angles
-
+# Step 4: Setup ansatz and simulator
 def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=False):
     """
     Estimate energy from TFIM-predicted RY angles.
     """
-    z, J, h = estimate_local_parameters(qubit_hamiltonian, n_qubits)
-    theta = tfim_ground_state_angles(n_qubits, J, h, z)
-
     if dev is None:
         dev = qml.device("lightning.qubit", wires=n_qubits)
 
@@ -307,7 +266,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
         def circuit(delta):
             for i in range(n_qubits):
                 qml.Hadamard(wires=i)
-                qml.RZ(theta[i] + delta[i], wires=i)
+                qml.RZ(delta[i], wires=i)
                 qml.Hadamard(wires=i)
             for i in range(n_qubits - 1):
                 qml.CZ(wires=[i, i + 1])
@@ -317,16 +276,15 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 
     @qjit
     @qml.qnode(dev)
-    def circuit(delta):
+    def circuit(theta):
         for i in range(n_qubits):
-            qml.RY(theta[i] + delta[i], wires=i)
+            qml.RY(theta[i], wires=i)
         for i in range(n_qubits - 1):
             qml.CZ(wires=[i, i + 1])
         return qml.expval(hamiltonian)
 
     return circuit
 
-# Step 5: Setup Qrack simulator and ansatz
 # dev = qml.device("qrack.simulator", wires=n_qubits) #, isSchmidtDecompose=False, isStabilizerHybrid=True)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
@@ -336,17 +294,11 @@ min_energy = circuit(weights)
 for i in range(n_qubits):
     w = 0
 
-    weights[i] = np.pi / 2
+    weights[i] = -np.pi
     energy = circuit(weights)
     if energy < min_energy:
         min_energy = energy
-        w = np.pi / 2
-
-    weights[i] = -np.pi / 2
-    energy = circuit(weights)
-    if energy < min_energy:
-        min_energy = energy
-        w = -np.pi / 2
+        w = -np.pi
 
     weights[i] = w
 
