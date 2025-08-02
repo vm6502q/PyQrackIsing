@@ -327,7 +327,7 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
     return circuit
 
 # Step 5: Setup Qrack simulator and ansatz
-# dev = qml.device("qrack.simulator", wires=n_qubits)
+# dev = qml.device("qrack.simulator", wires=n_qubits) #, isSchmidtDecompose=False, isStabilizerHybrid=True)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits)
 
 # Step 6: Bootstrap with TFIM!
