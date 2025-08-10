@@ -93,14 +93,13 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
     numer = 0
     denom = 0
     diff_sqr = 0
+    z_fidelity = 0
     sum_hog_counts = 0
-    experiment = [0] * n_pow
     # total = 0
     for i in range(n_pow):
         ideal = ideal_probs[i]
-
         count = counts[i] if i in counts else 0
-        count /= shots
+        exp = count / shots
 
         # How many bits are 1, in the basis state?
         hamming_weight = hamming_distance(i, 0, n)
@@ -112,28 +111,27 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         )
         # If we're also using conventional simulation, use a normalized weighted average that favors the (n+1)-dimensional model at later times.
         # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
-        count = (1 - model) * count + model * normed_closeness * bias[
+        count = (1 - model) * exp + model * normed_closeness * bias[
             hamming_weight
         ] / math.comb(n, hamming_weight)
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
 
-        experiment[i] = int(count * shots)
-
         # QV / HOG
         if ideal > threshold:
-            sum_hog_counts += count * shots
+            sum_hog_counts += count
 
         # L2 distance
-        diff_sqr += (ideal - count) ** 2
+        diff_sqr += (ideal - exp) ** 2
+        z_fidelity = exp if ideal > exp else ideal
 
         # XEB / EPLG
         ideal_centered = ideal - u_u
         denom += ideal_centered * ideal_centered
-        numer += ideal_centered * (count - u_u)
+        numer += ideal_centered * (exp - u_u)
 
-    l2_similarity = 1 - diff_sqr ** (1 / 2)
+    l2_difference = diff_sqr ** (1 / 2)
     hog_prob = sum_hog_counts / shots
 
     xeb = numer / denom
@@ -144,7 +142,8 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
     return {
         "qubits": n,
         "depth": depth,
-        "l2_similarity": float(l2_similarity),
+        "l2_difference": float(l2_difference),
+        "z_fidelity": float(z_fidelity),
         "hog_prob": hog_prob,
         "xeb": xeb,
     }
@@ -411,7 +410,7 @@ def main():
         )
 
         # Add up the square residuals:
-        r_squared += (1 - result["l2_similarity"]) ** 2
+        r_squared += result["l2_difference"] ** 2
 
         if model < 0.99:
             # Mix in the conventional simulation component.
@@ -457,7 +456,7 @@ def main():
     rmse = (ssr / depth) ** (1 / 2)
     sm_r_squared = 1 - (ssr / ss)
 
-    print("L2 norm R^2: " + str(r_squared))
+    print("L2 norm similarity R^2: " + str(r_squared))
     print("Square magnetization RMSE: " + str(rmse))
     print("Square magnetization R^2: " + str(sm_r_squared))
 
