@@ -114,6 +114,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         count = (1 - model) * exp + model * normed_closeness * bias[
             hamming_weight
         ] / math.comb(n, hamming_weight)
+        exp = count / shots
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
