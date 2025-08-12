@@ -83,6 +83,7 @@ jobs:
       matrix:
         platform:
           - win-amd64
+        dependencies: [vcpkg]
     steps:
       - name: Checkout PyQrackIsing
         uses: actions/checkout@v4
@@ -97,11 +98,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install wheel setuptools build cmake pybind11[global]
 
-      - name: Install Boost
-        uses: MarkusJx/install-boost@v2
-        id: install-boost
-        with:
-          boost_version: 1.87.0
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install boost
 
       - name: Build Wheel
         env:
