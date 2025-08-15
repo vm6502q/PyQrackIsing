@@ -97,8 +97,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install wheel setuptools build cmake pybind11[global]
 
-      - name: Install Boost using Chocolatey
-        run: choco install boost-msvc-14.3 -y
+      - name: Install Boost
+        uses: MarkusJx/install-boost@v2
+        id: install-boost
+        with:
+          boost_version: 1.87.0
 
       - name: Build Wheel
         env:
