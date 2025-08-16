@@ -30,7 +30,7 @@ class CMakeBuild(build_ext):
             cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
             release_args = [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
-        self.spawn(['cmake', '--build', '.', '--config', 'Release'] + release_args)
+        self.spawn(['cmake'] + release_args + ['--build', '.', '--config', 'Release'])
         if os.name == 'nt':
             os.chdir(extdir)
             os.rename('Release/tfim_sampler.cp312-win_amd64.pyd', 'tfim_sampler.cp312-win_amd64.pyd')
