@@ -10,10 +10,6 @@ if (DEFINED ENV{BOOST_ROOT})
   target_include_directories(tfim_sampler PUBLIC $ENV{BOOST_ROOT}/include/boost)
 endif (DEFINED ENV{BOOST_ROOT})
 
-if (DEFINED ENV{BOOST_TOOLCHAIN_FILE})
-  set(CMAKE_TOOLCHAIN_FILE $ENV{BOOST_TOOLCHAIN_FILE})
-endif (DEFINED ENV{BOOST_TOOLCHAIN_FILE})
-
 if (MSVC)
   target_compile_options(tfim_sampler PUBLIC /O2 /std:c++17)
 else (MSVC)

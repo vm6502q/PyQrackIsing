@@ -23,7 +23,10 @@ class CMakeBuild(build_ext):
         wd = os.getcwd()
         os.makedirs(self.build_temp, exist_ok=True)
         os.chdir(self.build_temp)
-        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir]
+        cmake_args = [f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}']
+        toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
+        if toolchain:
+            cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
         self.spawn(['cmake', '--build', '.', '--config', 'Release'])
         if os.name == 'nt':
