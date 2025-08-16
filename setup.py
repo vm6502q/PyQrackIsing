@@ -23,14 +23,14 @@ class CMakeBuild(build_ext):
         wd = os.getcwd()
         os.makedirs(self.build_temp, exist_ok=True)
         os.chdir(self.build_temp)
-        cmake_args = [f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}']
+        cmake_args = ['-DCMAKE_BUILD_TYPE=Release', f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}']
         toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
-        release_args = []
+        release_args = ['--build', '.', '--config', 'Release']
         if toolchain:
             cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
-            release_args = [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
+            release_args = [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}', '--build', '.']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
-        self.spawn(['cmake'] + release_args + ['--build', '.', '--config', 'Release'])
+        self.spawn(['cmake'] + release_args)
         if os.name == 'nt':
             os.chdir(extdir)
             os.rename('Release/tfim_sampler.cp312-win_amd64.pyd', 'tfim_sampler.cp312-win_amd64.pyd')
