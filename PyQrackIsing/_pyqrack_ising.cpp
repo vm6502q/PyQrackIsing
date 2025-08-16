@@ -127,7 +127,8 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
     thresholds[n_qubits] = 1.0;
 
     // random engine
-    std::mt19937_64 rng(std::random_device{}());
+    auto rd = std::random_device{};
+    std::mt19937_64 rng(rd());
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
     std::vector<BigInteger> samples;
@@ -138,20 +139,30 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
         qubits[i] = i;
     }
 
+    std::vector<size_t> hamming_samples(n_qubits + 1U);
     for (size_t s = 0U; s < shots; ++s) {
         double mag_prob = dist(rng);
         size_t m = 0U;
         while (thresholds[m] < mag_prob) {
             ++m;
         }
-        double closeness_prob = dist(rng);
+        ++hamming_samples[m];
+    }
+    for (size_t m = 0U; m < hamming_samples.size(); ++m){
         double tot_cprob = 0.0;
-        BigInteger state_int = 0;
+        size_t hs = hamming_samples[m];
+        std::vector<double> rands;
+        rands.reserve(hs);
+        for (size_t s = 0U; s < hs; ++s) {
+            rands.push_back(dist(rng));
+        }
+        std::sort(rands.begin(), rands.end());
         // iterate combinations
         std::vector<size_t> idx(m);
         for (size_t i = 0U; i < m; ++i) {
             idx[i] = i;
         }
+        size_t s = 0U;
         while (true) {
             BigInteger candidate = 0U;
             for (size_t pos : idx) {
@@ -159,8 +170,11 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
             }
             tot_cprob += (1.0 + closeness_like_bits(candidate, n_rows, n_cols)) /
                          (1.0 + expected_closeness_weight(n_rows, n_cols, m));
-            if (closeness_prob <= tot_cprob) {
-                state_int = candidate;
+            while ((s < hs) && (rands[s] <= tot_cprob)) {
+                samples.push_back(candidate);
+                ++s;
+            }
+            if (s == hs) {
                 break;
             }
 
@@ -170,6 +184,9 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
                 --k;
             }
             if (k < 0) {
+                for (; s < hs; ++s) {
+                    samples.push_back(candidate);
+                }
                 break;
             }
             ++idx[k];
@@ -177,8 +194,10 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
                 idx[j] = idx[j - 1U] + 1;
             }
         }
-        samples.push_back(state_int);
     }
+
+    auto dre = std::default_random_engine{rd()};
+    std::shuffle(samples.begin(), samples.end(), dre);
 
     std::vector<std::string> output;
     output.reserve(shots);
