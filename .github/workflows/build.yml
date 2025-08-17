@@ -100,7 +100,7 @@ jobs:
 
       - name: Install Boost
         run: |
-          vcpkg install boost
+          vcpkg install boost-multiprecision
 
       - name: Build Wheel
         env:
