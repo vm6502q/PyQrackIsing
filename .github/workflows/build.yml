@@ -104,7 +104,10 @@ jobs:
 
       - name: Build Wheel
         env:
-          VCPKG_ROOT: C:/vcpkg
+          BOOST_TOOLCHAIN_FILE: ${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake
+          BOOST_ROOT: ${{ env.VCPKG_INSTALLATION_ROOT }}installed/x64-windows
+          BOOST_INCLUDEDIR: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/include
+          BOOST_LIBRARYDIR: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed/x64-windows/lib
         run: |
           python setup.py bdist_wheel --plat-name=${{ matrix.platform }}
 

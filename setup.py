@@ -27,10 +27,19 @@ class CMakeBuild(build_ext):
             f'-DCMAKE_BUILD_TYPE={cfg}',
         ]
 
-        vcpkg_root = os.environ.get("VCPKG_ROOT")
-        if vcpkg_root:
-            toolchain_file = os.path.join(vcpkg_root, 'scripts', 'buildsystems', 'vcpkg.cmake')
-            cmake_args.append(f'-DCMAKE_TOOLCHAIN_FILE={toolchain_file}')
+        cmake_args = ['-DCMAKE_BUILD_TYPE=Release', f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}']
+        toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
+        if toolchain:
+            cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
+        root = os.environ.get("BOOST_ROOT")
+        if root:
+            cmake_args += ['-DBoost_NO_SYSTEM_PATHS=TRUE', f'-DBOOST_ROOT={root}']
+        include = os.environ.get("BOOST_INCLUDEDIR")
+        if include:
+            cmake_args += [f'-DBOOST_INCLUDEDIR={include}']
+        library = os.environ.get("BOOST_LIBRARYDIR")
+        if library:
+            cmake_args += [f'-DBOOST_LIBRARYDIR={library}']
 
         build_temp = self.build_temp
         os.makedirs(build_temp, exist_ok=True)
