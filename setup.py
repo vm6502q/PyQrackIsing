@@ -27,9 +27,10 @@ class CMakeBuild(build_ext):
             f'-DCMAKE_BUILD_TYPE={cfg}',
         ]
 
-        toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
-        if toolchain:
-            cmake_args.append(f'-DCMAKE_TOOLCHAIN_FILE={toolchain}')
+        vcpkg_root = os.environ.get("VCPKG_ROOT")
+        if vcpkg_root:
+            toolchain_file = os.path.join(vcpkg_root, 'scripts', 'buildsystems', 'vcpkg.cmake')
+            cmake_args.append(f'-DCMAKE_TOOLCHAIN_FILE={toolchain_file}')
 
         build_temp = self.build_temp
         os.makedirs(build_temp, exist_ok=True)
