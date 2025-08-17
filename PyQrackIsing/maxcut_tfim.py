@@ -76,17 +76,17 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
+    quality = 10,
     shots = None,
-    mult_log2 = 10,
 ):
     # Number of qubits/nodes
     n_qubits = G.number_of_nodes()
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits << mult_log2
+        shots = n_qubits << quality
 
     degrees = np.array([sum(edge_attributes.get('weight', 1.0) for neighbor, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
-    thresholds = tfim_sampler._maxcut_hamming_cdf(degrees, mult_log2)
+    thresholds = tfim_sampler._maxcut_hamming_cdf(degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
     weights = 1.0 / (degrees + 1.0)
     samples = []
