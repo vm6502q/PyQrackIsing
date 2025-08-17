@@ -76,7 +76,7 @@ def get_hamming_probabilities(n_qubits, J, h, theta, z, t):
     return bias
 
 
-def evaluate_cut_edges_numba(samples, flat_edges):
+def evaluate_cut_edges(samples, flat_edges):
     best_value = -1
     best_solution = None
     best_cut_edges = None
@@ -258,7 +258,7 @@ def maxcut_tfim(
         # Second dimension: permutation within Hamming weight
         samples.append(local_repulsion_choice(G_dict, degrees, weights, n_qubits, m))
 
-    best_value, best_solution, best_cut_edges = evaluate_cut_edges_numba(samples, [int(item) for tup in G.edges() for item in tup])
+    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, [int(item) for tup in G.edges() for item in tup])
 
     return best_value, int_to_bitstring(best_solution, n_qubits), best_cut_edges
 

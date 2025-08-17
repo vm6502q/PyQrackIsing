@@ -2,13 +2,15 @@
 requires = [
     "cmake",
     "pybind11",
-    "setuptools"
+    "setuptools",
+    "networkx",
+    "numpy",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "PyQrackIsing"
-version = "1.3.4"
+version = "1.4.0"
 requires-python = ">=3.8"
 description = "Near-ideal closed-form solutions for transverse field Ising model (TFIM)"
 readme = {file = "README.txt", content-type = "text/markdown"}
