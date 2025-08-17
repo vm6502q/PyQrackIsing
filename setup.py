@@ -27,6 +27,15 @@ class CMakeBuild(build_ext):
         toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
         if toolchain:
             cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
+        root = os.environ.get("BOOST_ROOT")
+        if root:
+            cmake_args += ['-DBoost_NO_SYSTEM_PATHS=TRUE', f'-DBOOST_ROOT={root}']
+        include = os.environ.get("BOOST_ROOT")
+        if include:
+            cmake_args += [f'-BOOST_INCLUDEDIR={include}']
+        library = os.environ.get("BOOST_ROOT")
+        if library:
+            cmake_args += [f'-BOOST_LIBRARYDIR={library}']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
         self.spawn(['cmake', '--build', '.', '--config', 'Release'])
         if os.name == 'nt':
