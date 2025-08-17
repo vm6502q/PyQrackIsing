@@ -20,29 +20,21 @@ class CMakeBuild(build_ext):
 
     def build_extension(self, ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-        wd = os.getcwd()
-        os.makedirs(self.build_temp, exist_ok=True)
-        os.chdir(self.build_temp)
-        cmake_args = ['-DCMAKE_BUILD_TYPE=Release', f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}']
+        cfg = 'Release'
+        cmake_args = [
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
+            f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}',
+            f'-DCMAKE_BUILD_TYPE={cfg}',
+        ]
+
         toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
         if toolchain:
-            cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
-        root = os.environ.get("BOOST_ROOT")
-        if root:
-            cmake_args += ['-DBoost_NO_SYSTEM_PATHS=TRUE', f'-DBOOST_ROOT={root}']
-        include = os.environ.get("BOOST_INCLUDEDIR")
-        if include:
-            cmake_args += [f'-DBOOST_INCLUDEDIR={include}']
-        library = os.environ.get("BOOST_LIBRARYDIR")
-        if library:
-            cmake_args += [f'-DBOOST_LIBRARYDIR={library}']
-        self.spawn(['cmake', ext.sourcedir] + cmake_args)
-        self.spawn(['cmake', '--build', '.', '--config', 'Release'])
-        if os.name == 'nt':
-            os.chdir(extdir)
-            os.rename('Release/tfim_sampler.cp312-win_amd64.pyd', 'tfim_sampler.cp312-win_amd64.pyd')
-            os.rmdir('Release')
-        os.chdir(wd)
+            cmake_args.append(f'-DCMAKE_TOOLCHAIN_FILE={toolchain}')
+
+        build_temp = self.build_temp
+        os.makedirs(build_temp, exist_ok=True)
+        self.spawn(['cmake', '-B', build_temp, '-S', ext.sourcedir] + cmake_args)
+        self.spawn(['cmake', '--build', build_temp, '--config', cfg])
 
 README_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'README.md')
 with open(README_PATH) as readme_file:
@@ -52,7 +44,7 @@ ext_modules = [CMakeExtension('tfim_sampler')]
 
 setup(
     name='PyQrackIsing',
-    version='1.4.0',
+    version='1.4.1',
     author='Dan Strano',
     author_email='stranoj@gmail.com',
     description='Near-ideal closed-form solutions for transverse field Ising model (TFIM)',
