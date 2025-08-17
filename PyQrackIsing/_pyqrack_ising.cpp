@@ -73,32 +73,33 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
     return s;
 }
 
-std::vector<double> adiabatic_hamming_pdf(py::array_t<double, py::array::c_style | py::array::forcecast> _degrees, int mult_log2) {
+std::vector<double> maxcut_hamming_cdf(py::array_t<double, py::array::c_style | py::array::forcecast> _degrees, int mult_log2) {
     auto buf = _degrees.request();
     size_t n_qubits = buf.shape[0];
     double* degrees = static_cast<double*>(buf.ptr);
-    int n_steps = n_qubits << mult_log2;
-    int shots = n_qubits << mult_log2;
-    double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
-    std::vector<double> hamming_prob(n_qubits + 1, 0.0);
+    const int n_steps = n_qubits << mult_log2;
+    const int shots = n_qubits << mult_log2;
+    const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
+    const double h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t);
+    std::vector<double> hamming_prob(n_qubits - 1, 0.0);
 
     for (int step = 0; step < n_steps; ++step) {
         double t = step * delta_t;
         double tm1 = (step - 1) * delta_t;
         for (int q = 0; q < n_qubits; ++q) {
-            double z = degrees[q];
-            double J_eff = -z;
-            double h_t = (1 << (mult_log2 >> 1)) * t / (n_steps * delta_t);
+            const double& z = degrees[q];
+            const double J_eff = -z;
+            const double h_t = h_mult * t;
             auto bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits);
             if (step == 0) {
-                for (size_t i = 0; i < bias.size(); ++i) {
-                    hamming_prob[i] += bias[i];
+                for (size_t i = 0U; i < hamming_prob.size(); ++i) {
+                    hamming_prob[i] += bias[i + 1];
                 }
                 continue;
             }
             auto last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits);
-            for (size_t i = 0; i < bias.size(); ++i) {
-                hamming_prob[i] += bias[i] - last_bias[i];
+            for (size_t i = 0U; i < hamming_prob.size(); ++i) {
+                hamming_prob[i] += bias[i + 1] - last_bias[i + 1];
             }
         }
     }
@@ -107,6 +108,13 @@ std::vector<double> adiabatic_hamming_pdf(py::array_t<double, py::array::c_style
     for (auto& x : hamming_prob) {
         x /= tot_prob;
     }
+
+    tot_prob = 0.0;
+    for (size_t i = 0U; i < hamming_prob.size(); ++i) {
+        tot_prob += hamming_prob[i];
+        hamming_prob[i] = tot_prob;
+    }
+    hamming_prob.back() = 1.0;
 
     return hamming_prob;
 }
@@ -290,6 +298,6 @@ PYBIND11_MODULE(tfim_sampler, m) {
     m.def("_tfim_square_magnetization", &tfim_square_magnetization,
           py::arg("J"), py::arg("h"), py::arg("z"), py::arg("theta"),
           py::arg("t"), py::arg("n_qubits"));
-    m.def("_adiabatic_hamming_pdf", &adiabatic_hamming_pdf, "Adiabatic TFIM Hamming weight probability density function");
+    m.def("_maxcut_hamming_cdf", &maxcut_hamming_cdf, "Adiabatic TFIM Hamming weight probability density function");
 }
 
