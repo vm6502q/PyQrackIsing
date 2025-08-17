@@ -32,10 +32,10 @@ class CMakeBuild(build_ext):
             cmake_args += ['-DBoost_NO_SYSTEM_PATHS=TRUE', f'-DBOOST_ROOT={root}']
         include = os.environ.get("BOOST_INCLUDEDIR")
         if include:
-            cmake_args += [f'-BOOST_INCLUDEDIR={include}']
+            cmake_args += [f'-DBOOST_INCLUDEDIR={include}']
         library = os.environ.get("BOOST_LIBRARYDIR")
         if library:
-            cmake_args += [f'-BOOST_LIBRARYDIR={library}']
+            cmake_args += [f'-DBOOST_LIBRARYDIR={library}']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
         self.spawn(['cmake', '--build', '.', '--config', 'Release'])
         if os.name == 'nt':
