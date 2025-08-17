@@ -36,10 +36,7 @@ class CMakeBuild(build_ext):
             cmake_args += ['-DBoost_NO_SYSTEM_PATHS=TRUE', f'-DBOOST_ROOT={root}']
         include = os.environ.get("BOOST_INCLUDEDIR")
         if include:
-            cmake_args += [f'-DBOOST_INCLUDEDIR={include}']
-        library = os.environ.get("BOOST_LIBRARYDIR")
-        if library:
-            cmake_args += [f'-DBOOST_LIBRARYDIR={library}']
+            cmake_args += [f'-DBoost_INCLUDE_DIR={include}']
 
         build_temp = self.build_temp
         os.makedirs(build_temp, exist_ok=True)
