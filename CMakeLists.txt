@@ -3,7 +3,7 @@ project(PyQrackIsing LANGUAGES CXX)
 
 set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
-find_package(boost CONFIG REQUIRED)
+find_package(Boost CONFIG REQUIRED)
 if (Boost_FOUND)
     target_include_directories(tfim_sampler PUBLIC ${Boost_INCLUDE_DIR})
 endif (Boost_FOUND)
