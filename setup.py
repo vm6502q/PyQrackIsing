@@ -27,6 +27,9 @@ class CMakeBuild(build_ext):
         toolchain = os.environ.get("BOOST_TOOLCHAIN_FILE")
         if toolchain:
             cmake_args += [f'-DCMAKE_TOOLCHAIN_FILE={toolchain}']
+        root = os.environ.get("BOOST_ROOT")
+        if root:
+            cmake_args += [f'-DBOOST_ROOT={root}']
         self.spawn(['cmake', ext.sourcedir] + cmake_args)
         self.spawn(['cmake', '--build', '.', '--config', 'Release'])
         if os.name == 'nt':
@@ -43,7 +46,7 @@ ext_modules = [CMakeExtension('tfim_sampler')]
 
 setup(
     name='PyQrackIsing',
-    version='1.3.5',
+    version='1.4.0',
     author='Dan Strano',
     author_email='stranoj@gmail.com',
     description='Near-ideal closed-form solutions for transverse field Ising model (TFIM)',

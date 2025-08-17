@@ -1,5 +1,9 @@
+// C++/pybind11 translation of TFIM function and maxcut_tfim()
+// Original algorithm by Dan Strano and Elara (OpenAI GPT), 2024
+
 #define _USE_MATH_DEFINES
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <cmath>
 #include <limits>
@@ -8,11 +12,56 @@
 #include <vector>
 #include <bitset>
 #include <algorithm>
+#include <numeric>
+#include <unordered_set>
+#include <unordered_map>
+#include <tuple>
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/functional/hash.hpp>
 
 namespace py = pybind11;
 
 typedef boost::multiprecision::cpp_int BigInteger;
+
+std::random_device rd = std::random_device{};
+std::mt19937 rng(rd());
+
+
+static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
+{
+    // critical angle
+    const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? std::abs(h) / (z * J) : (J > 0 ? 1.0 : -1.0))));
+    const double delta_theta = theta - theta_c;
+    std::vector<double> bias(n_qubits + 1, 0.0);
+    if (std::abs(h) < 1e-12) {
+        bias[0] = 1.0;
+    } else if (std::abs(J) < 1e-12) {
+        std::fill(bias.begin(), bias.end(), 1.0 / (n_qubits + 1.0));
+    } else {
+        const double sin_delta = std::sin(delta_theta);
+        const double omega = 1.5 * M_PI;
+        const double t2 = 1.0;
+        const double p = std::pow(2.0, std::abs(J / h) - 1.0) * (1.0 + sin_delta * std::cos(J * omega * t + theta) / (1.0 + std::sqrt(t / t2))) - 0.5;
+        if (p >= 1024) {
+            bias[0] = 1.0;
+        } else {
+            double tot_n = 0.0;
+            for (size_t q = 0U; q <= n_qubits; ++q) {
+                double n = 1.0 / ((n_qubits + 1) * std::pow(2.0, p * q));
+                bias[q] = n;
+                tot_n += n;
+            }
+            for (size_t q = 0U; q <= n_qubits; ++q) {
+                bias[q] /= tot_n;
+            }
+        }
+    }
+    if (J > 0) {
+        std::reverse(bias.begin(), bias.end());
+    }
+
+    return bias;
+}
 
 static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
     std::string s(length, '0');
@@ -22,6 +71,123 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
         }
     }
     return s;
+}
+
+py::tuple maxcut_tfim_cpp(py::dict G_edges, int n_qubits) {
+    int mult_log2 = 10;
+    int n_steps = n_qubits << mult_log2;
+    int shots = n_qubits << mult_log2;
+    double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
+
+    std::vector<int> degrees(n_qubits, 0);
+    std::vector<std::vector<int>> adjacency(n_qubits);
+
+    for (auto item : G_edges) {
+        int u = py::cast<int>(item.first);
+        for (int v : py::cast<std::vector<int>>(item.second)) {
+            adjacency[u].push_back(v);
+            degrees[u]++;
+        }
+    }
+
+    std::vector<double> orig_weights(n_qubits);
+    for (int i = 0; i < n_qubits; ++i) {
+        orig_weights[i] = 1.0 / (degrees[i] + 1.0);
+    }
+
+    std::vector<double> hamming_prob(n_qubits - 1, 0.0);
+    for (int step = 0; step < n_steps; ++step) {
+        double t = step * delta_t;
+        double tm1 = (step - 1) * delta_t;
+        for (int q = 0; q < n_qubits; ++q) {
+            double z = degrees[q];
+            double J_eff = -z;
+            double h_t = (1 << (mult_log2 >> 1)) * t / (n_steps * delta_t);
+            auto bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits);
+            if (step == 0) {
+                for (size_t i = 1; i < (bias.size() - 1); ++i) {
+                    hamming_prob[i - 1] += bias[i];
+                }
+                continue;
+            }
+            auto last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits);
+            for (size_t i = 1; i < (bias.size() - 1); ++i) {
+                hamming_prob[i - 1] += bias[i] - last_bias[i];
+            }
+        }
+    }
+
+    double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
+    for (auto& x : hamming_prob) {
+        x /= tot_prob;
+    }
+
+    std::vector<double> thresholds(hamming_prob.size(), 0.0);
+    double acc = 0.0;
+    for (size_t i = 0; i < hamming_prob.size(); ++i) {
+        acc += hamming_prob[i];
+        thresholds[i] = acc;
+    }
+    thresholds.back() = 1.0;
+
+    std::vector<BigInteger> samples;
+    std::uniform_real_distribution<> dist(0.0, 1.0);
+    for (int s = 0; s < shots; ++s) {
+        double val = dist(rng);
+        int m = 0;
+        while (m < int(thresholds.size()) && thresholds[m] < val) {
+            ++m;
+        }
+        m += 1;
+
+        std::vector<double> weights(orig_weights);
+        std::unordered_set<int> chosen;
+        while (int(chosen.size()) < m) {
+            std::discrete_distribution<> choice(weights.begin(), weights.end());
+            int candidate = choice(rng);
+            if (chosen.insert(candidate).second) {
+                for (int nbr : adjacency[candidate]) {
+                    weights[nbr] *= 0.5;
+                }
+            }
+        }
+
+        BigInteger bitmask = 0;
+        for (int bit : chosen) {
+            bitmask |= (1 << bit);
+        }
+        samples.push_back(bitmask);
+    }
+
+    // Evaluate maxcut
+    int best_value = -1;
+    BigInteger best_state = 0;
+    std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int>>> best_edges;
+
+    for (BigInteger state : samples) {
+        std::unordered_set<std::pair<int, int>, boost::hash<std::pair<int, int>>> cut;
+        for (auto item : G_edges) {
+            int u = py::cast<int>(item.first);
+            for (int v : py::cast<std::vector<int>>(item.second)) {
+                if (((state >> u) & 1) != ((state >> v) & 1)) {
+                    int a = std::min(u, v), b = std::max(u, v);
+                    cut.emplace(a, b);
+                }
+            }
+        }
+        if (int(cut.size()) > best_value) {
+            best_value = int(cut.size());
+            best_state = state;
+            best_edges = cut;
+        }
+    }
+
+    std::string bitstring(n_qubits, '0');
+    for (int i = 0; i < n_qubits; ++i) {
+        if ((best_state >> i) & 1) bitstring[n_qubits - i - 1] = '1';
+    }
+
+    return py::make_tuple(best_value, bitstring, best_edges);
 }
 
 static inline double closeness_like_bits(BigInteger perm, size_t n_rows, size_t n_cols) {
@@ -64,45 +230,6 @@ static inline double expected_closeness_weight(size_t n_rows, size_t n_cols, siz
     return 2.0 * mu_k - 1.0;
 }
 
-static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
-{
-    // critical angle
-    const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? std::abs(h) / (z * J) : (J > 0 ? 1.0 : -1.0))));
-    const double delta_theta = theta - theta_c;
-    std::vector<double> bias;
-    if (std::abs(h) < 1e-12) {
-        bias.assign(n_qubits + 1, 0.0);
-        bias[0] = 1.0;
-    } else if (std::abs(J) < 1e-12) {
-        bias.assign(n_qubits + 1, 1.0 / (n_qubits + 1));
-    } else {
-        const double sin_delta = std::sin(delta_theta);
-        const double omega = 1.5 * M_PI;
-        const double t2 = 1.0;
-        const double p = std::pow(2.0, std::abs(J / h) - 1.0) * (1.0 + sin_delta * std::cos(J * omega * t + theta) / (1.0 + std::sqrt(t / t2))) - 0.5;
-        if (p >= 1024) {
-            bias.assign(n_qubits + 1U, 0.0);
-            bias[0] = 1.0;
-        } else {
-            double tot_n = 0.0;
-            bias.resize(n_qubits + 1);
-            for (size_t q = 0U; q <= n_qubits; ++q) {
-                double n = 1.0 / ((n_qubits + 1) * std::pow(2.0, p * q));
-                bias[q] = n;
-                tot_n += n;
-            }
-            for (size_t q = 0U; q <= n_qubits; ++q) {
-                bias[q] /= tot_n;
-            }
-        }
-    }
-    if (J > 0) {
-        std::reverse(bias.begin(), bias.end());
-    }
-
-    return bias;
-}
-
 std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z, double theta, double t, size_t n_qubits, size_t shots) {
     // lattice dimensions
     size_t n_rows = 1U;
@@ -126,9 +253,6 @@ std::vector<std::string> generate_tfim_samples_cpp(double J, double h, double z,
     }
     thresholds[n_qubits] = 1.0;
 
-    // random engine
-    auto rd = std::random_device{};
-    std::mt19937_64 rng(rd());
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
     std::vector<BigInteger> samples;
@@ -245,5 +369,6 @@ PYBIND11_MODULE(tfim_sampler, m) {
     m.def("_tfim_square_magnetization", &tfim_square_magnetization,
           py::arg("J"), py::arg("h"), py::arg("z"), py::arg("theta"),
           py::arg("t"), py::arg("n_qubits"));
+    m.def("_maxcut_tfim", &maxcut_tfim_cpp, "TFIM-based approximate MAXCUT solver");
 }
 

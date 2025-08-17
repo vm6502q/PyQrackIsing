@@ -171,11 +171,13 @@ def maxcut_tfim(
     n_steps = None,
     delta_t = None,
     shots = None,
+    mult_log2 = None,
 ):
     # Number of qubits/nodes
     n_qubits = G.number_of_nodes()
     # Multiplicity (power of 2) of shots and steps
-    mult_log2 = 10
+    if mult_log2 is None:
+        mult_log2 = 10
     if J_func is None:
         # Coupling interaction
         J_func = lambda G: graph_to_J(G, n_qubits)
