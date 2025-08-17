@@ -105,7 +105,7 @@ jobs:
       - name: Build Wheel
         env:
           BOOST_TOOLCHAIN_FILE: C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-          BOOST_ROOT: C:/vcpkg/installed/x64-window"
+          BOOST_ROOT: C:/vcpkg/installed/x64-window
           BOOST_INCLUDEDIR: C:/vcpkg/installed/x64-windows/include
           BOOST_LIBRARYDIR: C:/vcpkg/installed/x64-windows/lib
         run: |
