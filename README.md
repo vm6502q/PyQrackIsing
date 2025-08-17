@@ -38,7 +38,18 @@ samples = generate_tfim_samples(
 )
 ```
 
-There are two more functions, `tfim_magnetization()` and `tfim_square_magnetization()`, that follow the same function signature except without the `shots` argument.
+There are two other functions, `tfim_magnetization()` and `tfim_square_magnetization()`, that follow the same function signature except without the `shots` argument.
+
+The library also provides a TFIM-inspired (approximate) MAXCUT solver:
+```py
+from PyQrackIsing import maxcut_tfim
+import networkx as nx
+
+G = nx.petersen_graph()
+best_cut_value, best_solution_bit_string, best_cut_edges = maxcut_tfim(G, quality=10)
+```
+
+The (integer) `quality` setting is optional, with a default value of 10, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify number of `shots` as argument, if you want specific fine-grained control over resource usage.)
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
