@@ -102,14 +102,15 @@ std::vector<double> maxcut_hamming_cdf(py::array_t<double, py::array::c_style | 
                 hamming_prob[i] += bias[i + 1] - last_bias[i + 1];
             }
         }
+        double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
+        if (tot_prob > (std::numeric_limits<double>::epsilon() / 2)) {
+            for (auto& x : hamming_prob) {
+                x /= tot_prob;
+            }
+        }
     }
 
-    double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
-    for (auto& x : hamming_prob) {
-        x /= tot_prob;
-    }
-
-    tot_prob = 0.0;
+    double tot_prob = 0.0;
     for (size_t i = 0U; i < hamming_prob.size(); ++i) {
         tot_prob += hamming_prob[i];
         hamming_prob[i] = tot_prob;

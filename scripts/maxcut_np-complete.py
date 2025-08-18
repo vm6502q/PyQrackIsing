@@ -5,9 +5,9 @@
 
 # After tackling the case where parameters are uniform and independent of time, we generalize the model by averaging per-qubit behavior as if the static case and per-time-step behavior as finite difference. This provides the basis of a novel physics-inspired (adiabatic TFIM) MAXCUT approximate solver that often gives optimal or exact answers on a wide selection of graph types.
 
+from PyQrackIsing import maxcut_tfim
 import networkx as nx
 import numpy as np
-from PyQrackIsing import maxcut_tfim
 
 
 # NP-complete spin glass
@@ -20,44 +20,28 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
     return G
 
 
+def flip_spin(spins, i):
+    new_spins = spins.copy()
+    new_spins[i] *= -1
+    return new_spins
+
+
 if __name__ == "__main__":
-    # We usually achieve the exact value
-    # (or optimal, for Erdős–Rényi, with unknown exact value)
-    # for each of the following examples.
-
-    # Example: Peterson graph
-    # G = nx.petersen_graph()
-    # Known MAXCUT size: 12
-
-    # Example: Icosahedral graph
-    # G = nx.icosahedral_graph()
-    # Known MAXCUT size: 20
-
-    # Example: Complete bipartite K_{m, n}
-    # m, n = 16, 16
-    # G = nx.complete_bipartite_graph(m, n)
-    # Known MAXCUT size: m * n
-
-    # Generate a "harder" test case: Erdős–Rényi random graph with 20 nodes, edge probability 0.5
-    n_nodes = 20
-    edge_prob = 0.5
-    G = nx.erdos_renyi_graph(n_nodes, edge_prob, seed=42)
-    # Cut value is approximately 63 for this example.
-
-    # Create a Barabási–Albert (BA) graph with 20 nodes and 2 edges to attach from a new node to existing nodes
-    # G = nx.barabasi_albert_graph(n=20, m=2, seed=42)
-
-    # Non-uniform edge weights
-    # G = nx.Graph()
-    # G.add_edge(0, 1, weight=3.69)
-    # G.add_edge(0, 2, weight=2.2)
-    # G.add_edge(0, 3, weight=2.26)
-    # G.add_edge(0, 4, weight=4.01)
-    # G.add_edge(0, 5, weight=1.29)
-
     # NP-complete spin glass
-    # G = generate_spin_glass_graph(seed=42)
+    G = generate_spin_glass_graph(n_nodes=64, seed=42)
 
-    cut_value, bitstring, cut_edges = maxcut_tfim(G)
+    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=11)
 
     print((cut_value, bitstring, cut_edges))
+
+    # Convert bitstring to spins
+    spins = {i: 1 if bitstring[i] == '1' else -1 for i in range(len(bitstring))}
+
+    # Reconstruct Ising energy (note: MAXCUT flips sign!)
+    E_claim = -sum(G[u][v].get("weight", 1) * spins[u] * spins[v] for u, v in G.edges())
+
+    for i in range(10):  # Try 10 random single spin flips
+        idx = np.random.randint(0, len(spins))
+        perturbed = flip_spin(spins, idx)
+        E_perturbed = -sum(G[u][v].get("weight", 1) * perturbed[u] * perturbed[v] for u, v in G.edges())
+        assert E_claim <= E_perturbed  # Should not find a better energy)
