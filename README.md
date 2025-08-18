@@ -69,7 +69,7 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
 
 
 G = generate_spin_glass_graph(n_nodes=64, seed=42)
-cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G)
+cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G, quality=0)
 ```
 
 ## About
