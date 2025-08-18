@@ -7,7 +7,7 @@
 
 import networkx as nx
 import numpy as np
-from PyQrackIsing import spin_glass_solver
+from PyQrackIsing import maxcut_tfim, spin_glass_solver
 
 
 # NP-complete spin glass
@@ -58,6 +58,7 @@ if __name__ == "__main__":
     # NP-complete spin glass
     # G = generate_spin_glass_graph(seed=42)
 
-    cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
+    cut_value, bitstring, cut_edges = maxcut_tfim(G)
+    # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
 
     print((cut_value, bitstring, cut_edges))
