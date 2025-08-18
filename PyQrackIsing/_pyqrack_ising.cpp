@@ -114,6 +114,7 @@ std::vector<double> maxcut_hamming_cdf(
         x /= tot_prob;
     }
 
+    tot_prob = 0.0;
     for (size_t i = 0U; i < hamming_prob.size(); ++i) {
         tot_prob += hamming_prob[i];
         hamming_prob[i] = tot_prob;
