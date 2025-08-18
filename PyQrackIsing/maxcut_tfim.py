@@ -79,6 +79,7 @@ def maxcut_tfim(
     G,
     quality = 12,
     shots = None,
+    is_spin_glass = False
 ):
     # Number of qubits/nodes
     n_qubits = G.number_of_nodes()
@@ -86,7 +87,11 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    J_eff = np.array([sum(-edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
+    J_eff = None
+    if is_spin_glass:
+        J_eff = np.array([sum(-edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
+    else:
+        J_eff = np.array([sum(edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
     degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
     thresholds = tfim_sampler._maxcut_hamming_cdf(J_eff, degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
