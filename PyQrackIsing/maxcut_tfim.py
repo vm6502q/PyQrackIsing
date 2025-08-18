@@ -85,7 +85,7 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    degrees = np.array([sum(edge_attributes.get('weight', 1.0) for neighbor, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
+    degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for neighbor, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
     thresholds = tfim_sampler._maxcut_hamming_cdf(degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
     weights = 1.0 / (degrees + 1.0)

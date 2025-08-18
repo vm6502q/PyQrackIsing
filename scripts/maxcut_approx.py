@@ -76,7 +76,7 @@ def get_hamming_probabilities(n_qubits, J, h, theta, z, t):
     return bias
 
 
-def evaluate_cut_edges(samples, flat_edges):
+def evaluate_cut_edges_numba(samples, flat_edges):
     best_value = -1
     best_solution = None
     best_cut_edges = None
@@ -171,13 +171,10 @@ def maxcut_tfim(
     n_steps = None,
     delta_t = None,
     shots = None,
-    mult_log2 = None,
+    mult_log2 = 10
 ):
     # Number of qubits/nodes
     n_qubits = G.number_of_nodes()
-    # Multiplicity (power of 2) of shots and steps
-    if mult_log2 is None:
-        mult_log2 = 10
     if J_func is None:
         # Coupling interaction
         J_func = lambda G: graph_to_J(G, n_qubits)
@@ -245,7 +242,7 @@ def maxcut_tfim(
     thresholds[-1] = 1.0
 
     G_dict = nx.to_dict_of_lists(G)
-    degrees = np.array([sum(edge_attributes.get('weight', 1.0) for neighbor, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
+    degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for neighbor, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
     weights = 1.0 / (degrees + 1.0)
     samples = []
     for s in range(shots):
@@ -258,9 +255,17 @@ def maxcut_tfim(
         # Second dimension: permutation within Hamming weight
         samples.append(local_repulsion_choice(G_dict, degrees, weights, n_qubits, m))
 
-    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, [int(item) for tup in G.edges() for item in tup])
+    best_value, best_solution, best_cut_edges = evaluate_cut_edges_numba(samples, [int(item) for tup in G.edges() for item in tup])
 
     return best_value, int_to_bitstring(best_solution, n_qubits), best_cut_edges
+
+
+# NP-complete spin glass
+def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
+    G = nx.random_regular_graph(d=degree, n=n_nodes, seed=seed)
+    for u, v in G.edges():
+        G[u][v]['weight'] = np.random.choice([-1, 1])  # spin glass couplings
+    return G
 
 
 if __name__ == "__main__":
@@ -297,5 +302,8 @@ if __name__ == "__main__":
     # G.add_edge(0, 3, weight=2.26)
     # G.add_edge(0, 4, weight=4.01)
     # G.add_edge(0, 5, weight=1.29)
+
+    # NP-complete spin glass
+    # G = generate_spin_glass_graph(seed=42)
 
     print(maxcut_tfim(G))
