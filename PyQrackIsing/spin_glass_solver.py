@@ -22,6 +22,7 @@ def compute_energy(theta_bits, G):
 
     return energy
 
+
 # Parallelization by Elara (OpenAI custom GPT):
 def bootstrap_worker(args):
     theta, G, indices = args
@@ -34,8 +35,22 @@ def bootstrap_worker(args):
 
     return indices, energy, flipped
 
-def spin_glass_solver(G, quality=2):
-    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
+
+# By Gemini (Google Search AI)
+def int_to_bitstring(integer, length):
+    return (bin(integer)[2:].zfill(length))[::-1]
+
+
+def spin_glass_solver(G, quality=2, best_guess=None):
+    bitstring = ''
+    if isinstance(best_guess, str):
+        bitstring = best_guess
+    elif isinstance(best_guess, int):
+        bitstring = int_to_bitstring(best_guess)
+    elif isinstance(best_guess, list):
+        bitstring = "".join(["1" if b else "0" for b in best_guess])
+    else:
+        cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
     best_theta = [ b == '1' for b in list(bitstring)]
     n_qubits = len(best_theta)
     min_energy = compute_energy(best_theta, G)

@@ -68,10 +68,10 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
     return G
 
 
-G = generate_spin_glass_graph(n_nodes=64, seed=42)
+G = generate_spin_glass_graph(n_nodes=64, seed=42, best_guess=None)
 cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G, quality=2)
 ```
-(The quality setting default is `2`.) It is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
+The `quality` setting default is `2`, and overhead grows roughly like the qubit count to the power of `quality` (so `O(n ** 2)` for default). `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
