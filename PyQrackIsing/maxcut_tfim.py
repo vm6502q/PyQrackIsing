@@ -49,24 +49,25 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
-def evaluate_cut_edges(samples, flat_edges):
-    best_value = -1
+def evaluate_cut_edges(samples, G):
+    best_value = float("-inf")
     best_solution = None
     best_cut_edges = None
+
     for state in samples:
         cut_edges = []
-        for i in range(len(flat_edges) // 2):
-            i2 = i << 1
-            u, v = flat_edges[i2], flat_edges[i2 + 1]
+        cut_value = 0
+        for u, v, data in G.edges(data=True):
             if ((state >> u) & 1) != ((state >> v) & 1):
                 cut_edges.append((u, v))
-        cut_size = len(cut_edges)
-        if cut_size > best_value:
-            best_value = cut_size
+                cut_value += data.get("weight", 1.0)
+
+        if cut_value > best_value:
+            best_value = cut_value
             best_solution = state
             best_cut_edges = cut_edges
 
-    return best_value, best_solution, best_cut_edges
+    return float(best_value), best_solution, best_cut_edges
 
 
 # By Gemini (Google Search AI)
@@ -89,7 +90,8 @@ def maxcut_tfim(
     degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
     thresholds = tfim_sampler._maxcut_hamming_cdf(J_eff, degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
-    weights = 1.0 / (degrees + 1.0)
+    J_max = max(J_eff)
+    weights = 1.0 / (1.0 + (J_max - J_eff))
     samples = []
     for s in range(shots):
         # First dimension: Hamming weight
@@ -101,6 +103,6 @@ def maxcut_tfim(
         # Second dimension: permutation within Hamming weight
         samples.append(local_repulsion_choice(G_dict, degrees, weights, n_qubits, m))
 
-    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, [int(item) for tup in G.edges() for item in tup])
+    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, G)
 
     return best_value, int_to_bitstring(best_solution, n_qubits), best_cut_edges

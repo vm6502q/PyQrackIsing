@@ -3,16 +3,15 @@ import multiprocessing
 import os
 
 
-def evaluate_cut_edges(state, flat_edges):
+def evaluate_cut_edges(state, G):
     cut_edges = []
-    for i in range(len(flat_edges) // 2):
-        i2 = i << 1
-        u, v = flat_edges[i2], flat_edges[i2 + 1]
+    cut_value = 0
+    for u, v, data in G.edges(data=True):
         if ((state >> u) & 1) != ((state >> v) & 1):
             cut_edges.append((u, v))
-    cut_size = len(cut_edges)
+            cut_value += data.get("weight", 1.0)
 
-    return cut_size, cut_edges
+    return float(cut_value), cut_edges
 
 
 def compute_energy(theta_bits, G):
@@ -34,8 +33,8 @@ def bootstrap_worker(args):
 
     return indices, energy, flipped
 
-def spin_glass_solver(G):
-    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
+def spin_glass_solver(G, quality=0):
+    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality)
     best_theta = [ b == '1' for b in list(bitstring)]
     min_energy = compute_energy(best_theta, G)
     n_qubits = len(best_theta)
@@ -94,6 +93,6 @@ def spin_glass_solver(G):
         if b:
             sample |= 1 << i
 
-    cut_value, cut_edges = evaluate_cut_edges(sample, [int(item) for tup in G.edges() for item in tup])
+    cut_value, cut_edges = evaluate_cut_edges(sample, G)
 
     return cut_value, bitstring, cut_edges, min_energy
