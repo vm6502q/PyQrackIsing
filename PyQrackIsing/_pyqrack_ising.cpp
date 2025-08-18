@@ -86,7 +86,7 @@ std::vector<double> maxcut_hamming_cdf(
     const int shots = n_qubits << mult_log2;
     const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
     const double h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t);
-    std::vector<double> hamming_prob(n_qubits + 1U, 0.0);
+    std::vector<double> hamming_prob(n_qubits - 1U, 0.0);
 
     for (int step = 0; step < n_steps; ++step) {
         double t = step * delta_t;
@@ -98,35 +98,29 @@ std::vector<double> maxcut_hamming_cdf(
             auto bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits);
             if (step == 0) {
                 for (size_t i = 0U; i < hamming_prob.size(); ++i) {
-                    hamming_prob[i] += bias[i];
+                    hamming_prob[i] += bias[i + 1U];
                 }
                 continue;
             }
             auto last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits);
             for (size_t i = 0U; i < hamming_prob.size(); ++i) {
-                hamming_prob[i] += bias[i] - last_bias[i];
+                hamming_prob[i] += bias[i + 1U] - last_bias[i + 1U];
             }
-        }
-        double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
-        for (auto& x : hamming_prob) {
-            x /= tot_prob;
         }
     }
 
-    double tot_prob = std::accumulate(hamming_prob.begin() + 1, hamming_prob.end() - 1U, 0.0);
+    double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
     for (auto& x : hamming_prob) {
         x /= tot_prob;
     }
 
-    tot_prob = 0.0;
-    std::vector<double> thresholds(hamming_prob.size() - 2U);
-    for (size_t i = 0U; i < thresholds.size(); ++i) {
-        tot_prob += hamming_prob[i + 1U];
-        thresholds[i] = tot_prob;
+    for (size_t i = 0U; i < hamming_prob.size(); ++i) {
+        tot_prob += hamming_prob[i];
+        hamming_prob[i] = tot_prob;
     }
-    thresholds.back() = 1.0;
+    hamming_prob.back() = 1.0;
 
-    return thresholds;
+    return hamming_prob;
 }
 
 static inline double closeness_like_bits(BigInteger perm, size_t n_rows, size_t n_cols) {

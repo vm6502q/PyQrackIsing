@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # for each of the following examples.
 
     # Example: Peterson graph
-    G = nx.petersen_graph()
+    # G = nx.petersen_graph()
     # Known MAXCUT size: 12
 
     # Example: Icosahedral graph
@@ -39,9 +39,9 @@ if __name__ == "__main__":
     # Known MAXCUT size: m * n
 
     # Generate a "harder" test case: Erdős–Rényi random graph with 20 nodes, edge probability 0.5
-    # n_nodes = 20
-    # edge_prob = 0.5
-    # G = nx.erdos_renyi_graph(n_nodes, edge_prob, seed=42)
+    n_nodes = 20
+    edge_prob = 0.5
+    G = nx.erdos_renyi_graph(n_nodes, edge_prob, seed=42)
     # Cut value is approximately 63 for this example.
 
     # Create a Barabási–Albert (BA) graph with 20 nodes and 2 edges to attach from a new node to existing nodes
