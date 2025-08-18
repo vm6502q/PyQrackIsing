@@ -73,10 +73,15 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
     return s;
 }
 
-std::vector<double> maxcut_hamming_cdf(py::array_t<double, py::array::c_style | py::array::forcecast> _degrees, int mult_log2) {
-    auto buf = _degrees.request();
-    size_t n_qubits = buf.shape[0];
-    double* degrees = static_cast<double*>(buf.ptr);
+std::vector<double> maxcut_hamming_cdf(
+    py::array_t<double, py::array::c_style | py::array::forcecast> _J_func,
+    py::array_t<double, py::array::c_style | py::array::forcecast> _degrees,
+    int mult_log2
+) {
+    auto bufj = _J_func.request();
+    size_t n_qubits = bufj.shape[0];
+    double* J_func = static_cast<double*>(bufj.ptr);
+    double* degrees = static_cast<double*>(_degrees.request().ptr);
     const int n_steps = n_qubits << mult_log2;
     const int shots = n_qubits << mult_log2;
     const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
@@ -88,7 +93,7 @@ std::vector<double> maxcut_hamming_cdf(py::array_t<double, py::array::c_style | 
         double tm1 = (step - 1) * delta_t;
         for (int q = 0; q < n_qubits; ++q) {
             const double& z = degrees[q];
-            const double J_eff = -z;
+            const double J_eff = J_func[q];
             const double h_t = h_mult * t;
             auto bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits);
             if (step == 0) {
