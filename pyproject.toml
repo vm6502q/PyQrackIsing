@@ -5,13 +5,12 @@ requires = [
     "setuptools",
     "networkx",
     "numpy",
-    "numba",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "PyQrackIsing"
-version = "1.5.2"
+version = "1.5.3"
 requires-python = ">=3.8"
 description = "Near-ideal closed-form solutions for transverse field Ising model (TFIM)"
 readme = {file = "README.txt", content-type = "text/markdown"}
