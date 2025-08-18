@@ -69,8 +69,9 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
 
 
 G = generate_spin_glass_graph(n_nodes=64, seed=42)
-cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G, quality=0)
+cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G, quality=0, is_maxcut=False)
 ```
+The spin glass solver default quality is 0. (This doesn't mean the solution is low-quality.) It can alternatively be used as a general MAXCUT solver if the parameter `is_maxcut` is set to `True`.
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
