@@ -42,7 +42,7 @@ def bootstrap_worker(args):
     return indices, energy, flipped
 
 def multiprocessing_bootstrap(G):
-    cut_value, bitstring, cut_edges = maxcut_tfim(G)
+    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=10)
     print((cut_value, bitstring, cut_edges))
     best_theta = np.array([1 if b == '1' else 0 for b in list(bitstring)])
     min_energy = compute_energy(best_theta, G)
@@ -109,7 +109,7 @@ def multiprocessing_bootstrap(G):
 
 if __name__ == "__main__":
     # NP-complete spin glass
-    G = generate_spin_glass_graph(n_nodes=16, seed=42)
+    G = generate_spin_glass_graph(n_nodes=64, seed=42)
 
     # Run threaded bootstrap
     theta, min_energy = multiprocessing_bootstrap(G)
