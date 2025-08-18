@@ -51,6 +51,27 @@ best_cut_value, best_solution_bit_string, best_cut_edges = maxcut_tfim(G, qualit
 
 The (integer) `quality` setting is optional, with a default value of `12`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
 
+Based on a combination of the TFIM-inspired MAXCUT solver and another technique for finding ground-state energy in quantum chemistry that we call the _"binary Clifford eigensolver,"_ we also provide an (approximate) spin glass ground-state solver:
+```py
+from PyQrackIsing import spin_glass_solver
+import networkx as nx
+import numpy as np
+
+
+# NP-complete spin glass
+def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
+    if not (seed is None):
+        np.random.seed(seed)
+    G = nx.random_regular_graph(d=degree, n=n_nodes, seed=seed)
+    for u, v in G.edges():
+        G[u][v]['weight'] = np.random.choice([-1, 1])  # spin glass couplings
+    return G
+
+
+G = generate_spin_glass_graph(n_nodes=64, seed=42)
+cut_value, bitstring, cut_edges, min_energy = spin_glass_solver(G)
+```
+
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
 
