@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import tfim_sampler
+from numba import njit
 
 
 # Written by Elara (OpenAI custom GPT)
@@ -49,6 +50,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
+@njit
 def evaluate_cut_edges(samples, flat_edges):
     best_value = -1
     best_solution = None
