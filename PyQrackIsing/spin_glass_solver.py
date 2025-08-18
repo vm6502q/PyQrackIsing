@@ -35,7 +35,7 @@ def bootstrap_worker(args):
     return indices, energy, flipped
 
 def spin_glass_solver(G):
-    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=6)
+    cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
     best_theta = [ b == '1' for b in list(bitstring)]
     min_energy = compute_energy(best_theta, G)
     n_qubits = len(best_theta)
