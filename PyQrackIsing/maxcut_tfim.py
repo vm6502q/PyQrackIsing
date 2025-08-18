@@ -76,7 +76,7 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality = 10,
+    quality = 12,
     shots = None,
 ):
     # Number of qubits/nodes
