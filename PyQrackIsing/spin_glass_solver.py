@@ -93,7 +93,8 @@ def spin_glass_solver(G, quality=2, best_guess=None):
 
             energy = min(energies)
             if energy < min_energy:
-                indices = indices[int(np.where(energies == energy)[0])]
+                index_match = np.where(energies == energy)[0][0]
+                indices = indices[index_match]
                 min_energy = energy
                 for i in range(len(indices)):
                     index = indices[i]
