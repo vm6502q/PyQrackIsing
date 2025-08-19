@@ -1,5 +1,5 @@
 # PyQrack Ising
-Efficiently generate near-ideal samples from transverse field Ising model (TFIM)
+Efficiently generate near-ideal samples from transverse field Ising model (TFIM), and TFIM-inspired MAXCUT solutions
 
 (It's "the **Ising** on top.")
 
