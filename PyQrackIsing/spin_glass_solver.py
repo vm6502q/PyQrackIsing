@@ -88,13 +88,13 @@ def spin_glass_solver(G, quality=2, best_guess=None):
 
             theta = best_theta.copy()
 
-            indices = list(itertools.combinations(range(n_qubits), k))
-            energies = bootstrap(theta, edge_keys, edge_values, k, list(item for sublist in indices for item in sublist))
+            indices = list(item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist)
+            energies = bootstrap(theta, edge_keys, edge_values, k, indices)
 
             energy = min(energies)
             if energy < min_energy:
-                index_match = np.where(energies == energy)[0][0]
-                indices = indices[index_match]
+                index_match = np.random.choice(np.where(energies == energy)[0])
+                indices = indices[(index_match * k):((index_match + 1) * k)]
                 min_energy = energy
                 for i in range(len(indices)):
                     index = indices[i]
