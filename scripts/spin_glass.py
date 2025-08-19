@@ -18,7 +18,7 @@ def generate_spin_glass_graph(n_nodes=64, degree=3, seed=None):
 if __name__ == "__main__":
     # NP-complete spin glass
     G = generate_spin_glass_graph(n_nodes=64, seed=42)
-    cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
+    cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, quality=5)
 
     print((cut_value, bitstring, cut_edges))
     print(f"Ground State Energy: {energy}")
