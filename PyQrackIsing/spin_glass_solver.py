@@ -1,38 +1,56 @@
 from .maxcut_tfim import maxcut_tfim
 import itertools
-import multiprocessing
+import numpy as np
+from numba import njit, prange
 import os
 
 
-def evaluate_cut_edges(state, edges):
+def evaluate_cut_edges(state, edge_keys, edge_values):
     cut_edges = []
     cut_value = 0
-    for key, weight in edges.items():
-        if ((state >> key[0]) & 1) != ((state >> key[1]) & 1):
-            cut_edges.append(key)
-            cut_value += weight
+    for i in range(len(edge_values)):
+        k = i << 1
+        u, v = edge_keys[k], edge_keys[k + 1]
+        if ((state >> u) & 1) != ((state >> v) & 1):
+            cut_edges.append((u, v))
+            cut_value += edge_values[i]
 
     return float(cut_value), cut_edges
 
 
-def compute_energy(theta_bits, edges):
-    spins = {i: 1 if theta_bits[i] else -1 for i in range(len(theta_bits))}
-    energy = sum(value * spins[key[0]] * spins[key[1]] for key, value in edges.items())
+@njit
+def compute_energy(theta_bits, edge_keys, edge_values):
+    energy = 0
+    for i in range(len(edge_values)):
+        k = i << 1
+        u, v = edge_keys[k], edge_keys[k + 1]
+        spin_u = 1 if theta_bits[u] else -1
+        spin_v = 1 if theta_bits[v] else -1
+        energy += edge_values[i] * spin_u * spin_v
 
     return energy
 
 
-# Parallelization by Elara (OpenAI custom GPT):
-def bootstrap_worker(args):
-    theta, edges, indices = args
+@njit
+def bootstrap_worker(theta, edge_keys, edge_values, indices):
     local_theta = theta.copy()
-    flipped = []
     for i in indices:
         local_theta[i] = not local_theta[i]
-        flipped.append(local_theta[i])
-    energy = compute_energy(local_theta, edges)
+    energy = compute_energy(local_theta, edge_keys, edge_values)
 
-    return indices, energy, flipped
+    return energy
+
+
+@njit(parallel=True)
+def bootstrap(theta, edge_keys, edge_values, k, indices_array):
+    n = len(indices_array) // k
+    energies = np.empty(n)
+    j = 0
+    for i in prange(n):
+        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j:j+k])
+        j += k
+
+    return energies
 
 
 # By Gemini (Google Search AI)
@@ -53,11 +71,14 @@ def spin_glass_solver(G, quality=2, best_guess=None):
     best_theta = [ b == '1' for b in list(bitstring)]
     n_qubits = len(best_theta)
 
-    edges = {}
+    edge_keys = []
+    edge_values = []
     for u, v, data in G.edges(data=True):
-        edges[(u, v)] = data.get("weight", 1.0)
+        edge_keys.append(u)
+        edge_keys.append(v)
+        edge_values.append(data.get("weight", 1.0))
 
-    min_energy = compute_energy(best_theta, edges)
+    min_energy = compute_energy(best_theta, edge_keys, edge_values)
     improved = True
     while improved:
         improved = False
@@ -66,20 +87,17 @@ def spin_glass_solver(G, quality=2, best_guess=None):
                 break
 
             theta = best_theta.copy()
-            args = []
 
-            for combo in itertools.combinations(range(n_qubits), k):
-                args.append((theta, edges, combo))
+            indices = list(itertools.combinations(range(n_qubits), k))
+            energies = bootstrap(theta, edge_keys, edge_values, k, list(item for sublist in indices for item in sublist))
 
-            with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-                results = pool.map(bootstrap_worker, args)
-
-            results.sort(key=lambda r: r[1])
-            indices, energy, flipped = results[0]
+            energy = min(energies)
             if energy < min_energy:
+                indices = indices[int(np.where(energies == energy)[0])]
                 min_energy = energy
                 for i in range(len(indices)):
-                    best_theta[indices[i]] = flipped[i]
+                    index = indices[i]
+                    best_theta[index] = not best_theta[index]
                 improved = True
                 break
 
@@ -91,6 +109,6 @@ def spin_glass_solver(G, quality=2, best_guess=None):
         if b:
             sample |= 1 << i
 
-    cut_value, cut_edges = evaluate_cut_edges(sample, edges)
+    cut_value, cut_edges = evaluate_cut_edges(sample, edge_keys, edge_values)
 
     return cut_value, bitstring, cut_edges, min_energy
