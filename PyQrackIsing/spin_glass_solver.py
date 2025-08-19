@@ -4,34 +4,33 @@ import multiprocessing
 import os
 
 
-def evaluate_cut_edges(state, G):
+def evaluate_cut_edges(state, edges):
     cut_edges = []
     cut_value = 0
-    for u, v, data in G.edges(data=True):
-        if ((state >> u) & 1) != ((state >> v) & 1):
-            cut_edges.append((u, v))
-            cut_value += data.get("weight", 1.0)
+    for key, weight in edges.items():
+        if ((state >> key[0]) & 1) != ((state >> key[1]) & 1):
+            cut_edges.append(key)
+            cut_value += weight
 
     return float(cut_value), cut_edges
 
 
-def compute_energy(theta_bits, G):
-    # Reconstruct Ising energy (note: MAXCUT flips sign!)
+def compute_energy(theta_bits, edges):
     spins = {i: 1 if theta_bits[i] else -1 for i in range(len(theta_bits))}
-    energy = sum(G[u][v].get("weight", 1) * spins[u] * spins[v] for u, v in G.edges())
+    energy = sum(value * spins[key[0]] * spins[key[1]] for key, value in edges.items())
 
     return energy
 
 
 # Parallelization by Elara (OpenAI custom GPT):
 def bootstrap_worker(args):
-    theta, G, indices = args
+    theta, edges, indices = args
     local_theta = theta.copy()
     flipped = []
     for i in indices:
         local_theta[i] = not local_theta[i]
         flipped.append(local_theta[i])
-    energy = compute_energy(local_theta, G)
+    energy = compute_energy(local_theta, edges)
 
     return indices, energy, flipped
 
@@ -53,7 +52,12 @@ def spin_glass_solver(G, quality=2, best_guess=None):
         cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
     best_theta = [ b == '1' for b in list(bitstring)]
     n_qubits = len(best_theta)
-    min_energy = compute_energy(best_theta, G)
+
+    edges = {}
+    for u, v, data in G.edges(data=True):
+        edges[(u, v)] = data.get("weight", 1.0)
+
+    min_energy = compute_energy(best_theta, edges)
     improved = True
     while improved:
         improved = False
@@ -65,7 +69,7 @@ def spin_glass_solver(G, quality=2, best_guess=None):
             args = []
 
             for combo in itertools.combinations(range(n_qubits), k):
-                args.append((theta, G, combo))
+                args.append((theta, edges, combo))
 
             with multiprocessing.Pool(processes=os.cpu_count()) as pool:
                 results = pool.map(bootstrap_worker, args)
@@ -87,6 +91,6 @@ def spin_glass_solver(G, quality=2, best_guess=None):
         if b:
             sample |= 1 << i
 
-    cut_value, cut_edges = evaluate_cut_edges(sample, G)
+    cut_value, cut_edges = evaluate_cut_edges(sample, edges)
 
     return cut_value, bitstring, cut_edges, min_energy
