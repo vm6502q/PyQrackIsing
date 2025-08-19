@@ -64,7 +64,7 @@ def spin_glass_solver(G, quality=2, best_guess=None):
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
-        bitstring = int_to_bitstring(best_guess)
+        bitstring = int_to_bitstring(best_guess, G.number_of_nodes())
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
@@ -112,4 +112,4 @@ def spin_glass_solver(G, quality=2, best_guess=None):
 
     cut_value, cut_edges = evaluate_cut_edges(sample, edge_keys, edge_values)
 
-    return cut_value, bitstring, cut_edges, min_energy
+    return float(cut_value), bitstring, cut_edges, float(min_energy)

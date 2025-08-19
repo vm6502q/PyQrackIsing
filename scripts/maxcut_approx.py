@@ -8,6 +8,23 @@
 import networkx as nx
 import numpy as np
 from PyQrackIsing import maxcut_tfim, spin_glass_solver
+# from cvxgraphalgs.algorithms import goemans_williamson_weighted
+
+# By Gemini (Google Search AI)
+def int_to_bitstring(integer, length):
+    return (bin(integer)[2:].zfill(length))[::-1]
+
+
+def compute_energy(bitstring, G):
+    theta_bits = [ b == '1' for b in list(bitstring)]
+    energy = 0
+    for u, v, data in G.edges(data=True):
+        value = data.get("weight", 1.0)
+        spin_u = 1 if theta_bits[u] else -1
+        spin_v = 1 if theta_bits[v] else -1
+        energy += value * spin_u * spin_v
+
+    return energy
 
 
 # NP-complete spin glass
@@ -61,5 +78,17 @@ if __name__ == "__main__":
     # cut_value, bitstring, cut_edges = maxcut_tfim(G)
     cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
     # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=12)[1])
-
     print((cut_value, bitstring, cut_edges))
+
+    # cut = goemans_williamson_weighted(G)
+    # left = cut.left
+    # right = cut.right
+    # gw_int = 0
+    # for b in right:
+    #     gw_int |= 1 << b
+    # gw_bit_string = int_to_bitstring(gw_int, G.number_of_nodes())
+    # gw_energy = compute_energy(gw_bit_string, G)
+    # print(f"GW: {(gw_bit_string, gw_energy)}")
+
+    # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, best_guess=gw_bit_string)
+    # print(f"vs: {(bitstring, energy)}")
