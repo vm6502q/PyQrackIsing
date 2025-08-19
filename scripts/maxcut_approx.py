@@ -60,5 +60,6 @@ if __name__ == "__main__":
 
     # cut_value, bitstring, cut_edges = maxcut_tfim(G)
     cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
+    # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=12)[1])
 
     print((cut_value, bitstring, cut_edges))
