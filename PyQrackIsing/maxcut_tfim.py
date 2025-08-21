@@ -18,7 +18,7 @@ def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
     weights = weights.copy()
 
     chosen = []
-    available = set(nodes)
+    available = set(range(len(nodes)))
 
     for _ in range(m):
         if not available:
@@ -38,9 +38,10 @@ def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
         available.remove(node)
 
         # Repulsion: penalize neighbors
-        for nbr in adjacency.get(node, []):
-            if nbr in available:
-                weights[nbr] *= 0.5  # halve neighbor's weight (tunable!)
+        for nbr in adjacency.get(nodes[node], []):
+            idx = nodes.index(nbr)
+            if idx in available:
+                weights[idx] *= 0.5  # halve neighbor's weight (tunable!)
 
     # Build integer mask
     mask = 0
