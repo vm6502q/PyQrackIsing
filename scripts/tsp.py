@@ -33,7 +33,7 @@ def get_best_stitch(adjacency, a_term, terminals_b):
     return best_weight, best_edge
 
 
-def recurse_tsp(G):
+def recurse_tsp(G, recursing=False):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
@@ -62,8 +62,8 @@ def recurse_tsp(G):
             G_b.add_edge(b.index(u), b.index(v), weight=weight)
             continue
 
-    sol_a = recurse_tsp(G_a) if len(a) > 2 else (([0, 1], G_a[0][1]['weight']) if len(a) == 2 else ([0], 0))
-    sol_b = recurse_tsp(G_b) if len(b) > 2 else (([0, 1], G_b[0][1]['weight']) if len(b) == 2 else ([0], 0))
+    sol_a = recurse_tsp(G_a, True) if len(a) > 2 else (([0, 1], G_a[0][1]['weight']) if len(a) == 2 else ([0], 0))
+    sol_b = recurse_tsp(G_b, True) if len(b) > 2 else (([0, 1], G_b[0][1]['weight']) if len(b) == 2 else ([0], 0))
     sol_weight  = sol_a[1] + sol_b[1]
 
     path_a = [a[idx] for idx in sol_a[0]]
@@ -85,6 +85,9 @@ def recurse_tsp(G):
         path_a.reverse()
     if best_edge[1] == terminals_b[1]:
         path_b.reverse()
+
+    if not recursing:
+        best_weight += G[path_a[0]][path_b[-1]]['weight']
 
     return (path_a + path_b, sol_weight + best_weight)
 
