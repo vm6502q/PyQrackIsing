@@ -97,4 +97,4 @@ if __name__ == "__main__":
     print(f"Node count: {n_nodes}")
     print(f"Path: {circuit}")
     print(f"Path length: {path_length}")
-    print("(The average randomized separation between each and every node is about 0.5.)")
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")
