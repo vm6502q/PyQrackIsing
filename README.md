@@ -74,7 +74,7 @@ solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quali
 ```
 The `quality` setting default is `2`, and overhead grows roughly like the qubit count to the power of `quality` (so `O(n ** 2)` for default). `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G, quality=0)` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
 
-From the MAXCUT solver, we provide a (recursive) Traveling Salesman Problem (TSP) solver:
+From the `spin_glass_solver()`, we provide a (recursive) Traveling Salesman Problem (TSP) solver:
 ```py
 from PyQrackIsing import tsp_symmetric
 import networkx as nx
@@ -93,7 +93,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 n_nodes = 128
 G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-circuit, path_length = tsp_symmetric(G, is_cyclic=True)
+circuit, path_length = tsp_symmetric(G, quality=2, is_cyclic=True)
 
 print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")

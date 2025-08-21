@@ -20,7 +20,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
     return best_weight, best_edge
 
 
-def tsp_symmetric(G, is_cyclic=True):
+def tsp_symmetric(G, quality=2, is_cyclic=True):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
@@ -31,7 +31,7 @@ def tsp_symmetric(G, is_cyclic=True):
     a = []
     b = []
     while (len(a) == 0) or (len(b) == 0):
-        bitstring, _, _, _ = spin_glass_solver(G)
+        bitstring, _, _, _ = spin_glass_solver(G, quality=quality)
         for idx, bit in enumerate(bitstring):
             if bit == '1':
                 b.append(nodes[idx])
@@ -49,8 +49,8 @@ def tsp_symmetric(G, is_cyclic=True):
             G_b.add_edge(b.index(u), b.index(v), weight=weight)
             continue
 
-    sol_a = tsp_symmetric(G_a, True) if len(a) > 2 else (([0, 1], G_a[0][1]['weight']) if len(a) == 2 else ([0], 0))
-    sol_b = tsp_symmetric(G_b, True) if len(b) > 2 else (([0, 1], G_b[0][1]['weight']) if len(b) == 2 else ([0], 0))
+    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False) if len(a) > 2 else (([0, 1], G_a[0][1]['weight']) if len(a) == 2 else ([0], 0))
+    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False) if len(b) > 2 else (([0, 1], G_b[0][1]['weight']) if len(b) == 2 else ([0], 0))
     sol_weight  = sol_a[1] + sol_b[1]
 
     path_a = [a[idx] for idx in sol_a[0]]

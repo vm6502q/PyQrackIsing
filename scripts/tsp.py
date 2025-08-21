@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # NP-complete spin glass
     n_nodes = 128
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-    circuit, path_length = tsp_symmetric(G)
+    circuit, path_length = tsp_symmetric(G, quality=3)
 
     print(f"Node count: {n_nodes}")
     print(f"Path: {circuit}")
