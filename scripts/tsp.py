@@ -43,7 +43,7 @@ def recurse_tsp(G, is_recursing=False):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
-        return ([0, 1], G[0][1])
+        return ([0, 1], G[0][1]['weight'])
 
     nodes = list(G.nodes())
 
