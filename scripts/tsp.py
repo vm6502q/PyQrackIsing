@@ -18,22 +18,28 @@ def generate_tsp_graph(n_nodes=64, seed=None):
     return G
 
 
-def get_best_stitch(adjacency, a_term, terminals_b):
+def get_best_stitch(adjacency, terminals_a, terminals_b, is_recursing=True):
     best_weight = float("inf")
     best_edge = None
-    for nbr in adjacency.get(a_term, []):
-        if nbr not in terminals_b:
-            continue
-        u, v = (a_term, nbr) if a_term < nbr else (nbr, a_term)
-        weight = G[a_term][nbr]["weight"]
-        if weight < best_weight:
-            best_weight = weight
-            best_edge = (u, v)
+    for a in range(2):
+        a_term = terminals_a[a]
+        for b in range(2):
+            b_term = terminals_b[b]
+            u, v = (a_term, b_term) if a_term < b_term else (b_term, a_term)
+            weight = adjacency[a_term][b_term]["weight"]
+            if not is_recursing:
+                n_a_term = terminals_a[0 if a else 1]
+                n_b_term = terminals_b[0 if b else 1]
+                w, x = (a_term, b_term) if a_term < b_term else (b_term, a_term)
+                weight += adjacency[n_a_term][n_b_term]["weight"]
+            if weight < best_weight:
+                best_weight = weight
+                best_edge = (u, v)
 
     return best_weight, best_edge
 
 
-def recurse_tsp(G, recursing=False):
+def recurse_tsp(G, is_recursing=False):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
@@ -73,21 +79,12 @@ def recurse_tsp(G, recursing=False):
     terminals_b = (path_b[0], path_b[-1])
 
     # Find the best edge to stitch "a" to "b"
-    
-    adjacency = nx.to_dict_of_lists(G)
-    best_weight, best_edge = get_best_stitch(adjacency, terminals_a[0], terminals_b)
-    weight, edge = get_best_stitch(adjacency, terminals_a[1], terminals_b)
-    if weight < best_weight:
-        best_weight = weight
-        best_edge = edge
+    best_weight, best_edge = get_best_stitch(G, terminals_a, terminals_b, is_recursing)
 
     if best_edge[0] == terminals_a[0]:
         path_a.reverse()
     if best_edge[1] == terminals_b[1]:
         path_b.reverse()
-
-    if not recursing:
-        best_weight += G[path_a[0]][path_b[-1]]['weight']
 
     return (path_a + path_b, sol_weight + best_weight)
 
