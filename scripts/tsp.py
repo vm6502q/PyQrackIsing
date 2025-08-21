@@ -24,7 +24,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_recursing=True):
         for b in range(2):
             b_term = terminals_b[b]
             u, v = (a_term, b_term) if a_term < b_term else (b_term, a_term)
-            weight = adjacency[a_term][b_term]["weight"]
+            weight = adjacency[u][v]["weight"]
             if not is_recursing:
                 n_a_term = terminals_a[0 if a else 1]
                 n_b_term = terminals_b[0 if b else 1]
