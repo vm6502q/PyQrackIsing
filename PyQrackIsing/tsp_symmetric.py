@@ -20,7 +20,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
     return best_weight, best_edge
 
 
-def tsp_symmetric(G, quality=2, is_cyclic=True):
+def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
@@ -30,13 +30,18 @@ def tsp_symmetric(G, quality=2, is_cyclic=True):
 
     a = []
     b = []
-    while (len(a) == 0) or (len(b) == 0):
-        bitstring, _, _, _ = spin_glass_solver(G, quality=quality)
-        for idx, bit in enumerate(bitstring):
-            if bit == '1':
-                b.append(nodes[idx])
-            else:
-                a.append(nodes[idx])
+    if not (start_node is None):
+        a = [start_node]
+        b = nodes
+        b.remove(start_node)
+    else:
+        while (len(a) == 0) or (len(b) == 0):
+            bitstring, _, _, _ = spin_glass_solver(G, quality=quality)
+            for idx, bit in enumerate(bitstring):
+                if bit == '1':
+                    b.append(nodes[idx])
+                else:
+                    a.append(nodes[idx])
 
     G_a = nx.Graph()
     G_b = nx.Graph()
