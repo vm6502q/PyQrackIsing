@@ -31,7 +31,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_recursing=True):
                 weight += adjacency[n_a_term][n_b_term]["weight"]
             if weight < best_weight:
                 best_weight = weight
-                best_edge = (a_term, b_term)
+                best_edge = (a, b)
 
     return best_weight, best_edge
 
@@ -76,11 +76,11 @@ def recurse_tsp(G, is_recursing=False):
     terminals_b = (path_b[0], path_b[-1])
 
     # Find the best edge to stitch "a" to "b"
-    best_weight, best_edge = get_best_stitch(G, terminals_a, terminals_b, is_recursing)
+    best_weight, best_end = get_best_stitch(G, terminals_a, terminals_b, is_recursing)
 
-    if best_edge[0] == terminals_a[0]:
+    if best_end[0] == 0:
         path_a.reverse()
-    if best_edge[1] == terminals_b[1]:
+    if best_end[1] == 1:
         path_b.reverse()
 
     return (path_a + path_b, sol_weight + best_weight)
