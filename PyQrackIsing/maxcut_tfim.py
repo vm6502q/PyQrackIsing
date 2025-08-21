@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 import tfim_sampler
+from numba import njit
 
 
 # Written by Elara (OpenAI custom GPT)
@@ -49,7 +50,8 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
-def evaluate_cut_edges(samples, G):
+@njit
+def evaluate_cut_edges(samples, edge_keys, edge_values):
     best_value = float("-inf")
     best_solution = None
     best_cut_edges = None
@@ -57,10 +59,12 @@ def evaluate_cut_edges(samples, G):
     for state in samples:
         cut_edges = []
         cut_value = 0
-        for u, v, data in G.edges(data=True):
+        for i in range(len(edge_values)):
+            k = i << 1
+            u, v = edge_keys[k], edge_keys[k + 1]
             if ((state >> u) & 1) != ((state >> v) & 1):
                 cut_edges.append((u, v))
-                cut_value += data.get("weight", 1.0)
+                cut_value += edge_values[i]
 
         if cut_value > best_value:
             best_value = cut_value
@@ -103,6 +107,13 @@ def maxcut_tfim(
         # Second dimension: permutation within Hamming weight
         samples.append(local_repulsion_choice(G_dict, degrees, weights, n_qubits, m))
 
-    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, G)
+    edge_keys = []
+    edge_values = []
+    for u, v, data in G.edges(data=True):
+        edge_keys.append(u)
+        edge_keys.append(v)
+        edge_values.append(data.get("weight", 1.0))
+
+    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, edge_keys, edge_values)
 
     return best_value, int_to_bitstring(best_solution, n_qubits), best_cut_edges
