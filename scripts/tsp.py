@@ -31,7 +31,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_recursing=True):
                 weight += adjacency[n_a_term][n_b_term]["weight"]
             if weight < best_weight:
                 best_weight = weight
-                best_edge = (u, v)
+                best_edge = (a_term, b_term)
 
     return best_weight, best_edge
 
