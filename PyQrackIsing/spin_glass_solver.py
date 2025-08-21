@@ -5,7 +5,6 @@ from numba import njit, prange
 import os
 
 
-@njit
 def evaluate_cut_edges(state, edge_keys, edge_values):
     cut_edges = []
     cut_value = 0

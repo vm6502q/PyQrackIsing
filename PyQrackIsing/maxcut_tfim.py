@@ -50,7 +50,6 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
-@njit
 def evaluate_cut_edges(samples, edge_keys, edge_values):
     best_value = float("-inf")
     best_solution = None
