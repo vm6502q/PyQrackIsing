@@ -75,10 +75,10 @@ if __name__ == "__main__":
     # NP-complete spin glass
     # G = generate_spin_glass_graph(seed=42)
 
-    # cut_value, bitstring, cut_edges = maxcut_tfim(G)
-    cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
-    # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=12)[1])
-    print((cut_value, bitstring, cut_edges))
+    # bitstring, cut_value, cut = maxcut_tfim(G)
+    bitstring, cut_value, cut, energy = spin_glass_solver(G)
+    # bitstring, cut_value, cut, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=12)[1])
+    print((bitstring, cut_value, cut))
 
     # cut = goemans_williamson_weighted(G)
     # left = cut.left
@@ -90,5 +90,5 @@ if __name__ == "__main__":
     # gw_energy = compute_energy(gw_bit_string, G)
     # print(f"GW: {(gw_bit_string, gw_energy)}")
 
-    # cut_value, bitstring, cut_edges, energy = spin_glass_solver(G, best_guess=gw_bit_string)
+    # bitstring, cut_value, energy = spin_glass_solver(G, best_guess=gw_bit_string)
     # print(f"vs: {(bitstring, energy)}")

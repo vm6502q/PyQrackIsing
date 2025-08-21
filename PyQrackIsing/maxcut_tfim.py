@@ -5,7 +5,7 @@ from numba import njit
 
 
 # Written by Elara (OpenAI custom GPT)
-def local_repulsion_choice(adjacency, degrees, weights, n, m):
+def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
     """
     Pick m nodes (bit positions) out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -18,7 +18,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     weights = weights.copy()
 
     chosen = []
-    available = set(range(n))
+    available = set(nodes)
 
     for _ in range(m):
         if not available:
@@ -62,15 +62,13 @@ def evaluate_cut_edges(samples, edge_keys, edge_values):
             k = i << 1
             u, v = edge_keys[k], edge_keys[k + 1]
             if ((state >> u) & 1) != ((state >> v) & 1):
-                cut_edges.append((u, v))
                 cut_value += edge_values[i]
 
         if cut_value > best_value:
             best_value = cut_value
             best_solution = state
-            best_cut_edges = cut_edges
 
-    return float(best_value), best_solution, best_cut_edges
+    return best_solution, float(best_value)
 
 
 # By Gemini (Google Search AI)
@@ -84,13 +82,15 @@ def maxcut_tfim(
     shots = None,
 ):
     # Number of qubits/nodes
-    n_qubits = G.number_of_nodes()
+    nodes = list(G.nodes())
+    n_qubits = len(nodes)
+
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    J_eff = np.array([-sum(edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
-    degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[i].items()) for i in range(n_qubits)], dtype=np.float64)
+    J_eff = np.array([-sum(edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
+    degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
     thresholds = tfim_sampler._maxcut_hamming_cdf(J_eff, degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
@@ -104,15 +104,24 @@ def maxcut_tfim(
             m += 1
         m += 1
         # Second dimension: permutation within Hamming weight
-        samples.append(local_repulsion_choice(G_dict, degrees, weights, n_qubits, m))
+        samples.append(local_repulsion_choice(nodes, G_dict, degrees, weights, n_qubits, m))
 
     edge_keys = []
     edge_values = []
     for u, v, data in G.edges(data=True):
-        edge_keys.append(u)
-        edge_keys.append(v)
+        edge_keys.append(nodes.index(u))
+        edge_keys.append(nodes.index(v))
         edge_values.append(data.get("weight", 1.0))
 
-    best_value, best_solution, best_cut_edges = evaluate_cut_edges(samples, edge_keys, edge_values)
+    best_solution, best_value = evaluate_cut_edges(samples, edge_keys, edge_values)
 
-    return best_value, int_to_bitstring(best_solution, n_qubits), best_cut_edges
+    bit_list = list(int_to_bitstring(best_solution, n_qubits))
+    l, r = [], []
+    for i in range(len(bit_list)):
+        b = (bit_list[i] == '1')
+        if b:
+            r.append(nodes[i])
+        else:
+            l.append(nodes[i])
+
+    return bit_list, best_value, (l, r)

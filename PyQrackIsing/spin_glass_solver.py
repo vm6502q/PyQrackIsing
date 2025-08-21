@@ -6,16 +6,14 @@ import os
 
 
 def evaluate_cut_edges(state, edge_keys, edge_values):
-    cut_edges = []
     cut_value = 0
     for i in range(len(edge_values)):
         k = i << 1
         u, v = edge_keys[k], edge_keys[k + 1]
         if ((state >> u) & 1) != ((state >> v) & 1):
-            cut_edges.append((u, v))
             cut_value += edge_values[i]
 
-    return float(cut_value), cut_edges
+    return float(cut_value)
 
 
 @njit
@@ -67,15 +65,16 @@ def spin_glass_solver(G, quality=2, best_guess=None):
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        cut_value, bitstring, cut_edges = maxcut_tfim(G, quality=0)
+        bitstring, _, _ = maxcut_tfim(G, quality=0)
     best_theta = [ b == '1' for b in list(bitstring)]
-    n_qubits = len(best_theta)
+    nodes = list(G.nodes())
+    n_qubits = len(nodes)
 
     edge_keys = []
     edge_values = []
     for u, v, data in G.edges(data=True):
-        edge_keys.append(u)
-        edge_keys.append(v)
+        edge_keys.append(nodes.index(u))
+        edge_keys.append(nodes.index(v))
         edge_values.append(data.get("weight", 1.0))
 
     min_energy = compute_energy(best_theta, edge_keys, edge_values)
@@ -102,13 +101,18 @@ def spin_glass_solver(G, quality=2, best_guess=None):
                 break
 
     sample = 0
-    bitstring = ""
+    bitstring = ''
+    l, r = [], []
     for i in range(len(best_theta)):
         b = best_theta[i]
-        bitstring += '1' if b else '0'
         if b:
+            bitstring += '1'
+            r.append(nodes[i])
             sample |= 1 << i
+        else:
+            bitstring += '0'
+            l.append(nodes[i])
 
-    cut_value, cut_edges = evaluate_cut_edges(sample, edge_keys, edge_values)
+    cut_value = evaluate_cut_edges(sample, edge_keys, edge_values)
 
-    return float(cut_value), bitstring, cut_edges, float(min_energy)
+    return bitstring, float(cut_value), (l, r), float(min_energy)

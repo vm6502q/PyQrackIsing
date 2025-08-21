@@ -23,8 +23,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_recursing=True):
         a_term = terminals_a[a]
         for b in range(2):
             b_term = terminals_b[b]
-            u, v = (a_term, b_term) if a_term < b_term else (b_term, a_term)
-            weight = adjacency[u][v]["weight"]
+            weight = adjacency[a_term][b_term]["weight"]
             if not is_recursing:
                 n_a_term = terminals_a[0 if a else 1]
                 n_b_term = terminals_b[0 if b else 1]
@@ -47,7 +46,7 @@ def recurse_tsp(G, is_recursing=False):
     a = []
     b = []
     while (len(a) == 0) or (len(b) == 0):
-        cut_value, bitstring, cut_edges, energy = spin_glass_solver(G)
+        bitstring, _, _, _ = spin_glass_solver(G)
         for idx, bit in enumerate(bitstring):
             if bit == '1':
                 b.append(nodes[idx])
