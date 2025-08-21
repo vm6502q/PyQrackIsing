@@ -3,3 +3,4 @@ from .tfim_magnetization import tfim_magnetization
 from .tfim_square_magnetization import tfim_square_magnetization
 from .maxcut_tfim import maxcut_tfim
 from .spin_glass_solver import spin_glass_solver
+from .tsp_symmetric import tsp_symmetric
