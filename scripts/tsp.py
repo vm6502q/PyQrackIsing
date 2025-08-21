@@ -11,9 +11,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
         np.random.seed(seed)
     G = nx.Graph()
     for u in range(n_nodes):
-        for v in range(u, n_nodes):
-            if u == v:
-                continue
+        for v in range(u + 1, n_nodes):
             G.add_edge(u, v, weight=np.random.random())
     return G
 
