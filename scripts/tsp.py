@@ -90,7 +90,11 @@ def recurse_tsp(G):
 
 if __name__ == "__main__":
     # NP-complete spin glass
-    G = generate_tsp_graph(n_nodes=32, seed=42)
+    n_nodes = 128
+    G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
     circuit, path_length = recurse_tsp(G)
 
-    print(circuit, path_length)
+    print(f"Node count: {n_nodes}")
+    print(f"Path: {circuit}")
+    print(f"Path length: {path_length}")
+    print("(The average randomized separation between each and every node is about 0.5.)")
