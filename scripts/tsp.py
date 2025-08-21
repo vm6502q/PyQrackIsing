@@ -18,7 +18,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 if __name__ == "__main__":
     # NP-complete spin glass
-    n_nodes = 128
+    n_nodes = 64
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
     circuit, path_length = tsp_symmetric(G, quality=3)
 
