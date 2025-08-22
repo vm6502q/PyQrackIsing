@@ -19,10 +19,16 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 if __name__ == "__main__":
     # NP-complete spin glass
     n_nodes = 64
+    quality = 3
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-    circuit, path_length = tsp_symmetric(G, quality=4, start_node=0, is_cyclic=False)
+    best_circuit, best_path_length = tsp_symmetric(G, quality=quality, start_node=0, is_cyclic=False)
+    for i in range(7):
+         circuit, path_length = tsp_symmetric(G, quality=quality, start_node=0, is_cyclic=False)
+         if path_length < best_path_length:
+             best_circuit = circuit
+             best_path_length = path_length
 
     print(f"Node count: {n_nodes}")
-    print(f"Path: {circuit}")
-    print(f"Path length: {path_length}")
+    print(f"Path: {best_circuit}")
+    print(f"Path length: {best_path_length}")
     print("(The average randomized and normalized separation between each and every node is about 0.5.)")
