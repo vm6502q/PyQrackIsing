@@ -1,4 +1,4 @@
-# Spin Glass Ground State (considered NP-complete)
+# Traveling Salesman Problem (considered NP-complete)
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
 from PyQrackIsing import tsp_symmetric
