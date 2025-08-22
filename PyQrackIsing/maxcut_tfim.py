@@ -107,6 +107,9 @@ def maxcut_tfim(
         # Second dimension: permutation within Hamming weight
         samples.append(local_repulsion_choice(nodes, G_dict, degrees, weights, n_qubits, m))
 
+    # We only need unique instances
+    samples = list(set(samples))
+
     edge_keys = []
     edge_values = []
     for u, v, data in G.edges(data=True):
