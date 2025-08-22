@@ -17,7 +17,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 
 if __name__ == "__main__":
-    # NP-complete spin glass
+    # NP-complete TSP
     n_nodes = 64
     quality = 2
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
