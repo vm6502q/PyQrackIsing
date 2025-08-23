@@ -172,6 +172,9 @@ def maxcut_tfim(
     if n_qubits == 0:
         return "", 0, ([], [])
 
+    if n_qubits == 1:
+        return "0", 0, ([nodes[0]], [])
+
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality

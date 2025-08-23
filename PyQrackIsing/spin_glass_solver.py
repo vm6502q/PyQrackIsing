@@ -63,6 +63,9 @@ def spin_glass_solver(G, quality=1, best_guess=None):
     if n_qubits == 0:
         return "", 0, ([], []), 0
 
+    if n_qubits == 1:
+        return "0", 0, ([nodes[0]], [])
+
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
