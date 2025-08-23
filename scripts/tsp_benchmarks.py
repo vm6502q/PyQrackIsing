@@ -91,11 +91,11 @@ def get_path_length(G, path):
     return sum(G[path[i]][path[i+1]]['weight'] for i in range(len(path)-1))
 
 # Benchmark framework with realistic (Euclidean) TSP graphs
-def benchmark_tsp_realistic(n_nodes=64, trials=3, seed=42):
+def benchmark_tsp_realistic(n_nodes=64, trials=3):
     results = {"Nearest Neighbor": [], "Christofides": [], "Simulated Annealing": [], "PyQrackIsing": []}
 
     for trial in range(trials):
-        G, _ = generate_clustered_tsp(n_nodes, seed + trial)
+        G, _ = generate_clustered_tsp(n_nodes)
 
         # Nearest neighbor
         start = time.time()
@@ -125,6 +125,18 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3, seed=42):
 # Run benchmark for 32 and 64 nodes
 results_32 = benchmark_tsp_realistic(32, trials=3)
 results_64 = benchmark_tsp_realistic(64, trials=3)
+
+for key, value in results_32.items():
+    transposed = list(zip(*value))
+    time = sum(transposed[0]) / len(transposed[0])
+    length = min(transposed[1])
+    results_32[key] = { 'seconds': time, 'length': length }
+
+for key, value in results_64.items():
+    transposed = list(zip(*value))
+    time = sum(transposed[0]) / len(transposed[0])
+    length = min(transposed[1])
+    results_64[key] = { 'seconds': time, 'length': length }
 
 # Combine into dataframe
 df32 = pd.DataFrame({
