@@ -91,7 +91,7 @@ def get_path_length(G, path):
     return sum(G[path[i]][path[i+1]]['weight'] for i in range(len(path)-1))
 
 # Benchmark framework with realistic (Euclidean) TSP graphs
-def benchmark_tsp_realistic(n_nodes=64, trials=3):
+def benchmark_tsp_realistic(n_nodes=64, trials=10):
     results = {"Nearest Neighbor": [], "Christofides": [], "Simulated Annealing": [], "PyQrackIsing": []}
 
     for trial in range(trials):
