@@ -5,11 +5,12 @@ from numba import njit, prange
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    bias = np.zeros(n_qubits + 1)
+    bias = np.zeros(n_qubits - 1)
     if np.isclose(abs(h), 0.0):
-        bias[0] = 1.0
-    elif np.isclose(abs(J), 0.0):
-        bias.fill(1.0 / (n_qubits + 1.0))
+        return bias
+
+    if np.isclose(abs(J), 0.0):
+        bias.fill(1.0 / (n_qubits - 1.0))
     else:
         # critical angle
         theta_c = np.arcsin(
@@ -27,14 +28,14 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
             - 0.5
         )
         if (p * n_qubits) >= 1024:
-            bias[0] = 1.0
-        else:
-            tot_n = 0.0
-            for q in range(n_qubits + 1):
-                n = 1.0 / pow(2.0, p * q)
-                bias[q] = n
-                tot_n += n
-            bias /= tot_n
+            return bias
+
+        tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
+        for q in range(1, n_qubits):
+            n = 1.0 / pow(2.0, p * q)
+            bias[q] = n
+            tot_n += n
+        bias /= tot_n
 
     if J > 0.0:
         return bias[::-1]
@@ -60,23 +61,23 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
         J_eff = J_func[q]
         bias = probability_by_hamming_weight(J_eff, h_mult, z, 0.0, 0, n_qubits)
         for i in range(n_bias):
-            hamming_prob[i] += bias[i + 1]
+            hamming_prob[i] += bias[i]
 
-    for step in range(1, n_steps):
+    for qc in range(n_qubits, n_steps * n_qubits):
+        step = qc // n_qubits
+        q = qc % n_qubits
         t = step * delta_t
         tm1 = (step - 1) * delta_t
-        for q in prange(n_qubits):
-            z = degrees[q]
-            J_eff = J_func[q]
-            h_t = h_mult * (tot_t - t)
-            bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits)
-            last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
-            for i in range(n_bias):
-                hamming_prob[i] += bias[i + 1] - last_bias[i + 1]
+        z = degrees[q]
+        J_eff = J_func[q]
+        h_t = h_mult * (tot_t - t)
+        bias = probability_by_hamming_weight(J_eff, h_mult, z, 0.0, 0, n_qubits)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
+        for i in range(n_bias):
+            hamming_prob[i] += bias[i] - last_bias[i]
 
     tot_prob = sum(hamming_prob)
-    for i in prange(n_bias):
-        hamming_prob[i] /= tot_prob
+    hamming_prob /= tot_prob
 
     tot_prob = 0.0
     for i in range(n_bias):
