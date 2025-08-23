@@ -27,7 +27,7 @@ std::random_device rd = std::random_device{};
 std::mt19937 rng(rd());
 
 
-std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
+static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
 {
     // critical angle
     const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? std::abs(h) / (z * J) : (J > 0 ? 1.0 : -1.0))));
@@ -71,53 +71,6 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
         }
     }
     return s;
-}
-
-std::vector<double> maxcut_hamming_cdf(size_t n_qubits, std::vector<double> J_func, std::vector<double> degrees, int mult_log2) {
-    if (!n_qubits) {
-        return std::vector<double>();
-    }
-
-    const size_t n_steps = n_qubits << mult_log2;
-    const size_t shots = n_qubits << mult_log2;
-    const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
-    const double h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t);
-    std::vector<double> hamming_prob(n_qubits - 1U, 0.0);
-
-    for (size_t step = 0; step < n_steps; ++step) {
-        double t = step * delta_t;
-        double tm1 = (step - 1) * delta_t;
-        for (size_t q = 0; q < n_qubits; ++q) {
-            const double& z = degrees[q];
-            const double J_eff = J_func[q];
-            const double h_t = h_mult * t;
-            auto bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits);
-            if (step == 0) {
-                for (size_t i = 0U; i < hamming_prob.size(); ++i) {
-                    hamming_prob[i] += bias[i + 1U];
-                }
-                continue;
-            }
-            auto last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits);
-            for (size_t i = 0U; i < hamming_prob.size(); ++i) {
-                hamming_prob[i] += bias[i + 1U] - last_bias[i + 1U];
-            }
-        }
-    }
-
-    double tot_prob = std::accumulate(hamming_prob.begin(), hamming_prob.end(), 0.0);
-    for (auto& x : hamming_prob) {
-        x /= tot_prob;
-    }
-
-    tot_prob = 0.0;
-    for (size_t i = 0U; i < hamming_prob.size(); ++i) {
-        tot_prob += hamming_prob[i];
-        hamming_prob[i] = tot_prob;
-    }
-    hamming_prob.back() = 1.0;
-
-    return hamming_prob;
 }
 
 static inline double closeness_like_bits(BigInteger perm, size_t n_rows, size_t n_cols) {
@@ -293,7 +246,5 @@ PYBIND11_MODULE(tfim_sampler, m) {
     m.def("_generate_tfim_samples", &generate_tfim_samples_cpp, "Generate measurement samples from globally-uniform TFIM");
     m.def("_tfim_magnetization", &tfim_magnetization, "Magnetization expectation value from globally-uniform TFIM");
     m.def("_tfim_square_magnetization", &tfim_square_magnetization, "Square magnetization expectation value from globally-uniform TFIM");
-    m.def("_maxcut_hamming_cdf", &maxcut_hamming_cdf, "Adiabatic TFIM Hamming weight probability density function");
-    m.def("_probability_by_hamming_weight", &probability_by_hamming_weight, "Trace probability from globally-uniform TFIM by Hamming weight");
 }
 
