@@ -5,46 +5,39 @@ from numba import njit, prange
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    # critical angle
-    theta_c = np.arcsin(
-        max(
-            -1.0,
-            min(
-                1.0,
-                (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h) / (z * J)),
-            ),
-        )
-    )
-    delta_theta = theta - theta_c
     bias = np.zeros(n_qubits + 1)
-
     if np.isclose(abs(h), 0.0):
         bias[0] = 1.0
     elif np.isclose(abs(J), 0.0):
         bias.fill(1.0 / (n_qubits + 1.0))
     else:
-        sin_delta = np.sin(delta_theta)
-        omega = 1.5 * np.pi
-        t2 = 1.0
+        # critical angle
+        theta_c = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h) / (z * J)),
+                ),
+            )
+        )
         p = (
             pow(2.0, abs(J / h) - 1.0)
-            * (1.0 + sin_delta * np.cos(J * omega * t + theta) / (1.0 + np.sqrt(t / t2)))
+            * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
             - 0.5
         )
-
-        if p >= 1024:
+        if (p * n_qubits) >= 1024:
             bias[0] = 1.0
         else:
             tot_n = 0.0
             for q in range(n_qubits + 1):
-                n = 1.0 / ((n_qubits + 1) * pow(2.0, p * q))
+                n = 1.0 / pow(2.0, p * q)
                 bias[q] = n
                 tot_n += n
-            for q in range(n_qubits + 1):
-                bias[q] /= tot_n
+            bias /= tot_n
 
     if J > 0.0:
-        bias = bias[::-1]
+        return bias[::-1]
 
     return bias
 
