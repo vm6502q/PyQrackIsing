@@ -95,6 +95,9 @@ def benchmark_tsp_realistic(n_nodes=64, trials=10):
     results = {"Nearest Neighbor": [], "Christofides": [], "Simulated Annealing": [], "PyQrackIsing": []}
     G, _ = generate_clustered_tsp(n_nodes)
 
+    # Exclude numba JIT overhead with warmup:
+    tsp_symmetric(G)
+
     for trial in range(trials):
         # Nearest neighbor
         start = time.time()
