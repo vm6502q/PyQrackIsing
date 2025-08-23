@@ -149,6 +149,7 @@ def benchmark_tsp_realistic(n_nodes=64, trials=10):
 results = [
     benchmark_tsp_realistic(32),
     benchmark_tsp_realistic(64),
+    benchmark_tsp_realistic(128),
 ]
 
 for results_dict in results:
@@ -177,3 +178,12 @@ df64 = pd.DataFrame(
     }
 )
 print(df64)
+df128 = pd.DataFrame(
+    {
+        "Nearest Neighbor (128)": results[2]["Nearest Neighbor"],
+        "Christofides (128)": results[2]["Christofides"],
+        "Simulated Annealing (128)": results[2]["Simulated Annealing"],
+        "PyQrackIsing (128)": results[2]["PyQrackIsing"],
+    }
+)
+print(df128)
