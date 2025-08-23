@@ -93,10 +93,9 @@ def get_path_length(G, path):
 # Benchmark framework with realistic (Euclidean) TSP graphs
 def benchmark_tsp_realistic(n_nodes=64, trials=10):
     results = {"Nearest Neighbor": [], "Christofides": [], "Simulated Annealing": [], "PyQrackIsing": []}
+    G, _ = generate_clustered_tsp(n_nodes)
 
     for trial in range(trials):
-        G, _ = generate_clustered_tsp(n_nodes)
-
         # Nearest neighbor
         start = time.time()
         path, length = tsp_nearest_neighbor(G)
