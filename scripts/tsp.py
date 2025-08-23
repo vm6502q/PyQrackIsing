@@ -19,7 +19,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 if __name__ == "__main__":
     # NP-complete TSP
     n_nodes = 64
-    quality = 2
+    quality = 1
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
     best_circuit, best_path_length = tsp_symmetric(G, quality=quality)
     for i in range(15):

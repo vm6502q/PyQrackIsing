@@ -73,8 +73,7 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
     return s;
 }
 
-std::vector<double> maxcut_hamming_cdf(std::vector<double> J_func, std::vector<double> degrees, int mult_log2) {
-    size_t n_qubits = J_func.size();
+std::vector<double> maxcut_hamming_cdf(size_t n_qubits, std::vector<double> J_func, std::vector<double> degrees, int mult_log2) {
     const int n_steps = n_qubits << mult_log2;
     const int shots = n_qubits << mult_log2;
     const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));

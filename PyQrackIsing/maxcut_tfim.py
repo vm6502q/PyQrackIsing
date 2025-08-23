@@ -92,7 +92,7 @@ def maxcut_tfim(
 
     J_eff = np.array([-sum(edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
     degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
-    thresholds = tfim_sampler._maxcut_hamming_cdf(J_eff, degrees, quality)
+    thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
