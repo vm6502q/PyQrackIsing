@@ -51,51 +51,40 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
-    if n_qubits < 2:
+    if n_qubits == 0:
         return np.empty(0, dtype=np.float64)
 
     n_steps = n_qubits << mult_log2
+    shots = n_qubits << mult_log2
     delta_t = 1.0 / (n_steps << (mult_log2 >> 1))
     h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t)
-
-    # Each q contributes independently
-    contrib = np.zeros((n_qubits, n_qubits - 1), dtype=np.float64)
+    hamming_prob = np.zeros(n_qubits - 1)
 
     for step in range(n_steps):
         t = step * delta_t
         tm1 = (step - 1) * delta_t
-
         for q in prange(n_qubits):
             z = degrees[q]
             J_eff = J_func[q]
             h_t = h_mult * t
             bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits)
-
             if step == 0:
-                for i in range(n_qubits + 1):
-                    contrib[q, i] += bias[i + 1]
-            else:
-                last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
-                for i in range(n_qubits + 1):
-                    contrib[q, i] += bias[i + 1] - last_bias[i + 1]
+                for i in range(len(hamming_prob)):
+                    hamming_prob[i] += bias[i + 1]
+                continue
 
-    # Safe reduction: sum over q contributions
-    hamming_prob = np.zeros(n_qubits - 1, dtype=np.float64)
-    for i in prange(n_qubits - 1):
-        hamming_prob[i] = np.sum(contrib[:, i])
+            last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
+            for i in range(len(hamming_prob)):
+                hamming_prob[i] += bias[i + 1] - last_bias[i + 1]
 
-    tot_prob = np.sum(hamming_prob)
-    if np.isclose(tot_prob, 0):
-        hamming_prob.fill(0.0)
-    else:
-        # Normalize
+    tot_prob = sum(hamming_prob)
+    for i in prange(len(hamming_prob)):
         hamming_prob[i] /= tot_prob
 
-        # Cumulative distribution
-        cumsum = 0.0
-        for i in range(len(hamming_prob)):
-            cumsum += hamming_prob[i]
-            hamming_prob[i] = cumsum
+    tot_prob = 0.0
+    for i in range(len(hamming_prob)):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
     hamming_prob[-1] = 1.0
 
     return hamming_prob
