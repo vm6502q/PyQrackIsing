@@ -74,16 +74,20 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
 }
 
 std::vector<double> maxcut_hamming_cdf(size_t n_qubits, std::vector<double> J_func, std::vector<double> degrees, int mult_log2) {
-    const int n_steps = n_qubits << mult_log2;
-    const int shots = n_qubits << mult_log2;
+    if (!n_qubits) {
+        return std::vector<double>();
+    }
+
+    const size_t n_steps = n_qubits << mult_log2;
+    const size_t shots = n_qubits << mult_log2;
     const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));
     const double h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t);
     std::vector<double> hamming_prob(n_qubits - 1U, 0.0);
 
-    for (int step = 0; step < n_steps; ++step) {
+    for (size_t step = 0; step < n_steps; ++step) {
         double t = step * delta_t;
         double tm1 = (step - 1) * delta_t;
-        for (int q = 0; q < n_qubits; ++q) {
+        for (size_t q = 0; q < n_qubits; ++q) {
             const double& z = degrees[q];
             const double J_eff = J_func[q];
             const double h_t = h_mult * t;
