@@ -73,15 +73,8 @@ static inline std::string int_to_bitstring(BigInteger integer, size_t length) {
     return s;
 }
 
-std::vector<double> maxcut_hamming_cdf(
-    py::array_t<double, py::array::c_style | py::array::forcecast> _J_func,
-    py::array_t<double, py::array::c_style | py::array::forcecast> _degrees,
-    int mult_log2
-) {
-    auto bufj = _J_func.request();
-    size_t n_qubits = bufj.shape[0];
-    double* J_func = static_cast<double*>(bufj.ptr);
-    double* degrees = static_cast<double*>(_degrees.request().ptr);
+std::vector<double> maxcut_hamming_cdf(std::vector<double> J_func, std::vector<double> degrees, int mult_log2) {
+    size_t n_qubits = J_func.size();
     const int n_steps = n_qubits << mult_log2;
     const int shots = n_qubits << mult_log2;
     const double delta_t = 1.0 / (n_steps << (mult_log2 >> 1));

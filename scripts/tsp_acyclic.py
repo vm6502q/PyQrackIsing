@@ -28,12 +28,14 @@ if __name__ == "__main__":
              best_circuit = circuit
              best_path_length = path_length
 
+    reconstructed_node_count = len(set(best_circuit))
     reconstructed_path_length = 0
     for i in range(len(best_circuit) - 1):
         reconstructed_path_length += G[best_circuit[i]][best_circuit[i + 1]]['weight']
 
-    print(f"Node count: {n_nodes}")
     print(f"Path: {best_circuit}")
+    print(f"Actual node count: {n_nodes}")
+    print(f"Solution distinct node count: {reconstructed_node_count}")
     print(f"Claimed path length: {best_path_length}")
     print(f"Verified path length: {reconstructed_path_length}")
     print("(The average randomized and normalized separation between each and every node is about 0.5.)")
