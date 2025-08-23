@@ -22,12 +22,15 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
 
 
 def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
-    if G.number_of_nodes() == 1:
-        return ([0], 0)
-    if G.number_of_nodes() == 2:
-        return ([0, 1], G[0][1]["weight"])
-
     nodes = list(G.nodes())
+    n_nodes = len(nodes)
+
+    if n_nodes == 0:
+        return ([], 0)
+    if n_nodes == 1:
+        return ([nodes[0]], 0)
+    if n_nodes == 2:
+        return ([nodes[0], nodes[1]], G[nodes[0]][nodes[1]]["weight"])
 
     a = []
     b = []
@@ -37,38 +40,28 @@ def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
         b.remove(start_node)
     else:
         while (len(a) == 0) or (len(b) == 0):
-            bitstring, _, _, _ = spin_glass_solver(G, quality=quality)
-            for idx, bit in enumerate(bitstring):
-                if bit == "1":
-                    b.append(nodes[idx])
-                else:
-                    a.append(nodes[idx])
+            _, _, bits, _ = spin_glass_solver(G, quality=quality)
+            a = list(bits[0])
+            b = list(bits[1])
 
     G_a = nx.Graph()
     G_b = nx.Graph()
     for u, v, data in G.edges(data=True):
         weight = data.get("weight", 1.0)
         if (u in a) and (v in a):
-            G_a.add_edge(a.index(u), a.index(v), weight=weight)
+            G_a.add_edge(u, v, weight=weight)
             continue
         elif (u in b) and (v in b):
-            G_b.add_edge(b.index(u), b.index(v), weight=weight)
+            G_b.add_edge(u, v, weight=weight)
             continue
 
-    sol_a = (
-        tsp_symmetric(G_a, quality=quality, is_cyclic=False)
-        if len(a) > 2
-        else (([0, 1], G_a[0][1]["weight"]) if len(a) == 2 else ([0], 0))
-    )
-    sol_b = (
-        tsp_symmetric(G_b, quality=quality, is_cyclic=False)
-        if len(b) > 2
-        else (([0, 1], G_b[0][1]["weight"]) if len(b) == 2 else ([0], 0))
-    )
-    sol_weight = sol_a[1] + sol_b[1]
+    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False) if len(a) > 1 else (a, 0)
+    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False) if len(b) > 1 else (b, 0)
 
-    path_a = [a[idx] for idx in sol_a[0]]
-    path_b = [b[idx] for idx in sol_b[0]]
+    path_a = sol_a[0]
+    path_b = sol_b[0]
+
+    sol_weight = sol_a[1] + sol_b[1]
 
     terminals_a = (path_a[0], path_a[-1])
     terminals_b = (path_b[0], path_b[-1])
