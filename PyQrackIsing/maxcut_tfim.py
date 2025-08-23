@@ -51,7 +51,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
-    if n_qubits == 0:
+    if n_qubits < 2:
         return np.empty(0, dtype=np.float64)
 
     n_steps = n_qubits << mult_log2
@@ -59,13 +59,14 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
     delta_t = 1.0 / (n_steps << (mult_log2 >> 1))
     tot_t = (n_steps - 1) * delta_t
     h_mult = (1 << (mult_log2 >> 1)) / tot_t
-    hamming_prob = np.zeros(n_qubits - 1)
+    n_bias = n_qubits - 1
+    hamming_prob = np.zeros(n_bias)
 
     for q in prange(n_qubits):
         z = degrees[q]
         J_eff = J_func[q]
         bias = probability_by_hamming_weight(J_eff, h_mult, z, 0.0, 0, n_qubits)
-        for i in range(len(hamming_prob)):
+        for i in range(n_bias):
             hamming_prob[i] += bias[i + 1]
 
     for step in range(1, n_steps):
@@ -77,15 +78,15 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
             h_t = h_mult * (tot_t - t)
             bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits)
             last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
-            for i in range(len(hamming_prob)):
+            for i in range(n_bias):
                 hamming_prob[i] += bias[i + 1] - last_bias[i + 1]
 
     tot_prob = sum(hamming_prob)
-    for i in prange(len(hamming_prob)):
+    for i in prange(n_bias):
         hamming_prob[i] /= tot_prob
 
     tot_prob = 0.0
-    for i in range(len(hamming_prob)):
+    for i in range(n_bias):
         tot_prob += hamming_prob[i]
         hamming_prob[i] = tot_prob
     hamming_prob[-1] = 1.0
