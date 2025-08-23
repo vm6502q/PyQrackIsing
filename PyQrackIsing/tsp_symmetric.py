@@ -47,13 +47,12 @@ def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
     G_a = nx.Graph()
     G_b = nx.Graph()
     for u, v, data in G.edges(data=True):
-        weight = data.get("weight", 1.0)
         if (u in a) and (v in a):
-            G_a.add_edge(u, v, weight=weight)
+            G_a.add_edge(u, v, weight=data.get("weight", 1.0))
             continue
-        elif (u in b) and (v in b):
-            G_b.add_edge(u, v, weight=weight)
-            continue
+
+        if (u in b) and (v in b):
+            G_b.add_edge(u, v, weight=data.get("weight", 1.0))
 
     sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False) if len(a) > 1 else (a, 0)
     sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False) if len(b) > 1 else (b, 0)
