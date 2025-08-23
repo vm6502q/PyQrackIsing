@@ -86,6 +86,9 @@ def maxcut_tfim(
     nodes = list(G.nodes())
     n_qubits = len(nodes)
 
+    if n_qubits == 0:
+        return '', 0, ([], [])
+
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
@@ -119,7 +122,8 @@ def maxcut_tfim(
 
     best_solution, best_value = evaluate_cut_edges(samples, edge_keys, edge_values)
 
-    bit_list = list(int_to_bitstring(best_solution, n_qubits))
+    bit_string = int_to_bitstring(best_solution, n_qubits)
+    bit_list = list(bit_string)
     l, r = [], []
     for i in range(len(bit_list)):
         b = (bit_list[i] == '1')
@@ -128,4 +132,4 @@ def maxcut_tfim(
         else:
             l.append(nodes[i])
 
-    return bit_list, best_value, (l, r)
+    return bit_string, best_value, (l, r)
