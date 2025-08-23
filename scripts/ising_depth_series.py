@@ -245,9 +245,7 @@ def main():
                 sqr_magnetization /= shots
 
                 magnetization = model * d_magnetization + (1 - model) * magnetization
-                sqr_magnetization = (
-                    model * d_sqr_magnetization + (1 - model) * sqr_magnetization
-                )
+                sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization
             else:
                 magnetization = d_magnetization
                 sqr_magnetization = d_sqr_magnetization
@@ -277,9 +275,7 @@ def main():
 
         plt.figure(figsize=(14, 14))
         plt.plot(depths, magnetizations[0], marker="o", linestyle="-")
-        plt.title(
-            "Square Magnetization vs Trotter Depth (" + str(n_qubits) + " Qubits)"
-        )
+        plt.title("Square Magnetization vs Trotter Depth (" + str(n_qubits) + " Qubits)")
         plt.xlabel("Trotter Depth")
         plt.ylabel("Square Magnetization")
         plt.grid(True)

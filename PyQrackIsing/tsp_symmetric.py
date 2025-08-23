@@ -1,6 +1,7 @@
 from .spin_glass_solver import spin_glass_solver
 import networkx as nx
 
+
 def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
     best_weight = float("inf")
     best_edge = None
@@ -24,7 +25,7 @@ def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
     if G.number_of_nodes() == 1:
         return ([0], 0)
     if G.number_of_nodes() == 2:
-        return ([0, 1], G[0][1]['weight'])
+        return ([0, 1], G[0][1]["weight"])
 
     nodes = list(G.nodes())
 
@@ -38,7 +39,7 @@ def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
         while (len(a) == 0) or (len(b) == 0):
             bitstring, _, _, _ = spin_glass_solver(G, quality=quality)
             for idx, bit in enumerate(bitstring):
-                if bit == '1':
+                if bit == "1":
                     b.append(nodes[idx])
                 else:
                     a.append(nodes[idx])
@@ -54,9 +55,17 @@ def tsp_symmetric(G, quality=2, is_cyclic=True, start_node=None):
             G_b.add_edge(b.index(u), b.index(v), weight=weight)
             continue
 
-    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False) if len(a) > 2 else (([0, 1], G_a[0][1]['weight']) if len(a) == 2 else ([0], 0))
-    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False) if len(b) > 2 else (([0, 1], G_b[0][1]['weight']) if len(b) == 2 else ([0], 0))
-    sol_weight  = sol_a[1] + sol_b[1]
+    sol_a = (
+        tsp_symmetric(G_a, quality=quality, is_cyclic=False)
+        if len(a) > 2
+        else (([0, 1], G_a[0][1]["weight"]) if len(a) == 2 else ([0], 0))
+    )
+    sol_b = (
+        tsp_symmetric(G_b, quality=quality, is_cyclic=False)
+        if len(b) > 2
+        else (([0, 1], G_b[0][1]["weight"]) if len(b) == 2 else ([0], 0))
+    )
+    sol_weight = sol_a[1] + sol_b[1]
 
     path_a = [a[idx] for idx in sol_a[0]]
     path_b = [b[idx] for idx in sol_b[0]]

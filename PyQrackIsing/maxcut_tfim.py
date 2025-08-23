@@ -1,7 +1,93 @@
 import networkx as nx
 import numpy as np
-import tfim_sampler
-from numba import njit
+from numba import njit, prange
+
+
+@njit
+def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
+    # critical angle
+    theta_c = np.arcsin(
+        max(
+            -1.0,
+            min(
+                1.0,
+                (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h) / (z * J)),
+            ),
+        )
+    )
+    delta_theta = theta - theta_c
+    bias = np.zeros(n_qubits + 1)
+
+    if np.isclose(abs(h), 0.0):
+        bias[0] = 1.0
+    elif np.isclose(abs(J), 0.0):
+        bias.fill(1.0 / (n_qubits + 1.0))
+    else:
+        sin_delta = np.sin(delta_theta)
+        omega = 1.5 * np.pi
+        t2 = 1.0
+        p = (
+            pow(2.0, abs(J / h) - 1.0)
+            * (1.0 + sin_delta * np.cos(J * omega * t + theta) / (1.0 + np.sqrt(t / t2)))
+            - 0.5
+        )
+
+        if p >= 1024:
+            bias[0] = 1.0
+        else:
+            tot_n = 0.0
+            for q in range(n_qubits + 1):
+                n = 1.0 / ((n_qubits + 1) * pow(2.0, p * q))
+                bias[q] = n
+                tot_n += n
+            for q in range(n_qubits + 1):
+                bias[q] /= tot_n
+
+    if J > 0.0:
+        bias = bias[::-1]
+
+    return bias
+
+
+@njit(parallel=True)
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
+    if n_qubits == 0:
+        return np.empty(0, dtype=np.float64)
+
+    n_steps = n_qubits << mult_log2
+    shots = n_qubits << mult_log2
+    delta_t = 1.0 / (n_steps << (mult_log2 >> 1))
+    h_mult = (1 << (mult_log2 >> 1)) / (n_steps * delta_t)
+    hamming_prob = np.zeros(n_qubits - 1)
+
+    for step in range(n_steps):
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        for q in prange(n_qubits):
+            z = degrees[q]
+            J_eff = J_func[q]
+            h_t = h_mult * t
+            bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, t, n_qubits)
+            if step == 0:
+                for i in range(len(hamming_prob)):
+                    hamming_prob[i] += bias[i + 1]
+                continue
+
+            last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
+            for i in range(len(hamming_prob)):
+                hamming_prob[i] += bias[i + 1] - last_bias[i + 1]
+
+    tot_prob = sum(hamming_prob)
+    for i in prange(len(hamming_prob)):
+        hamming_prob[i] /= tot_prob
+
+    tot_prob = 0.0
+    for i in range(len(hamming_prob)):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 1.0
+
+    return hamming_prob
 
 
 # Written by Elara (OpenAI custom GPT)
@@ -46,7 +132,7 @@ def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
     # Build integer mask
     mask = 0
     for pos in chosen:
-        mask |= (1 << pos)
+        mask |= 1 << pos
 
     return mask
 
@@ -79,23 +165,36 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality = 12,
-    shots = None,
+    quality=12,
+    shots=None,
 ):
     # Number of qubits/nodes
     nodes = list(G.nodes())
     n_qubits = len(nodes)
 
     if n_qubits == 0:
-        return '', 0, ([], [])
+        return "", 0, ([], [])
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    J_eff = np.array([-sum(edge_attributes.get('weight', 1.0) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
-    degrees = np.array([sum(abs(edge_attributes.get('weight', 1.0)) for _, edge_attributes in G.adj[n].items()) for n in nodes], dtype=np.float64)
-    thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    J_eff = np.array(
+        [
+            -sum(edge_attributes.get("weight", 1.0) for _, edge_attributes in G.adj[n].items())
+            for n in nodes
+        ],
+        dtype=np.float64,
+    )
+    degrees = np.array(
+        [
+            sum(abs(edge_attributes.get("weight", 1.0)) for _, edge_attributes in G.adj[n].items())
+            for n in nodes
+        ],
+        dtype=np.float64,
+    )
+    # thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    thresholds = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
@@ -126,7 +225,7 @@ def maxcut_tfim(
     bit_list = list(bit_string)
     l, r = [], []
     for i in range(len(bit_list)):
-        b = (bit_list[i] == '1')
+        b = bit_list[i] == "1"
         if b:
             r.append(nodes[i])
         else:

@@ -33,14 +33,12 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         # How closely grouped are "like" bits to "like"?
         expected_closeness = expected_closeness_weight(n_rows, n_cols, hamming_weight)
         # When we add all "closeness" possibilities for the particular Hamming weight, we should maintain the (n+1) mean probability dimensions.
-        normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (
-            1 + expected_closeness
-        )
+        normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (1 + expected_closeness)
         # If we're also using conventional simulation, use a normalized weighted average that favors the (n+1)-dimensional model at later times.
         # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
-        count = (1 - model) * count + model * normed_closeness * bias[
-            hamming_weight
-        ] / math.comb(n, hamming_weight)
+        count = (1 - model) * count + model * normed_closeness * bias[hamming_weight] / math.comb(
+            n, hamming_weight
+        )
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
@@ -196,9 +194,8 @@ def expected_closeness_weight_arbitrary(n, adjacency, hamming_weight, samples=50
 
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
-    return sum(
-        ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n))
-    )
+    return sum(ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n)))
+
 
 def get_hamming_probabilities(J, h, theta, z, t):
     t2 = 1
@@ -258,6 +255,7 @@ def get_hamming_probabilities(J, h, theta, z, t):
 
     return bias
 
+
 def simulate_tfim(
     J_func,
     h_func,
@@ -288,7 +286,9 @@ def simulate_tfim(
             if step == 0:
                 hamming_probabilities = bias.copy()
             else:
-                last_bias = get_hamming_probabilities(J_eff, h_eff, theta[q], z[q], delta_t * (step - 1))
+                last_bias = get_hamming_probabilities(
+                    J_eff, h_eff, theta[q], z[q], delta_t * (step - 1)
+                )
                 tot_n = 0
                 for i in range(len(bias)):
                     hamming_probabilities[i] += bias[i] - last_bias[i]

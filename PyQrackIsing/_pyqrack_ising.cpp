@@ -27,7 +27,7 @@ std::random_device rd = std::random_device{};
 std::mt19937 rng(rd());
 
 
-static inline std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
+std::vector<double> probability_by_hamming_weight(double J, double h, double z, double theta, double t, size_t n_qubits)
 {
     // critical angle
     const double theta_c = std::asin(std::max(-1.0, std::min(1.0, (std::abs(z * J) >= (std::numeric_limits<double>::epsilon() / 2)) ? std::abs(h) / (z * J) : (J > 0 ? 1.0 : -1.0))));
@@ -290,15 +290,10 @@ double tfim_square_magnetization(double J, double h, double z, double theta, dou
 
 PYBIND11_MODULE(tfim_sampler, m) {
     m.doc() = "PyQrackIsing TFIM sample generator";
-    m.def("_generate_tfim_samples", &generate_tfim_samples_cpp,
-          py::arg("J"), py::arg("h"), py::arg("z"), py::arg("theta"),
-          py::arg("t"), py::arg("n_qubits"), py::arg("shots"));
-    m.def("_tfim_magnetization", &tfim_magnetization,
-          py::arg("J"), py::arg("h"), py::arg("z"), py::arg("theta"),
-          py::arg("t"), py::arg("n_qubits"));
-    m.def("_tfim_square_magnetization", &tfim_square_magnetization,
-          py::arg("J"), py::arg("h"), py::arg("z"), py::arg("theta"),
-          py::arg("t"), py::arg("n_qubits"));
+    m.def("_generate_tfim_samples", &generate_tfim_samples_cpp, "Generate measurement samples from globally-uniform TFIM");
+    m.def("_tfim_magnetization", &tfim_magnetization, "Magnetization expectation value from globally-uniform TFIM");
+    m.def("_tfim_square_magnetization", &tfim_square_magnetization, "Square magnetization expectation value from globally-uniform TFIM");
     m.def("_maxcut_hamming_cdf", &maxcut_hamming_cdf, "Adiabatic TFIM Hamming weight probability density function");
+    m.def("_probability_by_hamming_weight", &probability_by_hamming_weight, "Trace probability from globally-uniform TFIM by Hamming weight");
 }
 

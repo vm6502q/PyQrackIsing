@@ -8,7 +8,9 @@
 import networkx as nx
 import numpy as np
 from PyQrackIsing import maxcut_tfim, spin_glass_solver
+
 # from cvxgraphalgs.algorithms import goemans_williamson_weighted
+
 
 # By Gemini (Google Search AI)
 def int_to_bitstring(integer, length):
@@ -16,7 +18,7 @@ def int_to_bitstring(integer, length):
 
 
 def compute_energy(bitstring, G):
-    theta_bits = [ b == '1' for b in list(bitstring)]
+    theta_bits = [b == "1" for b in list(bitstring)]
     energy = 0
     for u, v, data in G.edges(data=True):
         value = data.get("weight", 1.0)
@@ -33,7 +35,7 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
         np.random.seed(seed)
     G = nx.random_regular_graph(d=degree, n=n_nodes, seed=seed)
     for u, v in G.edges():
-        G[u][v]['weight'] = np.random.choice([-1, 1])  # spin glass couplings
+        G[u][v]["weight"] = np.random.choice([-1, 1])  # spin glass couplings
     return G
 
 

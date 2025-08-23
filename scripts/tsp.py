@@ -5,6 +5,7 @@ from PyQrackIsing import tsp_symmetric
 import networkx as nx
 import numpy as np
 
+
 # Traveling Salesman Problem (normalized to longest segment)
 def generate_tsp_graph(n_nodes=64, seed=None):
     if not (seed is None):
@@ -23,19 +24,23 @@ if __name__ == "__main__":
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
     best_circuit, best_path_length = tsp_symmetric(G, quality=quality)
     for i in range(15):
-         circuit, path_length = tsp_symmetric(G, quality=quality)
-         if path_length < best_path_length:
-             best_circuit = circuit
-             best_path_length = path_length
+        circuit, path_length = tsp_symmetric(G, quality=quality)
+        if path_length < best_path_length:
+            best_circuit = circuit
+            best_path_length = path_length
 
     reconstructed_node_count = len(set(best_circuit))
     reconstructed_path_length = 0
     for i in range(len(best_circuit)):
-        reconstructed_path_length += G[best_circuit[i]][best_circuit[(i + 1) % len(best_circuit)]]['weight']
+        reconstructed_path_length += G[best_circuit[i]][best_circuit[(i + 1) % len(best_circuit)]][
+            "weight"
+        ]
 
     print(f"Path: {best_circuit}")
     print(f"Actual node count: {n_nodes}")
     print(f"Solution distinct node count: {reconstructed_node_count}")
     print(f"Claimed path length: {best_path_length}")
     print(f"Verified path length: {reconstructed_path_length}")
-    print("(The average randomized and normalized separation between each and every node is about 0.5.)")
+    print(
+        "(The average randomized and normalized separation between each and every node is about 0.5.)"
+    )

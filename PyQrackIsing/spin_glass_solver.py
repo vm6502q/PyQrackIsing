@@ -45,7 +45,7 @@ def bootstrap(theta, edge_keys, edge_values, k, indices_array):
     energies = np.empty(n)
     j = 0
     for i in prange(n):
-        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j:j+k])
+        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j : j + k])
         j += k
 
     return energies
@@ -61,9 +61,9 @@ def spin_glass_solver(G, quality=1, best_guess=None):
     n_qubits = len(nodes)
 
     if n_qubits == 0:
-        return '', 0, ([], [])
+        return "", 0, ([], []), 0
 
-    bitstring = ''
+    bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -72,7 +72,7 @@ def spin_glass_solver(G, quality=1, best_guess=None):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
         bitstring, _, _ = maxcut_tfim(G, quality=max(0, quality - 1))
-    best_theta = [ b == '1' for b in list(bitstring)]
+    best_theta = [b == "1" for b in list(bitstring)]
 
     edge_keys = []
     edge_values = []
@@ -91,13 +91,15 @@ def spin_glass_solver(G, quality=1, best_guess=None):
 
             theta = best_theta.copy()
 
-            combos = list(item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist)
+            combos = list(
+                item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
+            )
             energies = bootstrap(theta, edge_keys, edge_values, k, combos)
 
             energy = min(energies)
             if energy < min_energy:
                 index_match = np.random.choice(np.where(energies == energy)[0])
-                indices = combos[(index_match * k):((index_match + 1) * k)]
+                indices = combos[(index_match * k) : ((index_match + 1) * k)]
                 min_energy = energy
                 for i in indices:
                     best_theta[i] = not best_theta[i]
@@ -105,16 +107,16 @@ def spin_glass_solver(G, quality=1, best_guess=None):
                 break
 
     sample = 0
-    bitstring = ''
+    bitstring = ""
     l, r = [], []
     for i in range(len(best_theta)):
         b = best_theta[i]
         if b:
-            bitstring += '1'
+            bitstring += "1"
             r.append(nodes[i])
             sample |= 1 << i
         else:
-            bitstring += '0'
+            bitstring += "0"
             l.append(nodes[i])
 
     cut_value = evaluate_cut_edges(sample, edge_keys, edge_values)

@@ -75,7 +75,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
     return 2 * mu_k - 1  # normalized closeness in [-1,1]
 
 
-def tfim_magnetization(J=-1.0, h=2.0, z=4, theta=math.pi/18, t=5, n_qubits=16):
+def tfim_magnetization(J=-1.0, h=2.0, z=4, theta=math.pi / 18, t=5, n_qubits=16):
     # Constants:
     t2 = 1
     omega = 1.5
@@ -102,7 +102,9 @@ def tfim_magnetization(J=-1.0, h=2.0, z=4, theta=math.pi/18, t=5, n_qubits=16):
     omega *= math.pi
 
     # Mean-field critical angle (in radians)
-    theta_c = math.asin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+    theta_c = math.asin(
+        max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1)
+    )
     # Set theta relative to that:
     delta_theta = theta - theta_c
 
@@ -165,7 +167,8 @@ def tfim_magnetization(J=-1.0, h=2.0, z=4, theta=math.pi/18, t=5, n_qubits=16):
 
     return magnetization, sqr_magnetization
 
-def generate_samples(J=-1.0, h=2.0, z=4, theta=math.pi/18, t=5, n_qubits=16, shots=100):
+
+def generate_samples(J=-1.0, h=2.0, z=4, theta=math.pi / 18, t=5, n_qubits=16, shots=100):
     # Constants:
     t2 = 1
     omega = 1.5 * math.pi
@@ -173,7 +176,9 @@ def generate_samples(J=-1.0, h=2.0, z=4, theta=math.pi/18, t=5, n_qubits=16, sho
     qubits = list(range(n_qubits))
 
     # Mean-field critical angle (in radians)
-    theta_c = math.asin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+    theta_c = math.asin(
+        max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1)
+    )
     # Set theta relative to that:
     delta_theta = theta - theta_c
 

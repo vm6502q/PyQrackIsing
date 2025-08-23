@@ -106,14 +106,12 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         # How closely grouped are "like" bits to "like"?
         expected_closeness = expected_closeness_weight(n_rows, n_cols, hamming_weight)
         # When we add all "closeness" possibilities for the particular Hamming weight, we should maintain the (n+1) mean probability dimensions.
-        normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (
-            1 + expected_closeness
-        )
+        normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (1 + expected_closeness)
         # If we're also using conventional simulation, use a normalized weighted average that favors the (n+1)-dimensional model at later times.
         # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
-        count = (1 - model) * exp + model * normed_closeness * bias[
-            hamming_weight
-        ] / math.comb(n, hamming_weight)
+        count = (1 - model) * exp + model * normed_closeness * bias[hamming_weight] / math.comb(
+            n, hamming_weight
+        )
         exp = count / shots
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
@@ -206,9 +204,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
 
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
-    return sum(
-        ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n))
-    )
+    return sum(ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n)))
 
 
 # From https://stackoverflow.com/questions/13070461/get-indices-of-the-top-n-values-of-a-list#answer-38835860
@@ -270,7 +266,9 @@ def main():
     # Coordination number for a square lattice:
     z = 4
     # Mean-field critical angle (in radians)
-    theta_c = math.asin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+    theta_c = math.asin(
+        max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1)
+    )
     # Set theta relative to that:
     delta_theta = theta - theta_c
 
@@ -427,9 +425,7 @@ def main():
                 sqr_magnetization += value * m * m
 
             magnetization = model * d_magnetization + (1 - model) * magnetization
-            sqr_magnetization = (
-                model * d_sqr_magnetization + (1 - model) * sqr_magnetization
-            )
+            sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization
         else:
             # Rely entirely on the (n+1)-dimensional model.
             magnetization = d_magnetization

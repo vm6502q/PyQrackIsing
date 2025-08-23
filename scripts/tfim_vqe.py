@@ -4,6 +4,7 @@
 
 import pennylane as qml
 from pennylane import numpy as np
+
 # from catalyst import qjit
 
 import openfermion as of
@@ -24,7 +25,9 @@ from openfermion.transforms import jordan_wigner
 basis = "sto-3g"  # Minimal Basis Set
 # basis = '6-31g'  # Larger basis set
 # basis = 'cc-pVDZ' # Even larger basis set!
-multiplicity = 1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
+multiplicity = (
+    1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
+)
 # multiplicity = 2  # doublet, one unpaired electron (ex.: OH- radical)
 # multiplicity = 3  # triplet, two unpaired electrons (ex.: O2)
 charge = 0  # Excess +/- elementary charge, beyond multiplicity
@@ -39,7 +42,7 @@ geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
 # Lithium (and lighter):
 
-geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 15.9))]  # LiH Molecule
+geometry = [("Li", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 15.9))]  # LiH Molecule
 
 # Carbon (and lighter):
 
@@ -232,6 +235,7 @@ qubit_hamiltonian = jordan_wigner(fermionic_hamiltonian)
 
 # Step 4: Setup localized TFIM from Hamiltonian
 
+
 def estimate_local_parameters(qubit_hamiltonian, n_qubits):
     z = np.zeros(n_qubits, dtype=int, requires_grad="False")
     J = np.zeros((n_qubits, n_qubits), requires_grad="False")
@@ -257,6 +261,7 @@ def estimate_local_parameters(qubit_hamiltonian, n_qubits):
 
     return z, J, h
 
+
 def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
     ry_angles = np.zeros(n_qubits, requires_grad="False")
 
@@ -265,9 +270,12 @@ def tfim_ground_state_angles(n_qubits, J_func, h_func, z_func):
         J = sum(J_func[q, j] for j in range(n_qubits) if (j != q)) / z
         h = h_func[q]
 
-        ry_angles[q] = np.arcsin(max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1))
+        ry_angles[q] = np.arcsin(
+            max(min(1, abs(h) / (z * J)) if np.isclose(z * J, 0) else (1 if J > 0 else -1), -1)
+        )
 
     return ry_angles
+
 
 def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=False):
     """
@@ -322,8 +330,11 @@ def hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev=None, is_near_clifford=Fals
 
     return circuit
 
+
 # Step 5: Setup Qrack simulator and ansatz
-dev = qml.device("qrack.simulator", wires=n_qubits) #, isSchmidtDecompose=False, isStabilizerHybrid=True)
+dev = qml.device(
+    "qrack.simulator", wires=n_qubits
+)  # , isSchmidtDecompose=False, isStabilizerHybrid=True)
 circuit = hybrid_tfim_vqe(qubit_hamiltonian, n_qubits, dev)
 
 # Step 6: Bootstrap with TFIM!
