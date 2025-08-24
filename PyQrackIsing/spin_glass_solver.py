@@ -56,7 +56,7 @@ def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
 
 
-def spin_glass_solver(G, quality=1, best_guess=None):
+def spin_glass_solver(G, quality=8, best_guess=None):
     nodes = list(G.nodes())
     n_qubits = len(nodes)
 
@@ -74,7 +74,7 @@ def spin_glass_solver(G, quality=1, best_guess=None):
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G, quality=max(0, quality - 1))
+        bitstring, _, _ = maxcut_tfim(G, quality=quality)
     best_theta = [b == "1" for b in list(bitstring)]
 
     edge_keys = []
@@ -88,7 +88,7 @@ def spin_glass_solver(G, quality=1, best_guess=None):
     improved = True
     while improved:
         improved = False
-        for k in range(1, quality + 1):
+        for k in range(1, max(2, quality - 6)):
             if n_qubits < k:
                 break
 

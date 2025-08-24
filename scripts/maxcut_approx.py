@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     # bitstring, cut_value, cut = maxcut_tfim(G)
     bitstring, cut_value, cut, energy = spin_glass_solver(G)
-    # bitstring, cut_value, cut, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=12)[1])
+    # bitstring, cut_value, cut, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=8)[0])
     print((bitstring, cut_value, cut))
 
     # cut = goemans_williamson_weighted(G)

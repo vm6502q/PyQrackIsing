@@ -100,7 +100,7 @@ def get_path_length(G, path):
 
 
 # Benchmark framework with realistic (Euclidean) TSP graphs
-def benchmark_tsp_realistic(n_nodes=64, trials=10):
+def benchmark_tsp_realistic(n_nodes=64, trials=3):
     results = {
         "Nearest Neighbor": [],
         "Christofides": [],
@@ -150,7 +150,7 @@ results = [
     benchmark_tsp_realistic(32),
     benchmark_tsp_realistic(64),
     benchmark_tsp_realistic(128),
-    benchmark_tsp_realistic(256),
+    # benchmark_tsp_realistic(256),
 ]
 
 for results_dict in results:
@@ -188,12 +188,12 @@ df128 = pd.DataFrame(
     }
 )
 print(df128)
-df256 = pd.DataFrame(
-    {
-        "Nearest Neighbor (256)": results[3]["Nearest Neighbor"],
-        "Christofides (256)": results[3]["Christofides"],
-        "Simulated Annealing (256)": results[3]["Simulated Annealing"],
-        "PyQrackIsing (256)": results[3]["PyQrackIsing"],
-    }
-)
-print(df256)
+# df256 = pd.DataFrame(
+#     {
+#         "Nearest Neighbor (256)": results[3]["Nearest Neighbor"],
+#         "Christofides (256)": results[3]["Christofides"],
+#         "Simulated Annealing (256)": results[3]["Simulated Annealing"],
+#         "PyQrackIsing (256)": results[3]["PyQrackIsing"],
+#     }
+# )
+# print(df256)

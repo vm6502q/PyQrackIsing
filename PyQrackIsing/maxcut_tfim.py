@@ -5,37 +5,39 @@ from numba import njit, prange
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
+    if np.isclose(abs(J), 0.0):
+        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1.0))
+
     bias = np.zeros(n_qubits - 1)
     if np.isclose(abs(h), 0.0):
         return bias
 
-    if np.isclose(abs(J), 0.0):
-        bias.fill(1.0 / (n_qubits - 1.0))
-    else:
-        # critical angle
-        theta_c = np.arcsin(
-            max(
-                -1.0,
-                min(
-                    1.0,
-                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h) / (z * J)),
-                ),
-            )
+    # critical angle
+    theta_c = np.arcsin(
+        max(
+            -1.0,
+            min(
+                1.0,
+                (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h) / (z * J)),
+            ),
         )
-        p = (
-            pow(2.0, abs(J / h) - 1.0)
-            * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
-            - 0.5
-        )
-        if (p * n_qubits) >= 1024:
-            return bias
+    )
 
-        tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
-        for q in range(1, n_qubits):
-            n = 1.0 / pow(2.0, p * q)
-            bias[q] = n
-            tot_n += n
-        bias /= tot_n
+    p = (
+        pow(2.0, abs(J / h) - 1.0)
+        * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
+        - 0.5
+    )
+
+    if (p * n_qubits) >= 1024:
+        return bias
+
+    tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
+    for q in range(1, n_qubits):
+        n = 1.0 / pow(2.0, p * q)
+        bias[q] = n
+        tot_n += n
+    bias /= tot_n
 
     if J > 0.0:
         return bias[::-1]
@@ -49,30 +51,36 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, mult_log2):
         return np.empty(0, dtype=np.float64)
 
     n_steps = n_qubits << mult_log2
-    shots = n_qubits << mult_log2
     delta_t = 1.0 / (n_steps << (mult_log2 >> 1))
     tot_t = (n_steps - 1) * delta_t
     h_mult = (1 << (mult_log2 >> 1)) / tot_t
     n_bias = n_qubits - 1
-    hamming_prob = np.zeros(n_bias)
-
+    hamming_prob = np.full(n_bias, 1 / n_bias)
+    theta = np.zeros(n_qubits)
     for q in prange(n_qubits):
+        J = J_func[q]
         z = degrees[q]
-        J_eff = J_func[q]
-        bias = probability_by_hamming_weight(J_eff, h_mult, z, 0.0, 0, n_qubits)
-        for i in range(n_bias):
-            hamming_prob[i] += bias[i]
+        theta[q] = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                ),
+            )
+        )
 
-    for qc in range(n_qubits, n_steps * n_qubits):
+    for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
         q = qc % n_qubits
         t = step * delta_t
         tm1 = (step - 1) * delta_t
         z = degrees[q]
         J_eff = J_func[q]
+        theta_eff = theta[q]
         h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_mult, z, 0.0, 0, n_qubits)
-        last_bias = probability_by_hamming_weight(J_eff, h_t, z, 0.0, tm1, n_qubits)
+        bias = probability_by_hamming_weight(J_eff, h_mult, z, theta_eff, t, n_qubits)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits)
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
@@ -163,7 +171,7 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality=12,
+    quality=8,
     shots=None,
 ):
     # Number of qubits/nodes
