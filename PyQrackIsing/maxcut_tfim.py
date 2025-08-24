@@ -5,12 +5,7 @@ from numba import njit, prange
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    if np.isclose(abs(J), 0.0):
-        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1.0))
-
     bias = np.zeros(n_qubits - 1)
-    if np.isclose(abs(h), 0.0):
-        return bias
 
     # critical angle
     theta_c = np.arcsin(
@@ -73,13 +68,15 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
     for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
         q = qc % n_qubits
+        J_eff = J_func[q]
+        if np.isclose(abs(J_eff), 0.0):
+            continue
+        z = degrees[q]
+        theta_eff = theta[q]
         t = step * delta_t
         tm1 = (step - 1) * delta_t
-        z = degrees[q]
-        J_eff = J_func[q]
-        theta_eff = theta[q]
         h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_mult, z, theta_eff, t, n_qubits)
+        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits)
         last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits)
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]

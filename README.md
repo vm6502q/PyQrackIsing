@@ -93,7 +93,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 n_nodes = 128
 G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-circuit, path_length = tsp_symmetric(G, quality=8, is_cyclic=True, start_node=None)
+circuit, path_length = tsp_symmetric(G, quality=1, is_cyclic=True, start_node=None)
 
 print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")
