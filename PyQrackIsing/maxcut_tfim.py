@@ -135,62 +135,6 @@ try:
 
 
     @cuda.jit
-    def cuda_maxcut_hamming_cdf_2048(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
-        qc = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-        step = qc // n_qubits
-        q = qc % n_qubits
-
-        if step >= n_steps:
-            return
-
-        J_eff = J_func[q]
-        if abs(J_eff) <= (2 ** (-54)):
-            return
-
-        z = degrees[q]
-        theta_eff = theta[q]
-        t = step * delta_t
-        tm1 = (step - 1) * delta_t
-        h_t = h_mult * (tot_t - t)
-        n_bias = n_qubits - 1
-
-        bias = cuda.local.array(shape=(2048,), dtype=types.float64)
-        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, bias)
-        last_bias = cuda.local.array(shape=(2048,), dtype=types.float64)
-        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, last_bias)
-        for i in range(n_qubits - 1):
-            hamming_prob[i] += bias[i] - last_bias[i]
-
-
-    @cuda.jit
-    def cuda_maxcut_hamming_cdf_4096(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
-        qc = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-        step = qc // n_qubits
-        q = qc % n_qubits
-
-        if step >= n_steps:
-            return
-
-        J_eff = J_func[q]
-        if abs(J_eff) <= (2 ** (-54)):
-            return
-
-        z = degrees[q]
-        theta_eff = theta[q]
-        t = step * delta_t
-        tm1 = (step - 1) * delta_t
-        h_t = h_mult * (tot_t - t)
-        n_bias = n_qubits - 1
-
-        bias = cuda.local.array(shape=(4096,), dtype=types.float64)
-        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, bias)
-        last_bias = cuda.local.array(shape=(4096,), dtype=types.float64)
-        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, last_bias)
-        for i in range(n_qubits - 1):
-            hamming_prob[i] += bias[i] - last_bias[i]
-
-
-    @cuda.jit
     def cuda_maxcut_hamming_cdf_large(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
         qc = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
         step = qc // n_qubits
@@ -210,7 +154,7 @@ try:
         h_t = h_mult * (tot_t - t)
         n_bias = n_qubits - 1
 
-        bias = cuda.local.array(shape=(8192,), dtype=types.float64)
+        bias = cuda.local.array(shape=(2048,), dtype=types.float64)
         cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, bias)
         for i in range(n_qubits - 1):
             hamming_prob[i] += bias[i]
@@ -441,7 +385,7 @@ def maxcut_tfim(
         tot_prob += n
     thresholds /= tot_prob
 
-    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128 and (n_qubits <= 8192):
+    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128 and (n_qubits <= 2048):
         delta_t = 1.0 / n_steps
         tot_t = n_steps * delta_t
         h_mult = 32.0 / tot_t
@@ -466,10 +410,6 @@ def maxcut_tfim(
             cuda_maxcut_hamming_cdf_512[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
         elif n_qubits <= 1024:
             cuda_maxcut_hamming_cdf_1024[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
-        elif n_qubits <= 2048:
-            cuda_maxcut_hamming_cdf_2048[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
-        elif n_qubits <= 4096:
-            cuda_maxcut_hamming_cdf_4096[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
         else:
             cuda_maxcut_hamming_cdf_large[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
