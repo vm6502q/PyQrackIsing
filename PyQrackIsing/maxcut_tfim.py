@@ -291,7 +291,9 @@ def maxcut_tfim(
     thresholds /= tot_prob
 
     n_steps = 1 << quality
-    grid_size = (n_steps * n_qubits + 31) // 32
+    # Warp size is 32:
+    group_size = 32
+    grid_size = (n_steps * n_qubits + group_size - 1) // group_size
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128 and (n_qubits <= 8192):
         delta_t = 1.0 / n_steps
@@ -312,7 +314,7 @@ def maxcut_tfim(
                 )
             )
 
-        cuda_maxcut_hamming_cdf[grid_size, 32](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        cuda_maxcut_hamming_cdf[grid_size, group_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         tot_prob = sum(thresholds)
         thresholds /= tot_prob
