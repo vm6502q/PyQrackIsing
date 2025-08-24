@@ -91,8 +91,6 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
         hamming_prob[i] = tot_prob
     hamming_prob[-1] = 1.0
 
-    return hamming_prob
-
 
 # Written by Elara (OpenAI custom GPT)
 def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
@@ -210,7 +208,7 @@ def maxcut_tfim(
         thresholds[n_bias - q] = n
         tot_prob += n << 1
     thresholds /= tot_prob
-    thresholds = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
