@@ -45,7 +45,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
     if n_qubits < 2:
         return np.empty(0, dtype=np.float64)
 
-    n_steps = n_qubits << quality
+    n_steps = 1 << quality
     delta_t = 1.0 / n_steps
     tot_t = n_steps * delta_t
     h_mult = 32.0 / tot_t
@@ -168,7 +168,7 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality=9,
+    quality=8,
     shots=None,
 ):
     # Number of qubits/nodes
