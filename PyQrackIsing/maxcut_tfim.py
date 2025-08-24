@@ -2,6 +2,79 @@ import math
 import networkx as nx
 import numpy as np
 from numba import njit, prange
+IS_CUDA_AVAILABLE = True
+try:
+    from numba import cuda, types
+
+    @cuda.jit(device=True)
+    def cuda_probability_by_hamming_weight(J, h, z, theta, t, n_qubits, bias):
+        # critical angle
+        theta_c = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    (1.0 if J > 0.0 else -1.0) if abs(z * J) <= (2 ** (-54)) else (abs(h) / (z * J)),
+                ),
+            )
+        )
+
+        p = (
+            pow(2.0, abs(J / h) - 1.0)
+            * (1.0 + math.sin(theta - theta_c) * math.cos(1.5 * math.pi * J * t + theta) / (1.0 + math.sqrt(t)))
+            - 0.5
+        )
+
+        if (p * n_qubits) >= 1024:
+            for i in range(n_qubits - 1):
+                bias[i] = 0.0
+            return
+
+        tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
+        for q in range(1, n_qubits):
+            n = 1.0 / pow(2.0, p * q)
+            bias[q - 1] = n
+            tot_n += n
+        for q in range(n_qubits - 1):
+            bias[q] /= tot_n
+
+        if J > 0.0:
+            end = n_qubits - 2
+            for i in range((n_qubits - 1) // 2):
+                tmp = bias[i]
+                bias[i] = bias[end - i]
+                bias[end - i] = tmp
+
+    @cuda.jit
+    def cuda_maxcut_hamming_cdf(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+        qc = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+        step = qc // n_qubits
+        q = qc % n_qubits
+
+        if step > n_steps:
+            return
+
+        J_eff = J_func[q]
+        if abs(J_eff) <= (2 ** (-54)):
+            return
+
+        z = degrees[q]
+        theta_eff = theta[q]
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        h_t = h_mult * (tot_t - t)
+        n_bias = n_qubits - 1
+
+        bias = cuda.local.array(shape=(8192,), dtype=types.float64)
+        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, bias)
+        for i in range(n_qubits - 1):
+            hamming_prob[i] += bias[i]
+        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
+        for i in range(n_qubits - 1):
+            hamming_prob[i] -= bias[i]
+
+except:
+    IS_CUDA_AVAILABLE = False
 
 
 @njit
@@ -31,7 +104,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
     tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
     for q in range(1, n_qubits):
         n = 1.0 / pow(2.0, p * q)
-        bias[q] = n
+        bias[q - 1] = n
         tot_n += n
     bias /= tot_n
 
@@ -213,7 +286,41 @@ def maxcut_tfim(
         thresholds[q - 1] = n
         tot_prob += n
     thresholds /= tot_prob
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
+
+    n_steps = 1 << quality
+    grid_size = (n_steps * n_qubits + 255) // 256
+
+    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 256 and (n_qubits <= 8192):
+        delta_t = 1.0 / n_steps
+        tot_t = n_steps * delta_t
+        h_mult = 32.0 / tot_t
+
+        theta = np.zeros(n_qubits)
+        for q in range(n_qubits):
+            J = J_eff[q]
+            z = degrees[q]
+            theta[q] = np.arcsin(
+                max(
+                    -1.0,
+                    min(
+                        1.0,
+                        (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                    ),
+                )
+            )
+
+        cuda_maxcut_hamming_cdf[grid_size, 256](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+
+        tot_prob = sum(thresholds)
+        thresholds /= tot_prob
+
+        tot_prob = 0.0
+        for i in range(n_bias):
+            tot_prob += thresholds[i]
+            thresholds[i] = tot_prob
+        thresholds[-1] = 1.0
+    else:
+        maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
