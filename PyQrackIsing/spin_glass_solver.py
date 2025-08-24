@@ -88,7 +88,7 @@ def spin_glass_solver(G, quality=4, best_guess=None):
     improved = True
     while improved:
         improved = False
-        for k in range(1, max(2, quality - 2)):
+        for k in range(1, max(2, quality - 1)):
             if n_qubits < k:
                 break
 
