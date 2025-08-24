@@ -55,7 +55,7 @@ try:
         step = qc // n_qubits
         q = qc % n_qubits
 
-        if step > n_steps:
+        if step >= n_steps:
             return
 
         J_eff = J_func[q]
