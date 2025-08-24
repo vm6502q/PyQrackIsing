@@ -56,7 +56,7 @@ def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
 
 
-def spin_glass_solver(G, quality=8, best_guess=None):
+def spin_glass_solver(G, quality=5, best_guess=None):
     nodes = list(G.nodes())
     n_qubits = len(nodes)
 
@@ -88,7 +88,7 @@ def spin_glass_solver(G, quality=8, best_guess=None):
     improved = True
     while improved:
         improved = False
-        for k in range(1, max(2, quality - 6)):
+        for k in range(1, max(3, quality - 2)):
             if n_qubits < k:
                 break
 
