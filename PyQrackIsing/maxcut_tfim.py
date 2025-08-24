@@ -243,7 +243,7 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality=8,
+    quality=None,
     shots=None,
 ):
     # Number of qubits/nodes
@@ -256,9 +256,18 @@ def maxcut_tfim(
     if n_qubits == 1:
         return "0", 0, ([nodes[0]], [])
 
+    # Warp size is 32:
+    group_size = 32
+
+    if quality is None:
+        quality = int(math.ceil(math.log2((128 * group_size + n_qubits - 1) // n_qubits)))
+
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
+
+    n_steps = 1 << quality
+    grid_size = (n_steps * n_qubits + group_size - 1) // group_size
 
     J_eff = np.array(
         [
@@ -289,11 +298,6 @@ def maxcut_tfim(
         thresholds[q - 1] = n
         tot_prob += n
     thresholds /= tot_prob
-
-    n_steps = 1 << quality
-    # Warp size is 32:
-    group_size = 32
-    grid_size = (n_steps * n_qubits + group_size - 1) // group_size
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128 and (n_qubits <= 8192):
         delta_t = 1.0 / n_steps
