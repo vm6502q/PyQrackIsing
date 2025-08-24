@@ -293,7 +293,7 @@ def maxcut_tfim(
     n_steps = 1 << quality
     grid_size = (n_steps * n_qubits + 31) // 32
 
-    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 256 and (n_qubits <= 8192):
+    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128 and (n_qubits <= 8192):
         delta_t = 1.0 / n_steps
         tot_t = n_steps * delta_t
         h_mult = 32.0 / tot_t
@@ -312,7 +312,7 @@ def maxcut_tfim(
                 )
             )
 
-        cuda_maxcut_hamming_cdf[grid_size, 256](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        cuda_maxcut_hamming_cdf[grid_size, 32](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         tot_prob = sum(thresholds)
         thresholds /= tot_prob
