@@ -20,13 +20,12 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 if __name__ == "__main__":
     # NP-complete TSP
     n_nodes = 64
-    quality = 2
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
     best_circuit, best_path_length = tsp_symmetric(
-        G, quality=quality, start_node=0, is_cyclic=False
+        G, start_node=0, is_cyclic=False
     )
-    for i in range(15):
-        circuit, path_length = tsp_symmetric(G, quality=quality, start_node=0, is_cyclic=False)
+    for i in range(2):
+        circuit, path_length = tsp_symmetric(G, start_node=0, is_cyclic=False)
         if path_length < best_path_length:
             best_circuit = circuit
             best_path_length = path_length

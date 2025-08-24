@@ -53,14 +53,14 @@ if __name__ == "__main__":
     # Known MAXCUT size: 20
 
     # Example: Complete bipartite K_{m, n}
-    m, n = 8, 8
-    G = nx.complete_bipartite_graph(m, n)
+    # m, n = 8, 8
+    # G = nx.complete_bipartite_graph(m, n)
     # Known MAXCUT size: m * n
 
     # Generate a "harder" test case: Erdős–Rényi random graph with 20 nodes, edge probability 0.5
-    # n_nodes = 20
-    # edge_prob = 0.5
-    # G = nx.erdos_renyi_graph(n_nodes, edge_prob, seed=42)
+    n_nodes = 20
+    edge_prob = 0.5
+    G = nx.erdos_renyi_graph(n_nodes, edge_prob, seed=42)
     # Cut value is approximately 63 for this example.
 
     # Create a Barabási–Albert (BA) graph with 20 nodes and 2 edges to attach from a new node to existing nodes
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     # NP-complete spin glass
     # G = generate_spin_glass_graph(seed=42)
 
-    bitstring, cut_value, cut = maxcut_tfim(G, quality=7)
-    # bitstring, cut_value, cut, energy = spin_glass_solver(G)
+    # bitstring, cut_value, cut = maxcut_tfim(G)
+    bitstring, cut_value, cut, energy = spin_glass_solver(G)
     # bitstring, cut_value, cut, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=8)[0])
     print((bitstring, cut_value, cut))
 
