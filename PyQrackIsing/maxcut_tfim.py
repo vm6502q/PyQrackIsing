@@ -207,6 +207,11 @@ def maxcut_tfim(
         thresholds[q - 1] = n
         thresholds[n_bias - q] = n
         tot_prob += n << 1
+    if n_qubits & 1:
+        q = n_qubits // 2
+        n = math.comb(n_qubits, q)
+        thresholds[q - 1] = n
+        tot_prob += n
     thresholds /= tot_prob
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
     G_dict = nx.to_dict_of_lists(G)
