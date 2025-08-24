@@ -5,6 +5,10 @@ from numba import njit, prange
 IS_CUDA_AVAILABLE = True
 try:
     from numba import cuda, types
+    from numba.core.errors import NumbaPerformanceWarning
+    import warnings
+
+    warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
     @cuda.jit(device=True)
     def cuda_probability_by_hamming_weight(J, h, z, theta, t, n_qubits, bias):
@@ -67,11 +71,10 @@ try:
 
         bias = cuda.local.array(shape=(8192,), dtype=types.float64)
         cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, bias)
+        last_bias = cuda.local.array(shape=(8192,), dtype=types.float64)
+        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, last_bias)
         for i in range(n_qubits - 1):
-            hamming_prob[i] += bias[i]
-        cuda_probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
-        for i in range(n_qubits - 1):
-            hamming_prob[i] -= bias[i]
+            hamming_prob[i] += bias[i] - last_bias[i]
 
 except:
     IS_CUDA_AVAILABLE = False
@@ -288,7 +291,7 @@ def maxcut_tfim(
     thresholds /= tot_prob
 
     n_steps = 1 << quality
-    grid_size = (n_steps * n_qubits + 255) // 256
+    grid_size = (n_steps * n_qubits + 31) // 32
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 256 and (n_qubits <= 8192):
         delta_t = 1.0 / n_steps
