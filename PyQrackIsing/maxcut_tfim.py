@@ -45,10 +45,10 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
     if n_qubits < 2:
         return np.empty(0, dtype=np.float64)
 
-    n_steps = n_qubits << (quality << 1)
-    delta_t = 1.0 / (n_steps << quality)
-    tot_t = (n_steps - 1) * delta_t
-    h_mult = (1 << quality) / tot_t
+    n_steps = n_qubits << quality
+    delta_t = 1.0 / n_steps
+    tot_t = n_steps * delta_t
+    h_mult = 32.0 / tot_t
     n_bias = n_qubits - 1
     hamming_prob = np.full(n_bias, 1 / n_bias)
     theta = np.zeros(n_qubits)
@@ -168,7 +168,7 @@ def int_to_bitstring(integer, length):
 
 def maxcut_tfim(
     G,
-    quality=4,
+    quality=9,
     shots=None,
 ):
     # Number of qubits/nodes
@@ -183,7 +183,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits << (quality << 1)
+        shots = n_qubits << quality
 
     J_eff = np.array(
         [

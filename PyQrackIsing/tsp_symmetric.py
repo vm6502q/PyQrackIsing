@@ -21,7 +21,7 @@ def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
     return best_weight, best_edge
 
 
-def tsp_symmetric(G, quality=1, is_cyclic=True, start_node=None):
+def tsp_symmetric(G, quality=3, is_cyclic=True, start_node=None):
     nodes = list(G.nodes())
     n_nodes = len(nodes)
 

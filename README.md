@@ -49,7 +49,7 @@ G = nx.petersen_graph()
 best_solution_bit_string, best_cut_value, best_node_groups = maxcut_tfim(G, quality=8)
 ```
 
-The (integer) `quality` setting is optional, with a default value of `4`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
+The (integer) `quality` setting is optional, with a default value of `9`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
 
 Based on a combination of the TFIM-inspired MAXCUT solver and another technique for finding ground-state energy in quantum chemistry that we call the _"binary Clifford eigensolver,"_ we also provide an (approximate) spin glass ground-state solver:
 ```py
@@ -72,7 +72,7 @@ G = generate_spin_glass_graph(n_nodes=64, seed=42)
 solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=8, best_guess=None)
 # solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=8)[0])
 ```
-The (integer) `quality` setting is optional, with a default value of `4`. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
+The (integer) `quality` setting is optional, with a default value of `9`. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
 
 From the `spin_glass_solver()`, we provide a (recursive) Traveling Salesman Problem (TSP) solver:
 ```py
@@ -99,7 +99,7 @@ print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")
 print(f"Path length: {path_length}")
 ```
-The (integer) `quality` setting is optional, with a default value of `1`. We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `is_cyclic` controls whether the path must ultimately complete a circuit, if `True`, or a one-way trip, if `False`. When the desired route is acyclic, a fixed starting point can optionally be specified via passing the node label to `start_node` (or, without this parameter, the solver will also attempt to pick an optimal starting point).
+The (integer) `quality` setting is optional, with a default value of `3`. We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `is_cyclic` controls whether the path must ultimately complete a circuit, if `True`, or a one-way trip, if `False`. When the desired route is acyclic, a fixed starting point can optionally be specified via passing the node label to `start_node` (or, without this parameter, the solver will also attempt to pick an optimal starting point).
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
