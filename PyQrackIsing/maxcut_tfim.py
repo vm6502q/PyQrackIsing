@@ -1,3 +1,4 @@
+import math
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -41,7 +42,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 @njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     if n_qubits < 2:
         return np.empty(0, dtype=np.float64)
 
@@ -50,7 +51,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
     tot_t = n_steps * delta_t
     h_mult = 32.0 / tot_t
     n_bias = n_qubits - 1
-    hamming_prob = np.full(n_bias, 1 / n_bias)
+
     theta = np.zeros(n_qubits)
     for q in prange(n_qubits):
         J = J_func[q]
@@ -200,7 +201,16 @@ def maxcut_tfim(
         dtype=np.float64,
     )
     # thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
-    thresholds = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    n_bias = n_qubits - 1
+    tot_prob = 2.0
+    thresholds = np.zeros(n_bias)
+    for q in range(1, n_qubits // 2):
+        n = math.comb(n_qubits, q)
+        thresholds[q - 1] = n
+        thresholds[n_bias - q] = n
+        tot_prob += n << 1
+    thresholds /= tot_prob
+    thresholds = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
     G_dict = nx.to_dict_of_lists(G)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
