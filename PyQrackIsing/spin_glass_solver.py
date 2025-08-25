@@ -67,7 +67,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=2, best_gu
         return "0", 0, ([nodes[0]], [])
 
     if quality is None:
-        quality = 3
+        quality = 5
 
     bitstring = ""
     if isinstance(best_guess, str):
