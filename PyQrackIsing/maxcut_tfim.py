@@ -21,12 +21,15 @@ try:
             - 0.5
         )
 
-        if (p * (n_qubits + 2)) >= 1024:
+        if (p * (n_qubits + 2.0)) >= 1024.0:
             return 0.0
 
-        norm = pow(2.0, -(n_qubits + 1) * p) * (pow(2.0, (n_qubits + 2) * p) - 1.0) / (pow(2, p) - 1.0)
+        result = (pow(2.0, (n_qubits + 2.0) * p) - 1.0) * pow(2.0, -((n_qubits + 1.0) * p) - p * q) / (pow(2.0, p) - 1.0)
 
-        return (1.0 / pow(2.0, p * q)) / norm
+        if math.isnan(result) or math.isinf(result):
+            return 0.0
+
+        return result
 
     @cuda.jit
     def cuda_maxcut_hamming_cdf(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
@@ -45,7 +48,7 @@ try:
 
         qo = cuda.threadIdx.x
         if J_eff > 0.0:
-            qo = n_qubits - (2 + qo)
+            qo = cuda.blockDim.x - (1 + qo)
         diff = cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits)
         diff -= cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
         hamming_prob[qo] += diff
