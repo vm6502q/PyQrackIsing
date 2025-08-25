@@ -66,8 +66,8 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=2, best_gu
     if n_qubits == 1:
         return "0", 0, ([nodes[0]], [])
 
-    # Warp size is 32:
-    group_size = 32
+    if quality is None:
+        quality = 3
 
     bitstring = ""
     if isinstance(best_guess, str):
