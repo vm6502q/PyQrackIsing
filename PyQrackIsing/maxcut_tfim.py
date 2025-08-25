@@ -160,7 +160,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     weights = weights.copy()
     chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
     available = np.ones(n, dtype=np.int32) # 1 = available, 0 = not
-    mask = np.zeros(n, dtype=np.bool_)
+    mask = np.zeros(n, dtype=np.uint8)
     chosen_count = 0
 
     for _ in prange(m):
@@ -190,7 +190,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         chosen[chosen_count] = node
         chosen_count += 1
         available[node] = 0
-        mask[node] = True
+        mask[node] = 1
 
         # Repulsion: penalize neighbors
         deg = degrees[node]
@@ -279,7 +279,7 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 1 << quality
+    n_steps = (1 << quality) - 1
     grid_size = n_steps * n_qubits
     grid_dims = (n_steps, n_qubits)
 
@@ -315,37 +315,40 @@ def maxcut_tfim(
         p /= 2
     thresholds /= tot_prob
 
-    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
-        delta_t = 1.0 / n_steps
-        tot_t = n_steps * delta_t
-        h_mult = 32.0 / tot_t
+    if n_steps:
+        if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
+            delta_t = 1.0 / n_steps
+            tot_t = n_steps * delta_t
+            h_mult = 32.0 / tot_t
 
-        theta = np.zeros(n_qubits)
-        for q in range(n_qubits):
-            J = J_eff[q]
-            z = degrees[q]
-            theta[q] = np.arcsin(
-                max(
-                    -1.0,
-                    min(
-                        1.0,
-                        (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
-                    ),
+            theta = np.zeros(n_qubits)
+            for q in range(n_qubits):
+                J = J_eff[q]
+                z = degrees[q]
+                theta[q] = np.arcsin(
+                    max(
+                        -1.0,
+                        min(
+                            1.0,
+                            (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                        ),
+                    )
                 )
-            )
 
-        cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+            cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
-        tot_prob = sum(thresholds)
-        thresholds /= tot_prob
+            tot_prob = sum(thresholds)
+            thresholds /= tot_prob
 
-        tot_prob = 0.0
-        for i in range(n_bias):
-            tot_prob += thresholds[i]
-            thresholds[i] = tot_prob
-        thresholds[-1] = 2.0
+            tot_prob = 0.0
+            for i in range(n_bias):
+                tot_prob += thresholds[i]
+                thresholds[i] = tot_prob
+            thresholds[-1] = 2.0
+        else:
+            maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
     else:
-        maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
+        thresholds[-1] = 2.0
 
     G_dict = nx.to_dict_of_lists(G)
     max_degree = max(len(x) for x in G_dict.values())
