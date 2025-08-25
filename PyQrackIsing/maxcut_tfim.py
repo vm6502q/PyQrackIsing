@@ -32,7 +32,7 @@ try:
 
     @cuda.jit
     def cuda_maxcut_hamming_cdf(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
-        bias = cuda.shared.array(0, dtype=np.float32)
+        bias = cuda.shared.array(0, dtype=np.float64)
         step = cuda.blockIdx.x
         qi = cuda.blockIdx.y
         J_eff = J_func[qi]
