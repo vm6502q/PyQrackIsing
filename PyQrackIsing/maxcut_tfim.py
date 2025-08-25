@@ -277,7 +277,7 @@ def maxcut_tfim(
     shared_size = (n_qubits - 1) * 8
 
     if quality is None:
-        quality = 8
+        quality = 10
 
     if shots is None:
         # Number of measurement shots
