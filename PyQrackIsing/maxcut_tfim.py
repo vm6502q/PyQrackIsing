@@ -301,18 +301,19 @@ def maxcut_tfim(
 
     n_bias = n_qubits - 1
     thresholds = np.zeros(n_bias, dtype=np.float64)
-    if ((n_qubits + 2) * (1 << n_qubits)) < 1024:
-        tot_prob = pow(2.0, -(n_qubits + 1) * (1 << n_qubits)) * (pow(2.0, (n_qubits + 2) * (1 << n_qubits)) - 1.0) / (pow(2, 1 << n_qubits) - 1.0)
-        for q in range(1, n_qubits // 2):
-            p = math.comb(n_qubits, q) / tot_prob
-            thresholds[q - 1] = p
-            thresholds[n_bias - q] = p
-        if n_qubits & 1:
-            q = n_qubits // 2
-            p = math.comb(n_qubits, q) / tot_prob
-            thresholds[q - 1] = p
-    else:
-        thresholds[(n_bias + 1) // 2] = 1.0
+    tot_prob = 0
+    p = 1.0
+    if n_qubits & 1:
+        q = n_qubits // 2
+        thresholds[q - 1] = p
+        tot_prob = p
+        p /= 2
+    for q in range(1, n_qubits // 2):
+        thresholds[q - 1] = p
+        thresholds[n_bias - q] = p
+        tot_prob += 2 * p
+        p /= 2
+    thresholds /= tot_prob
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
         delta_t = 1.0 / n_steps
