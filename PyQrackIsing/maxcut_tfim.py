@@ -50,11 +50,11 @@ try:
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
 
-        q = cuda.threadIdx.x
-        cuda_probability_by_hamming_weight(q, J_eff, h_t, z, theta_eff, t, n_qubits, bias)
-        hamming_prob[q] += bias[q]
-        cuda_probability_by_hamming_weight(q, J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
-        hamming_prob[q] -= bias[q]
+        qo = cuda.threadIdx.x
+        cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits, bias)
+        hamming_prob[qo] += bias[qo]
+        cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
+        hamming_prob[qo] -= bias[qo]
 
 except:
     IS_CUDA_AVAILABLE = False
