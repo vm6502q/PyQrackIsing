@@ -24,7 +24,7 @@ if __name__ == "__main__":
     best_circuit, best_path_length = tsp_symmetric(
         G, start_node=0, is_cyclic=False
     )
-    for i in range(15):
+    for i in range(3):
         circuit, path_length = tsp_symmetric(G, start_node=0, is_cyclic=False)
         if path_length < best_path_length:
             best_circuit = circuit

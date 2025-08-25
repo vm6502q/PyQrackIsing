@@ -20,7 +20,7 @@ if __name__ == "__main__":
     # NP-complete spin glass
     G = generate_spin_glass_graph(n_nodes=64, seed=42)
     best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver(G)
-    for i in range(15):
+    for i in range(3):
          bitstring, cut_value, cut, energy = spin_glass_solver(G)
          if energy < best_energy:
              best_bitstring = bitstring
