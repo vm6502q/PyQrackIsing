@@ -159,7 +159,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
     available = np.ones(n, dtype=np.int32) # 1 = available, 0 = not
 
-    mask = 0
+    mask = np.zeros(n, dtype=np.bool)
     chosen_count = 0
 
     for _ in prange(m):
@@ -189,7 +189,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         chosen[chosen_count] = node
         chosen_count += 1
         available[node] = 0
-        mask |= 1 << node
+        mask[node] = True
 
         # Repulsion: penalize neighbors
         deg = degrees[node]
@@ -200,6 +200,15 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
 
     return mask
 
+
+def mask_array_python_int(mask):
+    sample = 0
+    for b in reversed(mask):
+        sample <<= 1
+        if b:
+            sample |= 1
+
+    return sample
 
 def evaluate_cut_edges(samples, edge_keys, edge_values):
     best_value = float("-inf")
@@ -338,7 +347,7 @@ def maxcut_tfim(
             m += 1
         m += 1
         # Second dimension: permutation within Hamming weight
-        samples.append(local_repulsion_choice(adjacency, degrees, weights, n_qubits, m))
+        samples.append(mask_array_python_int(local_repulsion_choice(adjacency, degrees, weights, n_qubits, m)))
 
     # We only need unique instances
     samples = list(set(samples))
