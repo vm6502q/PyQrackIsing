@@ -33,13 +33,8 @@ try:
     @cuda.jit
     def cuda_maxcut_hamming_cdf(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
         bias = cuda.shared.array(0, dtype=np.float32)
-        idx = cuda.blockIdx.x * cuda.blockDim.x
-        n_bias = n_qubits - 1
-        step = idx // n_bias
-        qi = idx % n_bias
-        if step >= n_steps:
-            return
-
+        step = cuda.blockIdx.x
+        qi = cuda.blockIdx.y
         J_eff = J_func[qi]
         z = degrees[qi]
         if abs(z * J_eff) <= (2 ** (-54)):
@@ -249,6 +244,7 @@ def maxcut_tfim(
 
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
+    grid_dims = (n_steps, n_qubits)
 
     J_eff = np.array(
         [
@@ -299,7 +295,7 @@ def maxcut_tfim(
                 )
             )
 
-        cuda_maxcut_hamming_cdf[grid_size, group_size, 0, shared_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        cuda_maxcut_hamming_cdf[grid_dims, group_size, 0, shared_size](n_qubits, n_steps, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         tot_prob = sum(thresholds)
         thresholds /= tot_prob
