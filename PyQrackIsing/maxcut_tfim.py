@@ -147,50 +147,89 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 
 # Written by Elara (OpenAI custom GPT)
-def local_repulsion_choice(nodes, adjacency, degrees, weights, n, m):
+@njit(parallel=True)
+def local_repulsion_choice(adjacency, degrees, weights, n, m):
     """
-    Pick m nodes (bit positions) out of n with repulsion bias:
+
+    Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
+    adjacency: 2D int array (n x max_deg), padded with -1
+
+    degrees: int array of shape (n,)
+    weights: float64 array of shape (n,)
     """
 
-    # Base weights: inverse degree
-    # degrees = np.array([len(adjacency.get(i, [])) for i in range(n)], dtype=np.float64)
-    # weights = 1.0 / (degrees + 1.0)
     weights = weights.copy()
+    chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
+    available = np.ones(n, dtype=np.int32) # 1 = available, 0 = not
+    mask = np.zeros(n, dtype=np.bool_)
+    chosen_count = 0
 
-    chosen = []
-    available = set(range(len(nodes)))
-
-    for _ in range(m):
-        if not available:
+    for _ in prange(m):
+        # Count available
+        total_w = 0.0
+        for i in range(n):
+            if available[i] == 1:
+                total_w += weights[i]
+        if total_w <= 0:
             break
 
-        # Normalize weights over remaining nodes
-        sub_weights = np.array([weights[i] for i in available], dtype=np.float64)
-        sub_weights /= sub_weights.sum()
-        sub_nodes = list(available)
+        # Normalize & sample
+        r = np.random.rand()
+        cum = 0.0
+        node = -1
+        for i in range(n):
+            if available[i] == 1:
+                cum += weights[i] / total_w
+                if r < cum:
+                    node = i
+                    break
 
-        # Sample one node
-        idx = np.random.choice(len(sub_nodes), p=sub_weights)
-        node = sub_nodes[idx]
-        chosen.append(node)
+        if node == -1:
+            continue
 
-        # Remove node from available
-        available.remove(node)
+        # Select node
+        chosen[chosen_count] = node
+        chosen_count += 1
+        available[node] = 0
+        mask[node] = 1
 
         # Repulsion: penalize neighbors
-        for nbr in adjacency.get(nodes[node], []):
-            idx = nodes.index(nbr)
-            if idx in available:
-                weights[idx] *= 0.5  # halve neighbor's weight (tunable!)
-
-    # Build integer mask
-    mask = 0
-    for pos in chosen:
-        mask |= 1 << pos
+        deg = degrees[node]
+        for j in range(deg):
+            nbr = adjacency[node, j]
+            if nbr >= 0 and available[nbr] == 1:
+                weights[nbr] *= 0.5  # tunable penalty factor
 
     return mask
+
+
+def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n):
+    samples = []
+
+    for s in range(shots):
+        # First dimension: Hamming weight
+        mag_prob = np.random.random()
+        m = 0
+        while thresholds[m] < mag_prob:
+            m += 1
+        m += 1
+
+        # Second dimension: permutation within Hamming weight
+        samples.append(mask_array_to_python_int(local_repulsion_choice(adjacency, degrees, weights, n, m)))
+
+    return samples
+
+
+def mask_array_to_python_int(mask):
+    sample = 0
+    for b in reversed(mask):
+        sample <<= 1
+        if b:
+            sample |= 1
+
+    return sample
 
 
 def evaluate_cut_edges(samples, edge_keys, edge_values):
@@ -324,18 +363,17 @@ def maxcut_tfim(
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
     G_dict = nx.to_dict_of_lists(G)
+    max_degree = max(len(x) for x in G_dict.values())
+    adjacency = np.full((len(nodes), max_degree), -1, dtype=np.int32)
+    for i in range(len(nodes)):
+        adj = G_dict.get(nodes[i], [])
+        for j in range(len(adj)):
+            adjacency[i, j] = nodes.index(adj[j])
+
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
-    samples = []
-    for s in range(shots):
-        # First dimension: Hamming weight
-        mag_prob = np.random.random()
-        m = 0
-        while thresholds[m] < mag_prob:
-            m += 1
-        m += 1
-        # Second dimension: permutation within Hamming weight
-        samples.append(local_repulsion_choice(nodes, G_dict, degrees, weights, n_qubits, m))
+    # We only need unique instances
+    samples = list(set(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits)))
 
     edge_keys = []
     edge_values = []
