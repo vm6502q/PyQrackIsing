@@ -93,13 +93,13 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 n_nodes = 128
 G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-circuit, path_length = tsp_symmetric(G, quality=1, is_cyclic=True, start_node=None)
+circuit, path_length = tsp_symmetric(G, quality=0, correction_quality=2, is_cyclic=True, start_node=None)
 
 print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")
 print(f"Path length: {path_length}")
 ```
-The (integer) `quality` setting is optional, with a default value of `1`. We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `is_cyclic` controls whether the path must ultimately complete a circuit, if `True`, or a one-way trip, if `False`. When the desired route is acyclic, a fixed starting point can optionally be specified via passing the node label to `start_node` (or, without this parameter, the solver will also attempt to pick an optimal starting point).
+We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `is_cyclic` controls whether the path must ultimately complete a circuit, if `True`, or a one-way trip, if `False`. When the desired route is acyclic, a fixed starting point can optionally be specified via passing the node label to `start_node` (or, without this parameter, the solver will also attempt to pick an optimal starting point).
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.

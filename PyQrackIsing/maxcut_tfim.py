@@ -145,7 +145,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 
 # Written by Elara (OpenAI custom GPT)
-@njit
+@njit(parallel=True)
 def local_repulsion_choice(adjacency, degrees, weights, n, m):
     """
     Pick m nodes out of n with repulsion bias:
@@ -162,7 +162,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     mask = np.zeros(n, dtype=np.bool_)
     chosen_count = 0
 
-    for _ in range(m):
+    for _ in prange(m):
         # Count available
         total_w = 0.0
         for i in range(n):
@@ -201,11 +201,10 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
-@njit(parallel=True)
 def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n):
-    samples = np.zeros((shots, n), dtype=np.bool_)  # (shots × n) boolean mask array
+    samples = []
 
-    for s in prange(shots):
+    for s in range(shots):
         # First dimension: Hamming weight
         mag_prob = np.random.random()
         m = 0
@@ -214,22 +213,19 @@ def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        samples[s, :] = local_repulsion_choice(adjacency, degrees, weights, n, m)
+        samples.append(mask_array_to_python_int(local_repulsion_choice(adjacency, degrees, weights, n, m)))
 
     return samples
 
 
-def mask_array_to_python_ints(masks):
-    samples = []
-    for mask in masks:
-        sample = 0
-        for b in reversed(mask):
-            sample <<= 1
-            if b:
-                sample |= 1
-        samples.append(sample)
+def mask_array_to_python_int(mask):
+    sample = 0
+    for b in reversed(mask):
+        sample <<= 1
+        if b:
+            sample |= 1
 
-    return samples
+    return sample
 
 def evaluate_cut_edges(samples, edge_keys, edge_values):
     best_value = float("-inf")
@@ -360,7 +356,7 @@ def maxcut_tfim(
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
     # We only need unique instances
-    samples = list(set(mask_array_to_python_ints(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits))))
+    samples = list(set(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits)))
 
     edge_keys = []
     edge_values = []
