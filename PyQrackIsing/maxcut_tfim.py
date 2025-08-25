@@ -235,18 +235,18 @@ def maxcut_tfim(
         return "0", 0, ([nodes[0]], [])
 
     # Warp size is 32:
-    group_size = n_qubits
+    group_size = n_qubits - 1
     shared_size = (n_qubits - 1) * 8
 
     if quality is None:
-        quality = int(math.ceil(math.log2((128 * group_size + n_qubits - 1) // n_qubits)))
+        quality = math.ceil(math.log(128 * group_size))
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
     n_steps = 1 << quality
-    grid_size = (n_steps * n_qubits + group_size - 1) // group_size
+    grid_size = n_steps * n_qubits
 
     J_eff = np.array(
         [
