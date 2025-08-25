@@ -11,10 +11,7 @@ try:
     warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
 
     @cuda.jit(device=True)
-    def cuda_probability_by_hamming_weight(q, J, h, z, theta, t, n_qubits, bias):
-        if J > 0.0:
-            q = n_qubits - (2 + q)
-    
+    def cuda_probability_by_hamming_weight(q, J, h, z, theta, t, n_qubits):
         # critical angle
         theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
 
@@ -24,15 +21,15 @@ try:
             - 0.5
         )
 
-        if (p * n_qubits) >= 1024:
-            bias[q] = 0.0
-        else:
-            norm = pow(2.0, -(n_qubits + 1) * p) * (pow(2.0, (n_qubits + 2) * p) - 1.0) / (pow(2, p) - 1.0)
-            bias[q] = 1.0 / pow(2.0, p * q) / norm
+        if (p * (n_qubits + 2)) >= 1024:
+            return 0.0
+
+        norm = pow(2.0, -(n_qubits + 1) * p) * (pow(2.0, (n_qubits + 2) * p) - 1.0) / (pow(2, p) - 1.0)
+
+        return (1.0 / pow(2.0, p * q)) / norm
 
     @cuda.jit
     def cuda_maxcut_hamming_cdf(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
-        bias = cuda.shared.array(0, dtype=np.float64)
         step = cuda.blockIdx.x
         qi = cuda.blockIdx.y
         J_eff = J_func[qi]
@@ -47,10 +44,11 @@ try:
         h_t = h_mult * (tot_t - t)
 
         qo = cuda.threadIdx.x
-        cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits, bias)
-        hamming_prob[qo] += bias[qo]
-        cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
-        hamming_prob[qo] -= bias[qo]
+        if J_eff > 0.0:
+            qo = n_qubits - (2 + qo)
+        diff = cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits)
+        diff -= cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
+        hamming_prob[qo] += diff
 
 except:
     IS_CUDA_AVAILABLE = False
@@ -58,7 +56,7 @@ except:
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    bias = np.zeros(n_qubits - 1)
+    bias = np.zeros(n_qubits - 1, dtype=np.float64)
 
     # critical angle
     theta_c = np.arcsin(
@@ -96,7 +94,8 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     if n_qubits < 2:
-        return np.empty(0, dtype=np.float64)
+        hamming_prob.fill(0.0)
+        return
 
     n_steps = 1 << quality
     delta_t = 1.0 / n_steps
@@ -141,17 +140,19 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     for i in range(n_bias):
         tot_prob += hamming_prob[i]
         hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 1.0
+    hamming_prob[-1] = 2.0
 
 
 # Written by Elara (OpenAI custom GPT)
 @njit(parallel=True)
 def local_repulsion_choice(adjacency, degrees, weights, n, m):
     """
+
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
     adjacency: 2D int array (n x max_deg), padded with -1
+
     degrees: int array of shape (n,)
     weights: float64 array of shape (n,)
     """
@@ -270,7 +271,6 @@ def maxcut_tfim(
 
     # Warp size is 32:
     group_size = n_qubits - 1
-    shared_size = (n_qubits - 1) * 8
 
     if quality is None:
         quality = 10
@@ -298,20 +298,21 @@ def maxcut_tfim(
         dtype=np.float64,
     )
     # thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+
     n_bias = n_qubits - 1
-    tot_prob = 2.0
-    thresholds = np.zeros(n_bias)
-    for q in range(1, n_qubits // 2):
-        n = math.comb(n_qubits, q)
-        thresholds[q - 1] = n
-        thresholds[n_bias - q] = n
-        tot_prob += n << 1
-    if n_qubits & 1:
-        q = n_qubits // 2
-        n = math.comb(n_qubits, q)
-        thresholds[q - 1] = n
-        tot_prob += n
-    thresholds /= tot_prob
+    thresholds = np.zeros(n_bias, dtype=np.float64)
+    if ((n_qubits + 2) * (1 << n_qubits)) < 1024:
+        tot_prob = pow(2.0, -(n_qubits + 1) * (1 << n_qubits)) * (pow(2.0, (n_qubits + 2) * (1 << n_qubits)) - 1.0) / (pow(2, 1 << n_qubits) - 1.0)
+        for q in range(1, n_qubits // 2):
+            p = math.comb(n_qubits, q) / tot_prob
+            thresholds[q - 1] = p
+            thresholds[n_bias - q] = p
+        if n_qubits & 1:
+            q = n_qubits // 2
+            p = math.comb(n_qubits, q) / tot_prob
+            thresholds[q - 1] = p
+    else:
+        thresholds[(n_bias + 1) // 2] = 1.0
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
         delta_t = 1.0 / n_steps
@@ -332,7 +333,7 @@ def maxcut_tfim(
                 )
             )
 
-        cuda_maxcut_hamming_cdf[grid_dims, group_size, 0, shared_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         tot_prob = sum(thresholds)
         thresholds /= tot_prob
@@ -341,7 +342,7 @@ def maxcut_tfim(
         for i in range(n_bias):
             tot_prob += thresholds[i]
             thresholds[i] = tot_prob
-        thresholds[-1] = 1.0
+        thresholds[-1] = 2.0
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
