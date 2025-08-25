@@ -33,22 +33,24 @@ try:
     @cuda.jit
     def cuda_maxcut_hamming_cdf(n_qubits, n_steps, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
         bias = cuda.shared.array(0, dtype=np.float32)
-        step = cuda.blockIdx.x * cuda.blockDim.x
+        idx = cuda.blockIdx.x * cuda.blockDim.x
+        n_bias = n_qubits - 1
+        step = idx // n_bias
+        qi = idx % n_bias
         if step >= n_steps:
             return
 
-        q = cuda.threadIdx.x
-        J_eff = J_func[q]
-        z = degrees[q]
+        J_eff = J_func[qi]
+        z = degrees[qi]
         if abs(z * J_eff) <= (2 ** (-54)):
             return
 
-        theta_eff = theta[q]
+        theta_eff = theta[qi]
         t = step * delta_t
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
-        n_bias = n_qubits - 1
 
+        q = cuda.threadIdx.x
         cuda_probability_by_hamming_weight(q, J_eff, h_t, z, theta_eff, t, n_qubits, bias)
         hamming_prob[q] += bias[q]
         cuda_probability_by_hamming_weight(q, J_eff, h_t, z, theta_eff, tm1, n_qubits, bias)
