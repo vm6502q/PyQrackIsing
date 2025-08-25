@@ -239,7 +239,7 @@ def maxcut_tfim(
     shared_size = (n_qubits - 1) * 8
 
     if quality is None:
-        quality = math.ceil(math.log(128 * group_size))
+        quality = math.ceil(math.log2(128 * group_size))
 
     if shots is None:
         # Number of measurement shots
