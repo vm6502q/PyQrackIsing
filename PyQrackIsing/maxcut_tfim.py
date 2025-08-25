@@ -31,7 +31,7 @@ try:
             bias[q] = 1.0 / pow(2.0, p * q) / norm
 
     @cuda.jit
-    def cuda_maxcut_hamming_cdf(n_qubits, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+    def cuda_maxcut_hamming_cdf(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
         bias = cuda.shared.array(0, dtype=np.float64)
         step = cuda.blockIdx.x
         qi = cuda.blockIdx.y
@@ -40,6 +40,7 @@ try:
         if abs(z * J_eff) <= (2 ** (-54)):
             return
 
+        n_qubits = cuda.blockDim.y
         theta_eff = theta[qi]
         t = step * delta_t
         tm1 = (step - 1) * delta_t
@@ -295,7 +296,7 @@ def maxcut_tfim(
                 )
             )
 
-        cuda_maxcut_hamming_cdf[grid_dims, group_size, 0, shared_size](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        cuda_maxcut_hamming_cdf[grid_dims, group_size, 0, shared_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         tot_prob = sum(thresholds)
         thresholds /= tot_prob
