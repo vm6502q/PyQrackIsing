@@ -149,8 +149,10 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3):
 results = [
     benchmark_tsp_realistic(32),
     benchmark_tsp_realistic(64),
-    # benchmark_tsp_realistic(128),
-    # benchmark_tsp_realistic(256),
+    benchmark_tsp_realistic(128),
+    benchmark_tsp_realistic(256),
+    benchmark_tsp_realistic(512),
+    benchmark_tsp_realistic(1024),
 ]
 
 for results_dict in results:
@@ -163,37 +165,55 @@ for results_dict in results:
 # Combine into dataframe
 df32 = pd.DataFrame(
     {
-        "Nearest Neighbor  (32)": results[0]["Nearest Neighbor"],
-        "Christofides  (32)": results[0]["Christofides"],
-        "Simulated Annealing  (32)": results[0]["Simulated Annealing"],
-        "PyQrackIsing  (32)": results[0]["PyQrackIsing"],
+        "Nearest Neighbor   (32)": results[0]["Nearest Neighbor"],
+        "Christofides   (32)": results[0]["Christofides"],
+        "Simulated Annealing   (32)": results[0]["Simulated Annealing"],
+        "PyQrackIsing   (32)": results[0]["PyQrackIsing"],
     }
 )
 print(df32)
 df64 = pd.DataFrame(
     {
-        "Nearest Neighbor  (64)": results[1]["Nearest Neighbor"],
-        "Christofides  (64)": results[1]["Christofides"],
-        "Simulated Annealing  (64)": results[1]["Simulated Annealing"],
-        "PyQrackIsing  (64)": results[1]["PyQrackIsing"],
+        "Nearest Neighbor   (64)": results[1]["Nearest Neighbor"],
+        "Christofides   (64)": results[1]["Christofides"],
+        "Simulated Annealing   (64)": results[1]["Simulated Annealing"],
+        "PyQrackIsing   (64)": results[1]["PyQrackIsing"],
     }
 )
 print(df64)
-# df128 = pd.DataFrame(
-#     {
-#         "Nearest Neighbor (128)": results[2]["Nearest Neighbor"],
-#         "Christofides (128)": results[2]["Christofides"],
-#         "Simulated Annealing (128)": results[2]["Simulated Annealing"],
-#         "PyQrackIsing (128)": results[2]["PyQrackIsing"],
-#     }
-# )
-# print(df128)
-# df256 = pd.DataFrame(
-#     {
-#         "Nearest Neighbor (256)": results[3]["Nearest Neighbor"],
-#         "Christofides (256)": results[3]["Christofides"],
-#         "Simulated Annealing (256)": results[3]["Simulated Annealing"],
-#         "PyQrackIsing (256)": results[3]["PyQrackIsing"],
-#     }
-# )
-# print(df256)
+df128 = pd.DataFrame(
+    {
+        "Nearest Neighbor  (128)": results[2]["Nearest Neighbor"],
+        "Christofides  (128)": results[2]["Christofides"],
+        "Simulated Annealing  (128)": results[2]["Simulated Annealing"],
+        "PyQrackIsing  (128)": results[2]["PyQrackIsing"],
+    }
+)
+print(df128)
+df256 = pd.DataFrame(
+    {
+        "Nearest Neighbor  (256)": results[3]["Nearest Neighbor"],
+        "Christofides  (256)": results[3]["Christofides"],
+        "Simulated Annealing  (256)": results[3]["Simulated Annealing"],
+        "PyQrackIsing  (256)": results[3]["PyQrackIsing"],
+    }
+)
+print(df256)
+df512 = pd.DataFrame(
+    {
+        "Nearest Neighbor  (512)": results[4]["Nearest Neighbor"],
+        "Christofides  (512)": results[4]["Christofides"],
+        "Simulated Annealing  (512)": results[4]["Simulated Annealing"],
+        "PyQrackIsing  (512)": results[4]["PyQrackIsing"],
+    }
+)
+print(df512)
+df1024 = pd.DataFrame(
+    {
+        "Nearest Neighbor (1024)": results[5]["Nearest Neighbor"],
+        "Christofides (1024)": results[5]["Christofides"],
+        "Simulated Annealing (1024)": results[5]["Simulated Annealing"],
+        "PyQrackIsing (1024)": results[5]["PyQrackIsing"],
+    }
+)
+print(df1024)
