@@ -40,7 +40,7 @@ try:
         if abs(z * J_eff) <= (2 ** (-54)):
             return
 
-        n_qubits = cuda.blockDim.y
+        n_qubits = cuda.gridDim.y
         theta_eff = theta[qi]
         t = step * delta_t
         tm1 = (step - 1) * delta_t
