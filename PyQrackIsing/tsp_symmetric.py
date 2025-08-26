@@ -100,15 +100,30 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
 
         return (best_path, sol_weight + best_weight)
 
-    terminals_a = (path_a[0], path_a[-1])
-    terminals_b = (path_b[0], path_b[-1])
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
 
-    # Find the best edge to stitch "a" to "b"
-    best_weight, best_end = get_best_stitch(G, terminals_a, terminals_b, is_cyclic)
+    for _ in range(2):
+        for _ in range(2):
+            best_weight = G[terminals_a[1]][terminals_b[0]].get("weight", 1.0)
+            best_path = path_a + path_b
+            weight = G[terminals_b[1]][terminals_a[0]].get("weight", 1.0)
+            if weight < best_weight:
+                best_weight = weight
+                best_path = path_b + path_a
+            for i in range(len(path_b) - 1):
+                weight = (
+                    G[terminals_a[0]][path_b[i]].get("weight", 1.0) +
+                    G[terminals_a[1]][path_b[i + 1]].get("weight", 1.0) -
+                    G[path_b[i]][path_b[i + 1]].get("weight", 1.0)
+                )
+                if weight < best_weight:
+                    best_weight = weight
+                    best_path = path_b.copy()
+                    best_path[i + 1:i + 1] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
 
-    if best_end[0] == 0:
-        path_a.reverse()
-    if best_end[1] == 1:
-        path_b.reverse()
-
-    return (path_a + path_b, sol_weight + best_weight)
+    return (best_path, sol_weight + best_weight)
