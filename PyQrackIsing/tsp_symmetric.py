@@ -24,7 +24,7 @@ def two_opt(path, G):
     return best_path, best_dist
 
 def path_length(path, G):
-    return sum(G[path[i]][path[i+1]]["weight"] for i in range(len(path)-1))
+    return sum(G[path[i]][path[i+1]].get("weight", 1.0) for i in range(len(path)-1))
 
 def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True, start_node=None):
     nodes = list(G.nodes())
@@ -103,10 +103,13 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
                 best_weight = weight
                 best_path = bulk.copy().insert(singlet, i + 1)
 
+        best_path, best_weight = two_opt(best_path, G)
+ 
         if is_cyclic:
+            best_weight += G[best_path[-1]][best_path[0]].get("weight", 1.0)
             best_path += [best_path[0]]
 
-        return two_opt(best_path, G)
+        return best_path, best_weight
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
@@ -134,7 +137,10 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
         path_a, path_b = path_b, path_a
         terminals_a, terminals_b = terminals_b, terminals_a
 
+    best_path, best_weight = two_opt(best_path, G)
+ 
     if is_cyclic:
+        best_weight += G[best_path[-1]][best_path[0]].get("weight", 1.0)
         best_path += [best_path[0]]
 
-    return two_opt(best_path, G)
+    return best_path, best_weight
