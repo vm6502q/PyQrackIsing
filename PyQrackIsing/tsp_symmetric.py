@@ -1,9 +1,19 @@
 from .spin_glass_solver import spin_glass_solver
 import networkx as nx
+from numba import njit
 import numpy as np
 
 
-# two_opt() written by Elara (OpenAI ChatGPT instance)
+# two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
+@njit
+def path_length(path, G_m):
+    tot_len = 0.0
+    for i in range(len(path)-1):
+        tot_len += G_m[path[i], path[i+1]]
+
+    return tot_len
+
+@njit
 def two_opt(path, G):
     improved = True
     best_path = path
@@ -24,10 +34,93 @@ def two_opt(path, G):
         path = best_path
     return best_path, best_dist
 
-def path_length(path, G_m):
-    return sum(G_m[path[i], path[i+1]] for i in range(len(path)-1))
+@njit
+def targeted_three_opt(path, W, k_neighbors=20):
+    """
+    Lin-Kernighan style 3-opt heuristic for TSP improvement.
 
-def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True, start_node=None):
+    path: list of node indices (tour)
+    W: adjacency matrix (numpy array)
+    k_neighbors: restrict 3-opt to nearest neighbors for efficiency
+    """
+
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length(best_path, W)
+    improved = True
+
+    # Precompute nearest neighbors for each node
+    neighbor_lists = [
+        np.argsort(W[i])[:k_neighbors] for i in range(n)
+    ]
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for j in neighbor_lists[path[i]]:
+                if j <= i or j >= n-3:
+                    continue
+                for k in neighbor_lists[path[j]]:
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # Extract indices
+                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, start_node=None, is_cyclic=True, is_3_opt=True, k_neighbors=20):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -75,8 +168,8 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
                 continue
             G_b[i, j] = G_m[b[i], b[j]]
 
-    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False)
-    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False)
+    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False, is_3_opt=False)
+    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False, is_3_opt=False)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
@@ -143,7 +236,10 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
             path_a, path_b = path_b, path_a
             terminals_a, terminals_b = terminals_b, terminals_a
 
-        best_path, best_weight = two_opt(best_path, G_m)
+    best_path, best_weight = two_opt(best_path, G_m)
+
+    if is_3_opt:
+        best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
  
     if is_cyclic:
         best_weight += G_m[best_path[-1], best_path[0]]
