@@ -30,7 +30,7 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
     if n_nodes == 1:
         return ([nodes[0]], 0)
     if n_nodes == 2:
-        return ([nodes[0], nodes[1]], G[nodes[0]][nodes[1]]["weight"])
+        return ([nodes[0], nodes[1]], G[nodes[0]][nodes[1]].get("weight", 1.0))
 
     a = []
     b = []
@@ -64,6 +64,41 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
     path_b = sol_b[0]
 
     sol_weight = sol_a[1] + sol_b[1]
+
+    single = None
+    is_single_a = len(path_a) == 1
+    is_single_b = len(path_b) == 1
+
+    if is_single_a and is_single_b:
+        return (path_a + path_b, sol_weight + G[path_a[0]][path_b[0]].get("weight", 1.0))
+
+    singlet = None
+    bulk = None
+    if is_single_a:
+        singlet = path_a[0]
+        bulk = path_b
+    elif is_single_b:
+        singlet = path_b[0]
+        bulk = path_a
+
+    if not singlet is None:
+        best_weight = G[singlet][bulk[0]].get("weight", 1.0)
+        best_path = [singlet] + bulk
+        weight = G[singlet][bulk[-1]].get("weight", 1.0)
+        if weight < best_weight:
+            best_weight = weight
+            best_path = bulk + [singlet]
+        for i in range(len(bulk) - 1):
+            weight = (
+                G[singlet][bulk[i]].get("weight", 1.0) +
+                G[singlet][bulk[i + 1]].get("weight", 1.0) -
+                G[bulk[i]][bulk[i + 1]].get("weight", 1.0)
+            )
+            if weight < best_weight:
+                best_weight = weight
+                best_path = bulk.copy().insert(singlet, i + 1)
+
+        return (best_path, sol_weight + best_weight)
 
     terminals_a = (path_a[0], path_a[-1])
     terminals_b = (path_b[0], path_b[-1])

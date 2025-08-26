@@ -30,10 +30,8 @@ if __name__ == "__main__":
 
     reconstructed_node_count = len(set(best_circuit))
     reconstructed_path_length = 0
-    for i in range(len(best_circuit)):
-        reconstructed_path_length += G[best_circuit[i]][best_circuit[(i + 1) % len(best_circuit)]][
-            "weight"
-        ]
+    for i in range(len(best_circuit) - 1):
+        reconstructed_path_length += G[best_circuit[i]][best_circuit[i + 1]]["weight"]
 
     print(f"Path: {best_circuit}")
     print(f"Actual node count: {n_nodes}")
