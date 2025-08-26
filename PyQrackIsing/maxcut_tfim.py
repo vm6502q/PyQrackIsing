@@ -258,6 +258,27 @@ def evaluate_cut_edges(samples, edge_keys, edge_values):
 
 
 @njit
+def init_thresholds(n_qubits):
+    n_bias = n_qubits - 1
+    thresholds = np.zeros(n_bias, dtype=np.float64)
+    tot_prob = 0
+    p = 1.0
+    if n_qubits & 1:
+        q = n_qubits // 2
+        thresholds[q - 1] = p
+        tot_prob = p
+        p /= 2
+    for q in range(1, n_qubits // 2):
+        thresholds[q - 1] = p
+        thresholds[n_bias - q] = p
+        tot_prob += 2 * p
+        p /= 2
+    thresholds /= tot_prob
+
+    return thresholds
+
+
+@njit
 def compute_adjacency(G_m):
     n_qubits = len(G_m)
     adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
@@ -325,21 +346,7 @@ def maxcut_tfim(
     J_eff = np.array([-sum(G_m[n]) for n in range(n_qubits)], dtype=np.float64)
     degrees = np.array([sum(abs(G_m[n])) for n in range(n_qubits)], dtype=np.float64)
 
-    n_bias = n_qubits - 1
-    thresholds = np.zeros(n_bias, dtype=np.float64)
-    tot_prob = 0
-    p = 1.0
-    if n_qubits & 1:
-        q = n_qubits // 2
-        thresholds[q - 1] = p
-        tot_prob = p
-        p /= 2
-    for q in range(1, n_qubits // 2):
-        thresholds[q - 1] = p
-        thresholds[n_bias - q] = p
-        tot_prob += 2 * p
-        p /= 2
-    thresholds /= tot_prob
+    thresholds = init_thresholds(n_qubits)
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
         delta_t = 1.0 / n_steps
@@ -366,7 +373,7 @@ def maxcut_tfim(
         thresholds /= tot_prob
 
         tot_prob = 0.0
-        for i in range(n_bias):
+        for i in range(n_qubits - 1):
             tot_prob += thresholds[i]
             thresholds[i] = tot_prob
         thresholds[-1] = 2.0
