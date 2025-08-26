@@ -1,5 +1,6 @@
 from .maxcut_tfim import maxcut_tfim
 import itertools
+import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
@@ -57,14 +58,41 @@ def int_to_bitstring(integer, length):
 
 
 def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best_guess=None):
-    nodes = list(G.nodes())
-    n_qubits = len(nodes)
+    nodes = None
+    n_qubits = 0
+    is_matrix = False
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_qubits = len(nodes)
+        is_matrix = False
+    else:
+        n_qubits = len(G)
+        nodes = list(range(n_qubits))
+        is_matrix = True
 
     if n_qubits == 0:
         return "", 0, ([], []), 0
 
     if n_qubits == 1:
-        return "0", 0, ([nodes[0]], [])
+        return "0", 0, (nodes, []), 0
+
+    if n_qubits == 2:
+        if is_matrix:
+            weight = G[0, 1]
+            if weight < 0.0:
+                return "00", 0, ([0, 1], []), weight
+
+            return "01", weight, ([0], [1]), -weight
+
+        ed = G.get_edge_data(nodes[0], nodes[1], default={})
+        if ed == {}:
+            return "01", 0, ([nodes[0]], [nodes[1]]), 0
+
+        weight = ed.get("weight", 1.0)
+        if weight < 0.0:
+            return "00", 0, (nodes, []), weight
+
+        return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
     if correction_quality is None:
         # maxcut_tfim(G) scales roughly like n^4,
@@ -75,7 +103,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
-        bitstring = int_to_bitstring(best_guess, G.number_of_nodes())
+        bitstring = int_to_bitstring(best_guess, n_qubits)
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
@@ -84,10 +112,20 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
 
     edge_keys = []
     edge_values = []
-    for u, v, data in G.edges(data=True):
-        edge_keys.append(nodes.index(u))
-        edge_keys.append(nodes.index(v))
-        edge_values.append(data.get("weight", 1.0))
+    if is_matrix:
+        for i in range(n_qubits):
+            for j in range(i + 1, n_qubits):
+                weight = G[i, j]
+                if weight == 0.0:
+                    continue
+            edge_keys.append(i)
+            edge_keys.append(j)
+            edge_values.append(weight)
+    else:
+        for u, v, data in G.edges(data=True):
+            edge_keys.append(nodes.index(u))
+            edge_keys.append(nodes.index(v))
+            edge_values.append(data.get("weight", 1.0))
 
     min_energy = compute_energy(best_theta, edge_keys, edge_values)
     improved = True

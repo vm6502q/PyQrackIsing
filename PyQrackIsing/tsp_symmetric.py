@@ -1,5 +1,6 @@
 from .spin_glass_solver import spin_glass_solver
 import networkx as nx
+import numpy as np
 
 
 # two_opt() written by Elara (OpenAI ChatGPT instance)
@@ -23,19 +24,28 @@ def two_opt(path, G):
         path = best_path
     return best_path, best_dist
 
-def path_length(path, G):
-    return sum(G[path[i]][path[i+1]].get("weight", 1.0) for i in range(len(path)-1))
+def path_length(path, G_m):
+    return sum(G_m[path[i], path[i+1]] for i in range(len(path)-1))
 
 def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True, start_node=None):
-    nodes = list(G.nodes())
-    n_nodes = len(nodes)
+    nodes = None
+    n_nodes = 0
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_nodes = len(nodes)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    else:
+        n_nodes = len(G)
+        nodes = list(range(n_nodes))
+        G_m = G
 
     if n_nodes == 0:
         return ([], 0)
     if n_nodes == 1:
         return ([nodes[0]], 0)
     if n_nodes == 2:
-        return ([nodes[0], nodes[1]], G[nodes[0]][nodes[1]].get("weight", 1.0))
+        return ([nodes[0], nodes[1]], G_m[nodes[0], nodes[1]])
 
     a = []
     b = []
@@ -50,23 +60,26 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
             a = list(bits[0])
             b = list(bits[1])
 
-    G_a = nx.Graph()
-    G_b = nx.Graph()
-    G_a.add_nodes_from(a)
-    G_b.add_nodes_from(b)
-    for u, v, data in G.edges(data=True):
-        if (u in a) and (v in a):
-            G_a.add_edge(u, v, weight=data.get("weight", 1.0))
-            continue
-
-        if (u in b) and (v in b):
-            G_b.add_edge(u, v, weight=data.get("weight", 1.0))
+    n_a_nodes = len(a)
+    n_b_nodes = len(b)
+    G_a = np.zeros((n_a_nodes, n_a_nodes), dtype=np.float64)
+    G_b = np.zeros((n_b_nodes, n_b_nodes), dtype=np.float64)
+    for i in range(n_a_nodes):
+        for j in range(n_a_nodes):
+            if i == j:
+                continue
+            G_a[i, j] = G_m[a[i], a[j]]
+    for i in range(n_b_nodes):
+        for j in range(n_b_nodes):
+            if i == j:
+                continue
+            G_b[i, j] = G_m[b[i], b[j]]
 
     sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False)
     sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False)
 
-    path_a = sol_a[0]
-    path_b = sol_b[0]
+    path_a = [a[x] for x in sol_a[0]]
+    path_b = [b[x] for x in sol_b[0]]
 
     sol_weight = sol_a[1] + sol_b[1]
 
@@ -75,7 +88,7 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
     is_single_b = len(path_b) == 1
 
     if is_single_a and is_single_b:
-        return (path_a + path_b, sol_weight + G[path_a[0]][path_b[0]].get("weight", 1.0))
+        return (path_a + path_b, sol_weight + G_m[path_a[0], path_b[0]])
 
     singlet = None
     bulk = None
@@ -87,60 +100,53 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
         bulk = path_a
 
     if not singlet is None:
-        best_weight = G[singlet][bulk[0]].get("weight", 1.0)
+        best_weight = G_m[singlet, bulk[0]]
         best_path = [singlet] + bulk
-        weight = G[singlet][bulk[-1]].get("weight", 1.0)
+        weight = G_m[singlet, bulk[-1]]
         if weight < best_weight:
             best_weight = weight
             best_path = bulk + [singlet]
         for i in range(len(bulk) - 1):
             weight = (
-                G[singlet][bulk[i]].get("weight", 1.0) +
-                G[singlet][bulk[i + 1]].get("weight", 1.0) -
-                G[bulk[i]][bulk[i + 1]].get("weight", 1.0)
+                G_m[singlet, bulk[i]] +
+                G_m[singlet, bulk[i + 1]] -
+                G_m[bulk[i], bulk[i + 1]]
             )
             if weight < best_weight:
                 best_weight = weight
-                best_path = bulk.copy().insert(singlet, i + 1)
+                best_path = bulk.copy()
+                best_path.insert(i + 1, singlet)
+    else:
+        terminals_a = [path_a[0], path_a[-1]]
+        terminals_b = [path_b[0], path_b[-1]]
 
-        best_path, best_weight = two_opt(best_path, G)
- 
-        if is_cyclic:
-            best_weight += G[best_path[-1]][best_path[0]].get("weight", 1.0)
-            best_path += [best_path[0]]
-
-        return best_path, best_weight
-
-    terminals_a = [path_a[0], path_a[-1]]
-    terminals_b = [path_b[0], path_b[-1]]
-
-    for _ in range(2):
         for _ in range(2):
-            best_weight = G[terminals_a[1]][terminals_b[0]].get("weight", 1.0)
-            best_path = path_a + path_b
-            weight = G[terminals_b[1]][terminals_a[0]].get("weight", 1.0)
-            if weight < best_weight:
-                best_weight = weight
-                best_path = path_b + path_a
-            for i in range(len(path_b) - 1):
-                weight = (
-                    G[terminals_a[0]][path_b[i]].get("weight", 1.0) +
-                    G[terminals_a[1]][path_b[i + 1]].get("weight", 1.0) -
-                    G[path_b[i]][path_b[i + 1]].get("weight", 1.0)
-                )
+            for _ in range(2):
+                best_weight = G_m[terminals_a[1], terminals_b[0]]
+                best_path = path_a + path_b
+                weight = G_m[terminals_b[1], terminals_a[0]]
                 if weight < best_weight:
                     best_weight = weight
-                    best_path = path_b.copy()
-                    best_path[i + 1:i + 1] = path_a
-            path_a.reverse()
-            terminals_a.reverse()
-        path_a, path_b = path_b, path_a
-        terminals_a, terminals_b = terminals_b, terminals_a
+                    best_path = path_b + path_a
+                for i in range(len(path_b) - 1):
+                    weight = (
+                        G_m[terminals_a[0], path_b[i]] +
+                        G_m[terminals_a[1], path_b[i + 1]] -
+                        G_m[path_b[i], path_b[i + 1]]
+                    )
+                    if weight < best_weight:
+                        best_weight = weight
+                        best_path = path_b.copy()
+                        best_path[i + 1:i + 1] = path_a
+                path_a.reverse()
+                terminals_a.reverse()
+            path_a, path_b = path_b, path_a
+            terminals_a, terminals_b = terminals_b, terminals_a
 
-    best_path, best_weight = two_opt(best_path, G)
+        best_path, best_weight = two_opt(best_path, G_m)
  
     if is_cyclic:
-        best_weight += G[best_path[-1]][best_path[0]].get("weight", 1.0)
+        best_weight += G_m[best_path[-1], best_path[0]]
         best_path += [best_path[0]]
 
-    return best_path, best_weight
+    return [nodes[x] for x in best_path], best_weight

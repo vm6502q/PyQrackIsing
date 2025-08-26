@@ -267,22 +267,26 @@ def maxcut_tfim(
     quality=None,
     shots=None,
 ):
-    # Number of qubits/nodes
-    nodes = list(G.nodes())
-    n_qubits = len(nodes)
+    nodes = None
+    n_qubits = 0
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_qubits = len(nodes)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    else:
+        n_qubits = len(G)
+        nodes = list(range(n_qubits))
+        G_m = G
 
     if n_qubits == 0:
         return "", 0, ([], [])
 
     if n_qubits == 1:
-        return "0", 0, ([nodes[0]], [])
+        return "0", 0, (nodes, [])
 
     if n_qubits == 2:
-        ed = G.get_edge_data(nodes[0], nodes[1], default={})
-        if ed == {}:
-            return "01", 0, ([nodes[0]], [nodes[1]])
-
-        weight = ed.get("weight", 1.0)
+        weight = G_m[0, 1]
         if weight < 0.0:
             return "00", 0, (nodes, [])
 
@@ -302,21 +306,8 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
     grid_dims = (n_steps, n_qubits)
 
-    J_eff = np.array(
-        [
-            -sum(edge_attributes.get("weight", 1.0) for _, edge_attributes in G.adj[n].items())
-            for n in nodes
-        ],
-        dtype=np.float64,
-    )
-    degrees = np.array(
-        [
-            sum(abs(edge_attributes.get("weight", 1.0)) for _, edge_attributes in G.adj[n].items())
-            for n in nodes
-        ],
-        dtype=np.float64,
-    )
-    # thresholds = tfim_sampler._maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    J_eff = np.array([-sum(G_m[n]) for n in range(n_qubits)], dtype=np.float64)
+    degrees = np.array([sum(abs(G_m[n])) for n in range(n_qubits)], dtype=np.float64)
 
     n_bias = n_qubits - 1
     thresholds = np.zeros(n_bias, dtype=np.float64)
@@ -366,13 +357,15 @@ def maxcut_tfim(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
-    G_dict = nx.to_dict_of_lists(G)
-    max_degree = max(len(x) for x in G_dict.values())
-    adjacency = np.full((len(nodes), max_degree), -1, dtype=np.int32)
-    for i in range(len(nodes)):
-        adj = G_dict.get(nodes[i], [])
-        for j in range(len(adj)):
-            adjacency[i, j] = nodes.index(adj[j])
+    adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
+    for i in range(n_qubits):
+        k = 0
+        for j in range(n_qubits):
+            if i == j:
+                continue
+            if G_m[i, j] != 0.0:
+                adjacency[i, k] = j
+                k += 1
 
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
@@ -381,10 +374,14 @@ def maxcut_tfim(
 
     edge_keys = []
     edge_values = []
-    for u, v, data in G.edges(data=True):
-        edge_keys.append(nodes.index(u))
-        edge_keys.append(nodes.index(v))
-        edge_values.append(data.get("weight", 1.0))
+    for i in range(n_qubits):
+        for j in range(i + 1, n_qubits):
+            weight = G_m[i, j]
+            if weight == 0.0:
+                continue
+            edge_keys.append(i)
+            edge_keys.append(j)
+            edge_values.append(weight)
 
     best_solution, best_value = evaluate_cut_edges(samples, edge_keys, edge_values)
 
