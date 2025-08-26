@@ -361,7 +361,7 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
     grid_dims = (n_steps, n_qubits)
 
-    degrees = np.array([sum(G_m[n] != 0.0) for n in range(n_qubits)], dtype=np.float64)
+    degrees = np.array([sum(G_m[n] != 0.0) for n in range(n_qubits)], dtype=np.uint32)
     J_eff = np.array([-sum(G_m[n]) / degrees[n] if degrees[n] else 0.0 for n in range(n_qubits)], dtype=np.float64)
 
     thresholds = init_thresholds(n_qubits)
