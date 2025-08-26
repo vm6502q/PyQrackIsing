@@ -102,8 +102,8 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
     n_steps = 1 << quality
     delta_t = 1.0 / n_steps
-    tot_t = 64.0 * n_steps * delta_t
-    h_mult = 64.0 / tot_t
+    tot_t = 32.0 * n_steps * delta_t
+    h_mult = 32.0 / tot_t
     n_bias = n_qubits - 1
 
     theta = np.zeros(n_qubits)
@@ -351,7 +351,7 @@ def maxcut_tfim(
     group_size = n_qubits - 1
 
     if quality is None:
-        quality = 9
+        quality = 7
 
     if shots is None:
         # Number of measurement shots
@@ -361,15 +361,15 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
     grid_dims = (n_steps, n_qubits)
 
-    J_eff = np.array([-sum(G_m[n]) for n in range(n_qubits)], dtype=np.float64)
-    degrees = np.array([sum(abs(G_m[n])) for n in range(n_qubits)], dtype=np.float64)
+    degrees = np.array([sum(G_m[n] != 0.0) for n in range(n_qubits)], dtype=np.float64)
+    J_eff = np.array([-sum(G_m[n]) / degrees[n] if degrees[n] else 0.0 for n in range(n_qubits)], dtype=np.float64)
 
     thresholds = init_thresholds(n_qubits)
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
         delta_t = 1.0 / n_steps
-        tot_t = 64.0 * n_steps * delta_t
-        h_mult = 64.0 / tot_t
+        tot_t = 32.0 * n_steps * delta_t
+        h_mult = 32.0 / tot_t
         theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
 
         cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
