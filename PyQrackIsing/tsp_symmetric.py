@@ -2,24 +2,29 @@ from .spin_glass_solver import spin_glass_solver
 import networkx as nx
 
 
-def get_best_stitch(adjacency, terminals_a, terminals_b, is_cyclic):
-    best_weight = float("inf")
-    best_edge = None
-    for a in range(2):
-        a_term = terminals_a[a]
-        for b in range(2):
-            b_term = terminals_b[b]
-            weight = adjacency[a_term][b_term]["weight"]
-            if is_cyclic:
-                n_a_term = terminals_a[0 if a else 1]
-                n_b_term = terminals_b[0 if b else 1]
-                weight += adjacency[n_a_term][n_b_term]["weight"]
-            if weight < best_weight:
-                best_weight = weight
-                best_edge = (a, b)
+# two_opt() written by Elara (OpenAI ChatGPT instance)
+def two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+    
+    while improved:
+        improved = False
+        for i in range(1, len(path) - 2):
+            for j in range(i+1, len(path) - 1):
+                if j - i == 1:  # adjacent edges, skip
+                    continue
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
 
-    return best_weight, best_edge
-
+def path_length(path, G):
+    return sum(G[path[i]][path[i+1]]["weight"] for i in range(len(path)-1))
 
 def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True, start_node=None):
     nodes = list(G.nodes())
@@ -98,7 +103,10 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
                 best_weight = weight
                 best_path = bulk.copy().insert(singlet, i + 1)
 
-        return (best_path, sol_weight + best_weight)
+        if is_cyclic:
+            best_path += [best_path[0]]
+
+        return two_opt(best_path, G)
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
@@ -126,4 +134,7 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_cyclic=True
         path_a, path_b = path_b, path_a
         terminals_a, terminals_b = terminals_b, terminals_a
 
-    return (best_path, sol_weight + best_weight)
+    if is_cyclic:
+        best_path += [best_path[0]]
+
+    return two_opt(best_path, G)

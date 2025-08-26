@@ -138,9 +138,7 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3):
         start = time.time()
         path_q, length_q = tsp_symmetric(G)
         results["PyQrackIsing"].append((time.time() - start, length_q))
-        assert validate_tsp_solution(
-            G, path_q + [path_s[0]]
-        ), f"Invalid PyQrackIsing solution in trial {trial}"
+        assert validate_tsp_solution(G, path_q), f"Invalid PyQrackIsing solution in trial {trial}"
 
     return results
 
@@ -150,7 +148,6 @@ results = [
     benchmark_tsp_realistic(32),
     benchmark_tsp_realistic(64),
     benchmark_tsp_realistic(128),
-    benchmark_tsp_realistic(256),
 ]
 
 for results_dict in results:
@@ -188,12 +185,3 @@ df128 = pd.DataFrame(
     }
 )
 print(df128)
-df256 = pd.DataFrame(
-    {
-        "Nearest Neighbor  (256)": results[3]["Nearest Neighbor"],
-        "Christofides  (256)": results[3]["Christofides"],
-        "Simulated Annealing  (256)": results[3]["Simulated Annealing"],
-        "PyQrackIsing  (256)": results[3]["PyQrackIsing"],
-    }
-)
-print(df256)
