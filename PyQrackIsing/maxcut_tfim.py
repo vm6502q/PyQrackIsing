@@ -279,6 +279,24 @@ def init_thresholds(n_qubits):
 
 
 @njit
+def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
+    theta = np.zeros(n_qubits)
+    for q in range(n_qubits):
+        J = J_eff[q]
+        z = degrees[q]
+        theta[q] = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                ),
+            )
+        )
+
+    return theta
+
+@njit
 def compute_adjacency(G_m):
     n_qubits = len(G_m)
     adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
@@ -352,20 +370,7 @@ def maxcut_tfim(
         delta_t = 1.0 / n_steps
         tot_t = n_steps * delta_t
         h_mult = 32.0 / tot_t
-
-        theta = np.zeros(n_qubits)
-        for q in range(n_qubits):
-            J = J_eff[q]
-            z = degrees[q]
-            theta[q] = np.arcsin(
-                max(
-                    -1.0,
-                    min(
-                        1.0,
-                        (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
-                    ),
-                )
-            )
+        theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
 
         cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
