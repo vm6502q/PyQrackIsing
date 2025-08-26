@@ -138,20 +138,22 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, start_node=Non
     if n_nodes == 1:
         return ([nodes[0]], 0)
     if n_nodes == 2:
-        return ([nodes[0], nodes[1]], G_m[nodes[0], nodes[1]])
+        if is_cyclic:
+            return ([nodes[0], nodes[1], nodes[0]], 2 * G_m[0, 1])
+        else:
+            return ([nodes[0], nodes[1]], G_m[0, 1])
 
     a = []
     b = []
     if not (start_node is None):
         a = [start_node]
-        b = nodes
+        b = nodes.copy()
         b.remove(start_node)
     else:
-        while (len(a) == 0) or (len(b) == 0):
-            bits = ''
-            _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
-            a = list(bits[0])
-            b = list(bits[1])
+        bits = ''
+        _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
+        a = list(bits[0])
+        b = list(bits[1])
 
     n_a_nodes = len(a)
     n_b_nodes = len(b)
