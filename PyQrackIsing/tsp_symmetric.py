@@ -150,10 +150,11 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, start_node=Non
         b = nodes.copy()
         b.remove(start_node)
     else:
-        bits = ''
-        _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
-        a = list(bits[0])
-        b = list(bits[1])
+        while (len(a) == 0) or (len(b) == 0):
+            bits = ''
+            _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
+            a = list(bits[0])
+            b = list(bits[1])
 
     n_a_nodes = len(a)
     n_b_nodes = len(b)
