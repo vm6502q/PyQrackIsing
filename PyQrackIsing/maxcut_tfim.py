@@ -257,6 +257,22 @@ def evaluate_cut_edges(samples, edge_keys, edge_values):
     return best_solution, float(best_value)
 
 
+@njit
+def compute_adjacency(G_m):
+    n_qubits = len(G_m)
+    adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
+    for i in range(n_qubits):
+        k = 0
+        for j in range(n_qubits):
+            if i == j:
+                continue
+            if G_m[i, j] != 0.0:
+                adjacency[i, k] = j
+                k += 1
+
+    return adjacency
+
+
 # By Gemini (Google Search AI)
 def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
@@ -357,16 +373,7 @@ def maxcut_tfim(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
-    adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
-    for i in range(n_qubits):
-        k = 0
-        for j in range(n_qubits):
-            if i == j:
-                continue
-            if G_m[i, j] != 0.0:
-                adjacency[i, k] = j
-                k += 1
-
+    adjacency = compute_adjacency(G_m)
     J_max = max(J_eff)
     weights = 1.0 / (1.0 + (J_max - J_eff))
     # We only need unique instances
