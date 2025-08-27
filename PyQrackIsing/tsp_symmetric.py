@@ -120,7 +120,7 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
     return best_path, best_dist
 
-def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, start_node=None, is_cyclic=True, is_3_opt=True, k_neighbors=20):
+def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -145,16 +145,11 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, start_node=Non
 
     a = []
     b = []
-    if not (start_node is None):
-        a = [start_node]
-        b = nodes.copy()
-        b.remove(start_node)
-    else:
-        while (len(a) == 0) or (len(b) == 0):
-            bits = ''
-            _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
-            a = list(bits[0])
-            b = list(bits[1])
+    while (len(a) == 0) or (len(b) == 0):
+        bits = ''
+        _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
+        a = list(bits[0])
+        b = list(bits[1])
 
     n_a_nodes = len(a)
     n_b_nodes = len(b)
