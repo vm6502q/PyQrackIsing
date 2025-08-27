@@ -241,6 +241,5 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True,
  
     if is_cyclic:
         best_weight += G_m[best_path[-1], best_path[0]]
-        best_path += [best_path[0]]
 
     return [nodes[x] for x in best_path], best_weight
