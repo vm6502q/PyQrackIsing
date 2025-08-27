@@ -305,7 +305,7 @@ def compute_adjacency(G_m):
         for j in range(n_qubits):
             if i == j:
                 continue
-            if G_m[i, j] != 0.0:
+            if G_m[i, j] > 0.0:
                 adjacency[i, k] = j
                 k += 1
 
