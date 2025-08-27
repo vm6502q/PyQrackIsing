@@ -59,7 +59,7 @@ except:
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    bias = np.zeros(n_qubits - 1, dtype=np.float64)
+    bias = np.empty(n_qubits - 1, dtype=np.float64)
 
     # critical angle
     theta_c = np.arcsin(
@@ -106,7 +106,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     h_mult = 32.0 / tot_t
     n_bias = n_qubits - 1
 
-    theta = np.zeros(n_qubits)
+    theta = np.empty(n_qubits, dtype=np.float64)
     for q in prange(n_qubits):
         J = J_func[q]
         z = degrees[q]
@@ -207,7 +207,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
 
 @njit(parallel=True)
 def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n):
-    samples = np.zeros((shots, n), dtype=np.bool_)  # (shots × n) boolean mask array
+    samples = np.empty((shots, n), dtype=np.bool_)  # (shots × n) boolean mask array
 
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -259,7 +259,7 @@ def evaluate_cut_edges(G_m, samples):
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
-    thresholds = np.zeros(n_bias, dtype=np.float64)
+    thresholds = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
     p = 1.0
     if n_qubits & 1:
@@ -279,7 +279,7 @@ def init_thresholds(n_qubits):
 
 @njit
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
-    theta = np.zeros(n_qubits, dtype=np.float64)
+    theta = np.empty(n_qubits, dtype=np.float64)
     for q in range(n_qubits):
         J = J_eff[q]
         z = degrees[q]
@@ -360,8 +360,12 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
     grid_dims = (n_steps, n_qubits)
 
-    degrees = np.array([sum(G_m[n] != 0.0) for n in range(n_qubits)], dtype=np.uint32)
-    J_eff = np.array([-G_m[n].sum() / degrees[n] if degrees[n] else 0.0 for n in range(n_qubits)], dtype=np.float64)
+    degrees = np.empty(n_qubits, dtype=np.uint32)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
+    for n in range(n_qubits):
+        degree = sum(G_m[n] != 0.0)
+        degrees[n] = degree
+        J_eff[n] = -G_m[n].sum() / degree
 
     thresholds = init_thresholds(n_qubits)
 

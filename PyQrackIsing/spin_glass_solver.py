@@ -43,7 +43,7 @@ def bootstrap_worker(theta, G_m, indices):
 @njit(parallel=True)
 def bootstrap(theta, G_m, k, indices_array):
     n = len(indices_array) // k
-    energies = np.empty(n)
+    energies = np.empty(n, dtype=np.float64)
     for i in prange(n):
         j = i * k
         energies[i] = bootstrap_worker(theta, G_m, indices_array[j : j + k])
