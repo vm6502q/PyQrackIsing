@@ -236,7 +236,8 @@ def mask_array_to_python_ints(masks):
     return samples
 
 
-def evaluate_cut_edges(samples, edge_keys, edge_values):
+def evaluate_cut_edges(G_m, samples):
+    n_qubits = len(G_m)
     best_value = float("-inf")
     best_solution = None
     best_cut_edges = None
@@ -244,12 +245,10 @@ def evaluate_cut_edges(samples, edge_keys, edge_values):
     for state in samples:
         cut_edges = []
         cut_value = 0
-        for i in range(len(edge_values)):
-            k = i << 1
-            u, v = edge_keys[k], edge_keys[k + 1]
-            if ((state >> u) & 1) != ((state >> v) & 1):
-                cut_value += edge_values[i]
-
+        for u in range(n_qubits):
+            for v in range(u + 1, n_qubits):
+                if ((state >> u) & 1) != ((state >> v) & 1):
+                    cut_value += G_m[u, v]
         if cut_value > best_value:
             best_value = cut_value
             best_solution = state
@@ -351,7 +350,7 @@ def maxcut_tfim(
     group_size = n_qubits - 1
 
     if quality is None:
-        quality = 7
+        quality = 8
 
     if shots is None:
         # Number of measurement shots
@@ -391,18 +390,7 @@ def maxcut_tfim(
     # We only need unique instances
     samples = list(set(mask_array_to_python_ints(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits))))
 
-    edge_keys = []
-    edge_values = []
-    for i in range(n_qubits):
-        for j in range(i + 1, n_qubits):
-            weight = G_m[i, j]
-            if weight == 0.0:
-                continue
-            edge_keys.append(i)
-            edge_keys.append(j)
-            edge_values.append(weight)
-
-    best_solution, best_value = evaluate_cut_edges(samples, edge_keys, edge_values)
+    best_solution, best_value = evaluate_cut_edges(G_m, samples)
 
     bit_string = int_to_bitstring(best_solution, n_qubits)
     bit_list = list(bit_string)
