@@ -6,47 +6,47 @@ from numba import njit, prange
 import os
 
 
-def evaluate_cut_edges(state, edge_keys, edge_values):
+def evaluate_cut_edges(state, G_m):
+    n_qubits = len(G_m)
     cut_value = 0
-    for i in range(len(edge_values)):
-        k = i << 1
-        u, v = edge_keys[k], edge_keys[k + 1]
-        if ((state >> u) & 1) != ((state >> v) & 1):
-            cut_value += edge_values[i]
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            if ((state >> u) & 1) != ((state >> v) & 1):
+                cut_value += G_m[u, v]
 
     return float(cut_value)
 
 
 @njit
-def compute_energy(theta_bits, edge_keys, edge_values):
+def compute_energy(theta_bits, G_m):
+    n_qubits = len(G_m)
     energy = 0
-    for i in range(len(edge_values)):
-        k = i << 1
-        u, v = edge_keys[k], edge_keys[k + 1]
-        spin_u = 1 if theta_bits[u] else -1
-        spin_v = 1 if theta_bits[v] else -1
-        energy += edge_values[i] * spin_u * spin_v
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            spin_u = 1 if theta_bits[u] else -1
+            spin_v = 1 if theta_bits[v] else -1
+            energy += G_m[u, v] * spin_u * spin_v
 
     return energy
 
 
 @njit
-def bootstrap_worker(theta, edge_keys, edge_values, indices):
+def bootstrap_worker(theta, G_m, indices):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, edge_keys, edge_values)
+    energy = compute_energy(local_theta, G_m)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(theta, edge_keys, edge_values, k, indices_array):
+def bootstrap(theta, G_m, k, indices_array):
     n = len(indices_array) // k
     energies = np.empty(n)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(theta, G_m, indices_array[j : j + k])
 
     return energies
 
@@ -98,18 +98,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
         bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots)
     best_theta = [b == "1" for b in list(bitstring)]
 
-    edge_keys = []
-    edge_values = []
-    for i in range(n_qubits):
-        for j in range(i + 1, n_qubits):
-            weight = G_m[i, j]
-            if weight == 0.0:
-                continue
-            edge_keys.append(i)
-            edge_keys.append(j)
-            edge_values.append(weight)
-
-    min_energy = compute_energy(best_theta, edge_keys, edge_values)
+    min_energy = compute_energy(best_theta, G_m)
     improved = True
     while improved:
         improved = False
@@ -122,7 +111,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
             combos = list(
                 item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
             )
-            energies = bootstrap(theta, edge_keys, edge_values, k, combos)
+            energies = bootstrap(theta, G_m, k, combos)
 
             energy = min(energies)
             if energy < min_energy:
@@ -147,6 +136,6 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
             bitstring += "0"
             l.append(nodes[i])
 
-    cut_value = evaluate_cut_edges(sample, edge_keys, edge_values)
+    cut_value = evaluate_cut_edges(sample, G_m)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
