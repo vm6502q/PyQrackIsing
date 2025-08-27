@@ -136,7 +136,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
-    tot_prob = sum(hamming_prob)
+    tot_prob = hamming_prob.sum()
     hamming_prob /= tot_prob
 
     tot_prob = 0.0
@@ -279,7 +279,7 @@ def init_thresholds(n_qubits):
 
 @njit
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
-    theta = np.zeros(n_qubits)
+    theta = np.zeros(n_qubits, dtype=np.float64)
     for q in range(n_qubits):
         J = J_eff[q]
         z = degrees[q]
@@ -361,7 +361,7 @@ def maxcut_tfim(
     grid_dims = (n_steps, n_qubits)
 
     degrees = np.array([sum(G_m[n] != 0.0) for n in range(n_qubits)], dtype=np.uint32)
-    J_eff = np.array([-sum(G_m[n]) / degrees[n] if degrees[n] else 0.0 for n in range(n_qubits)], dtype=np.float64)
+    J_eff = np.array([-G_m[n].sum() / degrees[n] if degrees[n] else 0.0 for n in range(n_qubits)], dtype=np.float64)
 
     thresholds = init_thresholds(n_qubits)
 
@@ -373,7 +373,7 @@ def maxcut_tfim(
 
         cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
-        tot_prob = sum(thresholds)
+        tot_prob = thresholds.sum()
         thresholds /= tot_prob
 
         tot_prob = 0.0
@@ -385,7 +385,7 @@ def maxcut_tfim(
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
     adjacency = compute_adjacency(G_m)
-    J_max = max(J_eff)
+    J_max = J_eff.max()
     weights = 1.0 / (1.0 + (J_max - J_eff))
     # We only need unique instances
     samples = list(set(mask_array_to_python_ints(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits))))

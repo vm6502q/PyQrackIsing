@@ -113,7 +113,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
             )
             energies = bootstrap(theta, G_m, k, combos)
 
-            energy = min(energies)
+            energy = energies.min()
             if energy < min_energy:
                 index_match = np.random.choice(np.where(energies == energy)[0])
                 indices = combos[(index_match * k) : ((index_match + 1) * k)]
