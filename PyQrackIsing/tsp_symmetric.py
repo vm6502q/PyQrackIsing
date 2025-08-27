@@ -147,7 +147,7 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True,
     b = []
     while (len(a) == 0) or (len(b) == 0):
         bits = ''
-        _, _, bits, _ = spin_glass_solver(G, quality=quality, shots=shots, correction_quality=correction_quality)
+        _, _, bits, _ = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
         a = list(bits[0])
         b = list(bits[1])
 
