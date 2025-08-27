@@ -44,9 +44,9 @@ def bootstrap_worker(theta, edge_keys, edge_values, indices):
 def bootstrap(theta, edge_keys, edge_values, k, indices_array):
     n = len(indices_array) // k
     energies = np.empty(n)
-    j = [i * k for i in range(n)]
     for i in prange(n):
-        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j[i] : j[i] + k])
+        j = i * k
+        energies[i] = bootstrap_worker(theta, edge_keys, edge_values, indices_array[j : j + k])
 
     return energies
 
