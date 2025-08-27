@@ -138,7 +138,7 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3):
         start = time.time()
         path_q, length_q = tsp_symmetric(G)
         results["PyQrackIsing"].append((time.time() - start, length_q))
-        assert validate_tsp_solution(G, path_q + [path_q[0]]), f"Invalid PyQrackIsing solution in trial {trial}"
+        assert validate_tsp_solution(G, path_q), f"Invalid PyQrackIsing solution in trial {trial}"
 
     return results
 
