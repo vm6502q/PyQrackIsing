@@ -120,7 +120,7 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
     return best_path, best_dist
 
-def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True, is_cyclic_at_top=False):
+def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True, is_cyclic_at_top=False, multi_start=1):
     is_cyclic_at_top |= is_cyclic
 
     nodes = None
@@ -147,11 +147,19 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True,
 
     a = []
     b = []
-    while (len(a) == 0) or (len(b) == 0):
-        bits = ''
-        _, _, bits, _ = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
-        a = list(bits[0])
-        b = list(bits[1])
+    best_energy = float("inf")
+    for _ in range(multi_start):
+        energy = 0.0
+        _a = []
+        _b = []
+        while (len(_a) == 0) or (len(_b) == 0):
+            bits = ''
+            _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
+            _a = list(bits[0])
+            _b = list(bits[1])
+        if energy < best_energy:
+            best_energy = energy
+            a, b = _a, _b
 
     n_a_nodes = len(a)
     n_b_nodes = len(b)
