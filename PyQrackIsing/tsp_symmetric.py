@@ -160,15 +160,14 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
         _a = []
         _b = []
         while (len(_a) == 0) or (len(_b) == 0):
-            bits = ([], [])
+            bits = None
             if monte_carlo:
-                bit_list = ["0" if np.random.random() < 0.5 else "1"]
-                for i in range(len(bit_list)):
-                    b = bit_list[i] == "1"
-                    if b:
-                        bits[1].append(nodes[i])
-                    else:
+                bits = ([], [])
+                for i in range(n_nodes):
+                    if np.random.random() < 0.5:
                         bits[0].append(nodes[i])
+                    else:
+                        bits[1].append(nodes[i])
             else:
                 _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
             _a = list(bits[0])
