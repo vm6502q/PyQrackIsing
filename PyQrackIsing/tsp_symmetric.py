@@ -165,9 +165,9 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
                 bits = ([], [])
                 for i in range(n_nodes):
                     if np.random.random() < 0.5:
-                        bits[0].append(nodes[i])
+                        bits[0].append(i)
                     else:
-                        bits[1].append(nodes[i])
+                        bits[1].append(i)
             else:
                 _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
             _a = list(bits[0])
