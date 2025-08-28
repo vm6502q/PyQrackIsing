@@ -362,10 +362,15 @@ def maxcut_tfim(
 
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_max = -float("inf")
     for n in range(n_qubits):
         degree = sum(G_m[n] != 0.0)
+        J = -G_m[n].sum() / degree
         degrees[n] = degree
-        J_eff[n] = -G_m[n].sum() / degree
+        J_eff[n] = J
+        if J > J_max:
+            J = J_max
+    J_eff /= J_max
 
     thresholds = init_thresholds(n_qubits)
 
@@ -389,8 +394,7 @@ def maxcut_tfim(
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
     adjacency = compute_adjacency(G_m)
-    J_max = J_eff.max()
-    weights = 1.0 / (1.0 + (J_max - J_eff))
+    weights = 1.0 / (1.0 - J_eff)
     # We only need unique instances
     samples = list(set(mask_array_to_python_ints(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits))))
 
