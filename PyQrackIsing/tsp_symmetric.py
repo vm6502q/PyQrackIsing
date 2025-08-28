@@ -176,8 +176,8 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True,
                 continue
             G_b[i, j] = G_m[b[i], b[j]]
 
-    sol_a = tsp_symmetric(G_a, quality=quality, is_cyclic=False, is_cyclic_at_top=is_cyclic_at_top, is_3_opt=False, multi_start=multi_start)
-    sol_b = tsp_symmetric(G_b, quality=quality, is_cyclic=False, is_cyclic_at_top=is_cyclic_at_top, is_3_opt=False, multi_start=multi_start)
+    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_cyclic_at_top=is_cyclic_at_top, is_3_opt=False, multi_start=multi_start)
+    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_cyclic_at_top=is_cyclic_at_top, is_3_opt=False, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
