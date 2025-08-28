@@ -244,16 +244,16 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
                 if weight < best_weight:
                     best_weight = weight
                     best_path = path_b + path_a
-                for i in range(len(path_b) - 1):
+                for i in range(1, len(path_b)):
                     weight = (
-                        G_m[terminals_a[0], path_b[i]] +
-                        G_m[terminals_a[1], path_b[i + 1]] -
-                        G_m[path_b[i], path_b[i + 1]]
+                        G_m[terminals_a[0], path_b[i - 1]] +
+                        G_m[terminals_a[1], path_b[i]] -
+                        G_m[path_b[i - 1], path_b[i]]
                     )
                     if weight < best_weight:
                         best_weight = weight
                         best_path = path_b.copy()
-                        best_path[i + 1:i + 1] = path_a
+                        best_path[i:i] = path_a
                 path_a.reverse()
                 terminals_a.reverse()
             path_a, path_b = path_b, path_a
