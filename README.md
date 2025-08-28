@@ -93,13 +93,13 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 n_nodes = 128
 G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-circuit, path_length = tsp_symmetric(G, quality=1, correction_quality=2, is_cyclic=True, multi_start=1, is_2_opt=True, is_3_opt=True, k_neighbors=20)
+circuit, path_length = tsp_symmetric(G, is_monte_carlo=False, quality=1, correction_quality=2, is_cyclic=True, multi_start=1, is_2_opt=True, is_3_opt=True, k_neighbors=20)
 
 print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")
 print(f"Path length: {path_length}")
 ```
-We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `multi_start` controls how many stochastic repeats of MAXCUT are tried to select the best result, at every level of recursion.
+We only provide a solver for the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A"). `is_monte_carlo=True` switches out the MAXCUT-based heuristic for pure Monte Carlo recursive bipartitioning. `multi_start` controls how many stochastic repeats of MAXCUT are tried to select the best result, at every level of recursion.
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.

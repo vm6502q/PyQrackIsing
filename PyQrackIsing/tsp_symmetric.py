@@ -4,6 +4,12 @@ from numba import njit
 import numpy as np
 
 
+
+# By Gemini (Google Search AI)
+def int_to_bitstring(integer, length):
+    return (bin(integer)[2:].zfill(length))[::-1]
+
+
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
 @njit
 def path_length(path, G_m):
@@ -12,6 +18,7 @@ def path_length(path, G_m):
         tot_len += G_m[path[i], path[i+1]]
 
     return tot_len
+
 
 @njit
 def two_opt(path, G):
@@ -33,6 +40,7 @@ def two_opt(path, G):
                     improved = True
         path = best_path
     return best_path, best_dist
+
 
 @njit
 def targeted_three_opt(path, W, k_neighbors=20):
@@ -120,7 +128,8 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
     return best_path, best_dist
 
-def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_2_opt=True, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1):
+
+def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=False, is_2_opt=True, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -151,8 +160,17 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_2_opt=True,
         _a = []
         _b = []
         while (len(_a) == 0) or (len(_b) == 0):
-            bits = ''
-            _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
+            bits = ([], [])
+            if monte_carlo:
+                bit_list = ["0" if np.random.random() < 0.5 else "1"]
+                for i in range(len(bit_list)):
+                    b = bit_list[i] == "1"
+                    if b:
+                        bits[1].append(nodes[i])
+                    else:
+                        bits[0].append(nodes[i])
+            else:
+                _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
             _a = list(bits[0])
             _b = list(bits[1])
         if energy < best_energy:
