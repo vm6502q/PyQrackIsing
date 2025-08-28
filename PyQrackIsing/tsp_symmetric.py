@@ -242,18 +242,22 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_2_opt=True,
             path_a, path_b = path_b, path_a
             terminals_a, terminals_b = terminals_b, terminals_a
 
-    cycle_node = best_path[0]
-    best_path += [cycle_node]
+    if is_2_opt or is_3_opt:
+        cycle_node = best_path[0]
+        best_path += [cycle_node]
 
-    if is_2_opt:
-        best_path, best_weight = two_opt(best_path, G_m)
+        if is_2_opt:
+            best_path, best_weight = two_opt(best_path, G_m)
 
-    if is_3_opt:
-        best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
- 
-    if not is_cyclic:
-        cycle_index = best_path.index(cycle_node)
-        best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
-        best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
+        if is_3_opt:
+            best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
+
+        if not is_cyclic:
+            cycle_index = best_path.index(cycle_node)
+            best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
+            best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
+    elif is_cyclic:
+        cycle_node = best_path[0]
+        best_path += [cycle_node]
 
     return [nodes[x] for x in best_path], best_weight
