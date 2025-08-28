@@ -120,7 +120,7 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
     return best_path, best_dist
 
-def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1):
+def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_2_opt=True, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -174,8 +174,8 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_3_opt=True,
                 continue
             G_b[i, j] = G_m[b[i], b[j]]
 
-    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_3_opt=False, multi_start=multi_start)
-    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_3_opt=False, multi_start=multi_start)
+    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
+    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
@@ -245,7 +245,8 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, is_3_opt=True,
     cycle_node = best_path[0]
     best_path += [cycle_node]
 
-    best_path, best_weight = two_opt(best_path, G_m)
+    if is_2_opt:
+        best_path, best_weight = two_opt(best_path, G_m)
 
     if is_3_opt:
         best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
