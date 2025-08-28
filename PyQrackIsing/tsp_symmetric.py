@@ -120,7 +120,9 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
     return best_path, best_dist
 
-def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True, is_cyclic_at_top=True):
+def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True, k_neighbors=20, is_cyclic=True, is_cyclic_at_top=False):
+    is_cyclic_at_top |= is_cyclic
+
     nodes = None
     n_nodes = 0
     G_m = None
@@ -246,8 +248,8 @@ def tsp_symmetric(G, quality=0, shots=None, correction_quality=2, is_3_opt=True,
  
     if is_cyclic_at_top:
         cycle_index = best_path.index(cycle_node)
+        best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
         best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
-        best_weight = path_length(best_path, G_m)
 
     if is_cyclic:
         best_weight += G_m[best_path[-1], best_path[0]]
