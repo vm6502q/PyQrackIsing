@@ -371,7 +371,7 @@ def maxcut_tfim(
         J_abs = abs(J)
         if J_abs > J_max:
             J_max = J_abs
-    J_eff /= J_abs
+    J_eff /= J_max
 
     thresholds = init_thresholds(n_qubits)
 
