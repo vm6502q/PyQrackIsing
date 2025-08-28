@@ -257,6 +257,24 @@ def evaluate_cut_edges(G_m, samples):
 
 
 @njit
+def init_J_and_z(G_m):
+    n_qubits = len(G_m)
+    degrees = np.empty(n_qubits, dtype=np.uint32)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_max = -float("inf")
+    for n in range(n_qubits):
+        degree = sum(G_m[n] != 0.0)
+        J = -G_m[n].sum() / degree
+        degrees[n] = degree
+        J_eff[n] = J
+        J_abs = abs(J)
+        if J_abs > J_max:
+            J_max = J_abs
+    J_eff /= J_max
+
+    return J_eff, degrees
+
+@njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
     thresholds = np.empty(n_bias, dtype=np.float64)
@@ -346,9 +364,6 @@ def maxcut_tfim(
 
         return "01", weight, ([nodes[0]], [nodes[1]])
 
-    # Warp size is 32:
-    group_size = n_qubits - 1
-
     if quality is None:
         quality = 3
 
@@ -358,21 +373,8 @@ def maxcut_tfim(
 
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
-    grid_dims = (n_steps, n_qubits)
 
-    degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float64)
-    J_max = -float("inf")
-    for n in range(n_qubits):
-        degree = sum(G_m[n] != 0.0)
-        J = -G_m[n].sum() / degree
-        degrees[n] = degree
-        J_eff[n] = J
-        J_abs = abs(J)
-        if J_abs > J_max:
-            J_max = J_abs
-    J_eff /= J_max
-
+    J_eff, degrees = init_J_and_z(G_m)
     thresholds = init_thresholds(n_qubits)
 
     if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
@@ -381,11 +383,13 @@ def maxcut_tfim(
         h_mult = 2.0 / tot_t
         theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
 
+        # Warp size is 32:
+        group_size = n_qubits - 1
+        grid_dims = (n_steps, n_qubits)
+
         cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
-        tot_prob = thresholds.sum()
-        thresholds /= tot_prob
-
+        thresholds /= thresholds.sum()
         tot_prob = 0.0
         for i in range(n_qubits - 1):
             tot_prob += thresholds[i]
