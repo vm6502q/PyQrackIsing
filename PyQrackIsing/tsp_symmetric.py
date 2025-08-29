@@ -130,6 +130,26 @@ def targeted_three_opt(path, W, k_neighbors=20):
 
 
 @njit
+def init_G_a_b(G_m, a, b):
+    n_a_nodes = len(a)
+    n_b_nodes = len(b)
+    G_a = np.zeros((n_a_nodes, n_a_nodes), dtype=np.float64)
+    G_b = np.zeros((n_b_nodes, n_b_nodes), dtype=np.float64)
+    for i in range(n_a_nodes):
+        for j in range(n_a_nodes):
+            if i == j:
+                continue
+            G_a[i, j] = G_m[a[i], a[j]]
+    for i in range(n_b_nodes):
+        for j in range(n_b_nodes):
+            if i == j:
+                continue
+            G_b[i, j] = G_m[b[i], b[j]]
+
+    return G_a, G_b
+
+
+@njit
 def stitch(G_m, path_a, path_b, sol_weight):
     is_single_a = len(path_a) == 1
     is_single_b = len(path_b) == 1
@@ -241,20 +261,7 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
             best_energy = energy
             a, b = _a, _b
 
-    n_a_nodes = len(a)
-    n_b_nodes = len(b)
-    G_a = np.zeros((n_a_nodes, n_a_nodes), dtype=np.float64)
-    G_b = np.zeros((n_b_nodes, n_b_nodes), dtype=np.float64)
-    for i in range(n_a_nodes):
-        for j in range(n_a_nodes):
-            if i == j:
-                continue
-            G_a[i, j] = G_m[a[i], a[j]]
-    for i in range(n_b_nodes):
-        for j in range(n_b_nodes):
-            if i == j:
-                continue
-            G_b[i, j] = G_m[b[i], b[j]]
+    G_a, G_b = init_G_a_b(G_m, a, b)
 
     sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
     sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
