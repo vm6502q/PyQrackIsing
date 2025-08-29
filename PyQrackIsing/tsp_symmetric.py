@@ -185,14 +185,14 @@ def stitch(G_m, path_a, path_b, sol_weight):
         terminals_a = [path_a[0], path_a[-1]]
         terminals_b = [path_b[0], path_b[-1]]
 
+        best_weight = G_m[terminals_a[1], terminals_b[0]]
+        best_path = path_a + path_b
+        weight = G_m[terminals_a[0], terminals_b[1]]
+        if weight < best_weight:
+            best_weight = weight
+            best_path = path_b + path_a
         for _ in range(2):
             for _ in range(2):
-                best_weight = G_m[terminals_a[1], terminals_b[0]]
-                best_path = path_a + path_b
-                weight = G_m[terminals_b[1], terminals_a[0]]
-                if weight < best_weight:
-                    best_weight = weight
-                    best_path = path_b + path_a
                 for i in range(1, len(path_b)):
                     weight = (
                         G_m[terminals_a[0], path_b[i - 1]] +
