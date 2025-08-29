@@ -25,15 +25,16 @@ def one_way_two_opt(path, G):
     improved = True
     best_path = path
     best_dist = path_length(best_path, G)
+    path_len = len(path)
 
     while improved:
         improved = False
-        for i in range(1, len(path) - 1):
-            for j in range(i+1, len(path)):
+        for i in range(1, path_len - 1):
+            for j in range(i+1, path_len + 1):
                 if j - i == 1:  # adjacent edges, skip
                     continue
                 new_path = best_path[:]
-                new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
+                new_path[i:(j % path_len)] = best_path[j-1:i-1:-1]  # reverse segment
                 new_dist = path_length(new_path, G)
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
