@@ -21,11 +21,33 @@ def path_length(path, G_m):
 
 
 @njit
+def one_way_two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+
+    while improved:
+        improved = False
+        for i in range(1, len(path) - 1):
+            for j in range(i+1, len(path)):
+                if j - i == 1:  # adjacent edges, skip
+                    continue
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
+
+
+@njit
 def two_opt(path, G):
     improved = True
     best_path = path
     best_dist = path_length(best_path, G)
-    
+
     while improved:
         improved = False
         for i in range(1, len(path) - 2):
@@ -286,8 +308,12 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
             cycle_index = best_path.index(cycle_node)
             best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
             best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
-    elif is_cyclic:
-        cycle_node = best_path[0]
-        best_path += [cycle_node]
+    else:
+        best_path, best_weight = two_opt(best_path, G_m)
+
+        if is_cyclic:
+            cycle_node = best_path[0]
+            best_weight += G_m[cycle_node, best_path[-1]]
+            best_path += [cycle_node]
 
     return [nodes[x] for x in best_path], best_weight
