@@ -34,7 +34,7 @@ def one_way_two_opt(path, G):
                 if j - i == 1:  # adjacent edges, skip
                     continue
                 new_path = best_path[:]
-                new_path[i:(j % path_len)] = best_path[j-1:i-1:-1]  # reverse segment
+                new_path[i:j] = best_path[j-1:i-1:-1]
                 new_dist = path_length(new_path, G)
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
