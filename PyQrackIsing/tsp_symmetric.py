@@ -300,7 +300,10 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
         best_path += [cycle_node]
 
         if is_2_opt:
-            best_path, best_weight = two_opt(best_path, G_m)
+            if is_cyclic:
+                best_path, best_weight = two_opt(best_path, G_m)
+            else:
+                best_path, best_weight = one_way_two_opt(best_path, G_m)
 
         if is_3_opt:
             best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
