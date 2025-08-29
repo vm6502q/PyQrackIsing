@@ -21,9 +21,9 @@ if __name__ == "__main__":
     # NP-complete TSP
     n_nodes = 64
     G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-    best_circuit, best_path_length = tsp_symmetric(G, is_cyclic=False)
+    best_circuit, best_path_length = tsp_symmetric(G, is_cyclic=False, start_node=0, end_node=1)
     for i in range(3):
-        circuit, path_length = tsp_symmetric(G)
+        circuit, path_length = tsp_symmetric(G, is_cyclic=False, start_node=0, end_node=1)
         if path_length < best_path_length:
             best_circuit = circuit
             best_path_length = path_length

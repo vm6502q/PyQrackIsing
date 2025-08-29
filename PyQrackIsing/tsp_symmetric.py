@@ -44,6 +44,29 @@ def one_way_two_opt(path, G):
 
 
 @njit
+def anchored_two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i+1, path_len):
+                if j - i == 1:  # adjacent edges, skip
+                    continue
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
+
+
+@njit
 def two_opt(path, G):
     improved = True
     best_path = path
@@ -234,7 +257,7 @@ def stitch(G_m, path_a, path_b, sol_weight):
     return best_path, best_weight
 
 
-def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=False, is_2_opt=True, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1):
+def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -257,61 +280,92 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
         else:
             return ([nodes[0], nodes[1]], G_m[0, 1])
 
+    if (start_node is None) and not (end_node is None):
+        start_node = end_node
+        end_node = None
+
     a = []
     b = []
-    best_energy = float("inf")
-    for _ in range(multi_start):
-        energy = 0.0
-        _a = []
-        _b = []
-        while (len(_a) == 0) or (len(_b) == 0):
-            bits = ([], [])
-            if monte_carlo:
-                for i in range(n_nodes):
-                    if np.random.random() < 0.5:
-                        bits[0].append(i)
-                    else:
-                        bits[1].append(i)
-            else:
-                _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
-            _a = list(bits[0])
-            _b = list(bits[1])
-        if energy < best_energy:
-            best_energy = energy
-            a, b = _a, _b
+    c = []
+    if (start_node is None) and (end_node is None):
+        best_energy = float("inf")
+        for _ in range(multi_start):
+            energy = 0.0
+            _a = []
+            _b = []
+            while (len(_a) == 0) or (len(_b) == 0):
+                bits = ([], [])
+                if monte_carlo:
+                    for i in range(n_nodes):
+                        if np.random.random() < 0.5:
+                            bits[0].append(i)
+                        else:
+                            bits[1].append(i)
+                else:
+                    _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
+                _a = list(bits[0])
+                _b = list(bits[1])
+            if energy < best_energy:
+                best_energy = energy
+                a, b = _a, _b
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
-    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_2_opt=False, is_3_opt=False, multi_start=multi_start)
+    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, is_3_opt=False, multi_start=multi_start)
+    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, is_3_opt=False, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
     sol_weight = sol_a[1] + sol_b[1]
 
+    if len(c):
+        sol_weight += G_m[b[-1], c[0]]
+
     if (len(path_a) == 1) and (len(path_b) == 1):
-        return (path_a + path_b, sol_weight + G_m[path_a[0], path_b[0]])
+        if len(c):
+            return (path_a + path_b + c, (sol_weight + G_m[path_b[0], c[0]] + G_m[path_a[0], c[0]]) if is_cyclic else (sol_weight + G_m[path_b[0], c[0]]))
+        return (path_a + path_b, (sol_weight + G_m[path_a[0], path_b[0]]) if is_cyclic else sol_weight)
 
-    best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+    if start_node is None:
+        best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+    else:
+        best_path = path_a + path_b
+        best_weight = G_m[path_a[0], path_b[0]]
+        weight = G_m[path_a[0], path_b[-1]]
+        if weight < best_weight:
+            path_b.reverse()
+            best_path = path_a + path_b
+            best_weight = weight
+        best_weight += sol_weight
 
-    if is_2_opt or is_3_opt:
-        cycle_node = best_path[0]
-        best_path += [cycle_node]
+    if len(c):
+        best_path += c
+        best_weight += G_m[best_path[-1], c[0]]
 
-        if is_2_opt:
-            if is_cyclic:
-                best_path, best_weight = two_opt(best_path, G_m)
-            else:
-                best_path, best_weight = one_way_two_opt(best_path, G_m)
+    if is_top_level:
+        if is_cyclic:
+            best_path += [best_path[0]]
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not end_node is None:
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not start_node is None:
+            best_path.reverse()
+            best_path, best_weight = anchored_two_opt(best_path, G_m)
+            best_path.reverse()
+        else:
+            best_path, best_weight = one_way_two_opt(best_path, G_m)
 
         if is_3_opt:
             best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
-
-        if not is_cyclic:
-            cycle_index = best_path.index(cycle_node)
-            best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
-            best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
     else:
         best_path, best_weight = one_way_two_opt(best_path, G_m)
 
