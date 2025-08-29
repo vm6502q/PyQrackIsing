@@ -107,7 +107,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     n_bias = n_qubits - 1
 
     theta = np.empty(n_qubits, dtype=np.float64)
-    for q in prange(n_qubits):
+    for q in range(n_qubits):
         J = J_func[q]
         z = degrees[q]
         theta[q] = np.arcsin(
