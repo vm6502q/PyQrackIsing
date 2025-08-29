@@ -153,22 +153,18 @@ def init_G_a_b(G_m, a, b):
 def stitch(G_m, path_a, path_b, sol_weight):
     is_single_a = len(path_a) == 1
     is_single_b = len(path_b) == 1
-
-    if is_single_a and is_single_b:
-        return (path_a + path_b, sol_weight + G_m[path_a[0], path_b[0]])
-
-    singlet = 0
-    bulk = [0]
-    if len(path_a) == 1:
-        singlet = path_a[0]
-        bulk = path_b
-    elif len(path_b) == 1:
-        singlet = path_b[0]
-        bulk = path_a
-
     best_path = [0]
     best_weight = 0.0
     if is_single_a or is_single_b:
+        singlet = 0
+        bulk = [0]
+        if is_single_a:
+            singlet = path_a[0]
+            bulk = path_b
+        elif is_single_b:
+            singlet = path_b[0]
+            bulk = path_a
+
         best_weight = G_m[singlet, bulk[0]]
         best_path = [singlet] + bulk
         weight = G_m[singlet, bulk[-1]]
@@ -270,6 +266,9 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
     path_b = [b[x] for x in sol_b[0]]
 
     sol_weight = sol_a[1] + sol_b[1]
+
+    if (len(path_a) == 1) and (len(path_b) == 1):
+        return (path_a + path_b, sol_weight + G_m[path_a[0], path_b[0]])
 
     best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
 
