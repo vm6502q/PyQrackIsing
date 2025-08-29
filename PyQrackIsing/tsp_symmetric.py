@@ -309,7 +309,7 @@ def tsp_symmetric(G, quality=1, shots=None, correction_quality=2, monte_carlo=Fa
             best_weight -= G_m[best_path[cycle_index], best_path[cycle_index + 1]]
             best_path = best_path[cycle_index + 1:] + best_path[:cycle_index]
     else:
-        best_path, best_weight = two_opt(best_path, G_m)
+        best_path, best_weight = one_way_two_opt(best_path, G_m)
 
         if is_cyclic:
             cycle_node = best_path[0]
