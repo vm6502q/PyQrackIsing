@@ -13,6 +13,15 @@ try:
     CVXPY_AVAILABLE = True
 except ImportError:
     CVXPY_AVAILABLE = False
+
+def evaluate_cut_value(G, partition):
+    """Compute cut value directly from graph and bitstring."""
+    cut = 0
+    for u, v, data in G.edges(data=True):
+        w = data.get("weight", 1.0)
+        if (u in partition[0]) == (v in partition[1]):  # different sides of partition
+            cut += w
+    return cut
     
 def safe_cholesky(X, eps=1e-8):
     # Symmetrize just in case of numerical asymmetry
@@ -69,18 +78,24 @@ def benchmark_maxcut(n=50, p=0.3, seed=None, quality=None):
     # --- Greedy local improvement ---
     start = time.time()
     cut_value, partition = nx_maxcut.one_exchange(G)
+    verified = evaluate_cut_value(G, partition)
+    assert np.isclose(cut_value, verified)
     results["Greedy"] = (cut_value, time.time() - start)
     
     # --- GW SDP (if available) ---
     if CVXPY_AVAILABLE:
         start = time.time()
         cut_value, partition = gw_sdp_maxcut(G)
+        verified = evaluate_cut_value(G, partition)
+        assert np.isclose(cut_value, verified)
         results["GW_SDP"] = (cut_value, time.time() - start)
     
     # --- Qrack solver (placeholder) ---
     # Replace with your function call locally
     start = time.time()
-    bitstring, cut_value, _, _ = spin_glass_solver(G, quality=quality)
+    _, cut_value, partition, _ = spin_glass_solver(G, quality=quality)
+    verified = evaluate_cut_value(G, partition)
+    assert np.isclose(cut_value, verified)
     results["Qrack"] = (cut_value, time.time() - start)
     
     return results
