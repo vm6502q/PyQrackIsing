@@ -69,7 +69,7 @@ def gw_sdp_maxcut(G):
     partition = (set(np.where(x > 0)[0]), set(np.where(x <= 0)[0]))
     return cut_value, partition
 
-def benchmark_maxcut(n=50, p=0.3, seed=None, quality=None):
+def benchmark_maxcut(n=50, p=0.3, seed=None, quality=2, correction_quality=2):
     # Generate random graph
     G = nx.erdos_renyi_graph(n, p, seed=seed)
     
@@ -93,7 +93,7 @@ def benchmark_maxcut(n=50, p=0.3, seed=None, quality=None):
     # --- Qrack solver (placeholder) ---
     # Replace with your function call locally
     start = time.time()
-    _, cut_value, partition, _ = spin_glass_solver(G, quality=quality)
+    _, cut_value, partition, _ = spin_glass_solver(G, quality=quality, correction_quality=correction_quality)
     verified = evaluate_cut_value(G, partition)
     assert np.isclose(cut_value, verified)
     results["Qrack"] = (cut_value, time.time() - start)
@@ -101,5 +101,5 @@ def benchmark_maxcut(n=50, p=0.3, seed=None, quality=None):
     return results
 
 # Example run (small n for sanity check, if cvxpy is present)
-print(benchmark_maxcut(n=100, p=0.5, seed=42))
+print(benchmark_maxcut(n=50, p=0.5, seed=42))
 
