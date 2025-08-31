@@ -22,7 +22,7 @@ def erdos_renyi_graph(n=128, p=0.5, seed=None):
 
 
 # --- 2. Planted-partition ---
-def planted_partition_graph(n=128, p_in=0.1, p_out=0.9, seed=None):
+def planted_partition_graph(n=128, p_in=0.2, p_out=0.8, seed=None):
     # Split into 2 equal communities
     sizes = [n // 2, n - n // 2]
     probs = [[p_in, p_out], [p_out, p_in]]
@@ -95,46 +95,54 @@ def gw_sdp_maxcut(G):
     return cut_value, partition
 
 
-def benchmark_maxcut(generator, name, n=50, p=0.3, seed=None, trials=5, **kwargs):
-    results = {name: []}
-    for _ in range(trials):
-        # Generate random graph
-        G = generator(n=n, **kwargs, seed=seed)
+def benchmark_maxcut(generators, sizes=[64, 128, 256], seed=42, trials=5):
+    results = {}
+    for n in sizes:
+        results[n] = {}
+        for key, value in generators.items():
+            results[n][key] = []
+            for t in range(trials):
+                # Generate random graph
+                G = value[0](n=n, **(value[1]), seed=seed + t)
 
-        results_dict = {}
+                results_dict = {}
 
-        # --- Greedy local improvement ---
-        # start = time.time()
-        # cut_value, partition = nx_maxcut.one_exchange(G)
-        # verified = evaluate_cut_value(G, partition)
-        # assert np.isclose(cut_value, verified)
-        # results["Greedy"] = (cut_value, time.time() - start)
+                # --- GW SDP (if available) ---
+                if CVXPY_AVAILABLE:
+                    start = time.time()
+                    cut_value, partition = gw_sdp_maxcut(G)
+                    verified = evaluate_cut_value(G, partition)
+                    assert np.isclose(cut_value, verified)
+                    results_dict["GW_SDP"] = (cut_value, time.time() - start)
+                else:
+                    # --- Greedy local improvement ---
+                    start = time.time()
+                    cut_value, partition = nx_maxcut.one_exchange(G)
+                    verified = evaluate_cut_value(G, partition)
+                    assert np.isclose(cut_value, verified)
+                    results["Greedy"] = (cut_value, time.time() - start)
 
-        # --- GW SDP (if available) ---
-        if CVXPY_AVAILABLE:
-            start = time.time()
-            cut_value, partition = gw_sdp_maxcut(G)
-            verified = evaluate_cut_value(G, partition)
-            assert np.isclose(cut_value, verified)
-            results_dict["GW_SDP"] = (cut_value, time.time() - start)
+                # --- Qrack solver (placeholder) ---
+                # Replace with your function call locally
+                start = time.time()
+                _, cut_value, partition, _ = spin_glass_solver(G)
+                verified = evaluate_cut_value(G, partition)
+                assert np.isclose(cut_value, verified)
+                results_dict["Qrack"] = (cut_value, time.time() - start)
 
-        # --- Qrack solver (placeholder) ---
-        # Replace with your function call locally
-        start = time.time()
-        _, cut_value, partition, _ = spin_glass_solver(G)
-        verified = evaluate_cut_value(G, partition)
-        assert np.isclose(cut_value, verified)
-        results_dict["Qrack"] = (cut_value, time.time() - start)
-
-        results[name].append(results_dict)
+                results[n][key].append(results_dict)
 
     return results
 
 
 if __name__ == "__main__":
     # Example runs
-    print(benchmark_maxcut(erdos_renyi_graph, "Erdős–Rényi", n=128, p=0.5))
     print(
-        benchmark_maxcut(planted_partition_graph, "Planted-partition", n=128, p_in=0.2, p_out=0.8)
+        benchmark_maxcut(
+            {
+                "Erdős–Rényi": (erdos_renyi_graph, {"p": 0.5}),
+                "Planted-partition": (planted_partition_graph, {"p_in": 0.2, "p_out": 0.8}),
+                "Hard (bipartite expander)": (hard_instance_graph, {"d": 10}),
+            }
+        )
     )
-    print(benchmark_maxcut(hard_instance_graph, "Hard (bipartite expander)", n=128, d=10))
