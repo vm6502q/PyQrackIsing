@@ -85,7 +85,7 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
     if correction_quality is None:
         # maxcut_tfim(G) scales roughly like n^4,
         # so its match order of overhead.
-        correction_quality = 4
+        correction_quality = 2
 
     bitstring = ""
     if isinstance(best_guess, str):

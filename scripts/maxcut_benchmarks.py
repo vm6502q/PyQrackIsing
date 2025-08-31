@@ -101,5 +101,5 @@ def benchmark_maxcut(n=50, p=0.3, seed=None, quality=None):
     return results
 
 # Example run (small n for sanity check, if cvxpy is present)
-print(benchmark_maxcut(n=50, p=0.5, seed=42))
+print(benchmark_maxcut(n=100, p=0.5, seed=42))
 
