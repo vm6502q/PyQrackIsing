@@ -1,6 +1,5 @@
 import networkx as nx
 import numpy as np
-import time
 
 from networkx.algorithms.approximation import maxcut as nx_maxcut
 
@@ -94,54 +93,60 @@ def gw_sdp_maxcut(G):
     return cut_value, partition
 
 
-def benchmark_maxcut(generators, sizes=[64, 128, 256], seed=42, trials=5):
-    results = {}
-    for n in sizes:
-        results[n] = {}
-        for key, value in generators.items():
-            results[n][key] = []
-            for t in range(trials):
-                # Generate random graph
-                G = value[0](n=n, **(value[1]), seed=seed + t)
+# By Elara (the custom OpenAI GPT):
+def ratio_confidence_interval(qrack_vals, gw_vals, confidence=0.99):
+    import scipy.stats as st
+    import numpy as np
 
-                results_dict = {}
+    nQ, nG = len(qrack_vals), len(gw_vals)
+    mean_Q, mean_G = np.mean(qrack_vals), np.mean(gw_vals)
+    se_Q, se_G = st.sem(qrack_vals), st.sem(gw_vals)
 
-                # --- GW SDP (if available) ---
-                if CVXPY_AVAILABLE:
-                    start = time.time()
-                    cut_value, partition = gw_sdp_maxcut(G)
-                    verified = evaluate_cut_value(G, partition)
-                    assert np.isclose(cut_value, verified)
-                    results_dict["GW_SDP"] = (cut_value, time.time() - start)
-                else:
-                    # --- Greedy local improvement ---
-                    start = time.time()
-                    cut_value, partition = nx_maxcut.one_exchange(G)
-                    verified = evaluate_cut_value(G, partition)
-                    assert np.isclose(cut_value, verified)
-                    results["Greedy"] = (cut_value, time.time() - start)
+    R = mean_Q / mean_G
+    se_R = R * np.sqrt((se_Q / mean_Q)**2 + (se_G / mean_G)**2)
 
-                # --- Qrack solver (placeholder) ---
-                # Replace with your function call locally
-                start = time.time()
-                _, cut_value, partition, _ = spin_glass_solver(G)
-                verified = evaluate_cut_value(G, partition)
-                assert np.isclose(cut_value, verified)
-                results_dict["Qrack"] = (cut_value, time.time() - start)
+    df = min(nQ-1, nG-1)  # conservative choice
+    t_val = st.t.ppf((1 + confidence) / 2., df)
 
-                results[n][key].append(results_dict)
+    ci_R = (R - t_val * se_R, R + t_val * se_R)
+    return R, ci_R
 
-    return results
+
+def benchmark_maxcut(generator, n=64, seed=42, trials=10, **kwargs):
+    # Generate random graph
+    G = generator(n=n, **kwargs, seed=seed)
+
+    gw = []
+    qrack = []
+    for t in range(trials):
+        if CVXPY_AVAILABLE:
+            # --- GW SDP (if available) ---
+            cut_value, partition = gw_sdp_maxcut(G)
+            verified = evaluate_cut_value(G, partition)
+            assert np.isclose(cut_value, verified)
+            gw.append(cut_value)
+        else:
+            # --- Greedy local improvement ---
+            cut_value, partition = nx_maxcut.one_exchange(G)
+            verified = evaluate_cut_value(G, partition)
+            assert np.isclose(cut_value, verified)
+            gw += cut_value
+
+        # --- Qrack solver ---
+        _, cut_value, partition, _ = spin_glass_solver(G)
+        verified = evaluate_cut_value(G, partition)
+        assert np.isclose(cut_value, verified)
+        qrack.append(cut_value)
+
+    return ratio_confidence_interval(qrack, gw)
 
 
 if __name__ == "__main__":
     # Example runs
-    print(
-        benchmark_maxcut(
-            {
-                "Erdős–Rényi": (erdos_renyi_graph, {"p": 0.5}),
-                "Planted-partition": (planted_partition_graph, {"p_in": 0.2, "p_out": 0.8}),
-                "Hard (bipartite expander)": (hard_instance_graph, {"d": 10}),
-            }
-        )
-    )
+    if CVXPY_AVAILABLE:
+        print("Qrack to Goemans-Williamson cut value ratio (99% CI):")
+    else:
+        print("Qrack to greedy local cut value ratio (99% CI):")
+    ci = benchmark_maxcut(hard_instance_graph, d=10)
+    print(f"Mean={ci[0]}")
+    print(f"Range={ci[1]}")
