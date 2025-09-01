@@ -1,5 +1,6 @@
 import networkx as nx
 import numpy as np
+import time
 
 from networkx.algorithms.approximation import maxcut as nx_maxcut
 
@@ -77,7 +78,9 @@ def gw_sdp_maxcut(G):
     # Objective: maximize 1/4 sum_ij W_ij (1 - X_ij)
     obj = cp.Maximize(0.25 * cp.sum(cp.multiply(W, (1 - X))))
     prob = cp.Problem(obj, constraints)
-    prob.solve(solver=cp.SCS, verbose=False)
+
+    # Solve with CVXOPT (higher accuracy than SCS)
+    prob.solve(solver=cp.CVXOPT, verbose=False)
 
     # Extract randomized rounding solution
     U = safe_cholesky(X.value)
@@ -118,7 +121,10 @@ def benchmark_maxcut(generator, n=64, seed=42, trials=10, **kwargs):
 
     gw = []
     qrack = []
+    gw_time = 0
+    qrack_time = 0
     for t in range(trials):
+        start = time.perf_counter()
         if CVXPY_AVAILABLE:
             # --- GW SDP (if available) ---
             cut_value, partition = gw_sdp_maxcut(G)
@@ -131,14 +137,20 @@ def benchmark_maxcut(generator, n=64, seed=42, trials=10, **kwargs):
             verified = evaluate_cut_value(G, partition)
             assert np.isclose(cut_value, verified)
             gw += cut_value
+        gw_time += time.perf_counter() - start
 
         # --- Qrack solver ---
+        start = time.perf_counter()
         _, cut_value, partition, _ = spin_glass_solver(G)
         verified = evaluate_cut_value(G, partition)
         assert np.isclose(cut_value, verified)
         qrack.append(cut_value)
+        qrack_time += time.perf_counter() - start
 
-    return ratio_confidence_interval(qrack, gw)
+    gw_time /= trials
+    qrack_time /= trials
+
+    return ratio_confidence_interval(qrack, gw), qrack_time, gw_time
 
 
 if __name__ == "__main__":
@@ -147,6 +159,8 @@ if __name__ == "__main__":
         print("Qrack to Goemans-Williamson cut value ratio (99% CI):")
     else:
         print("Qrack to greedy local cut value ratio (99% CI):")
-    ci = benchmark_maxcut(hard_instance_graph, d=10)
+    ci, qrack_time, gw_time = benchmark_maxcut(hard_instance_graph, d=10)
     print(f"Mean={ci[0]}")
     print(f"Range={ci[1]}")
+    print(f"Qrack average seconds per trial: {qrack_time}")
+    print(f"Goemans-Williamson average seconds per trial: {gw_time}")
