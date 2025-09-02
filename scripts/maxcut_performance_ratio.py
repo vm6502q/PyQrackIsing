@@ -136,7 +136,7 @@ def benchmark_maxcut(generator, n=64, seed=None, trials=10, **kwargs):
             cut_value, partition = nx_maxcut.one_exchange(G)
             verified = evaluate_cut_value(G, partition)
             assert np.isclose(cut_value, verified)
-            gw += cut_value
+            gw.append(cut_value)
         gw_time += time.perf_counter() - start
 
         # --- Qrack solver ---
