@@ -150,7 +150,7 @@ def benchmark_maxcut(generator, n=64, seed=42, trials=10, **kwargs):
     gw_time /= trials
     qrack_time /= trials
 
-    return ratio_confidence_interval(qrack, gw), qrack_time, gw_time
+    return ratio_confidence_interval(qrack, gw), qrack_time, gw_time, max(qrack), max(gw)
 
 
 if __name__ == "__main__":
@@ -159,8 +159,12 @@ if __name__ == "__main__":
         print("Qrack to Goemans-Williamson cut value ratio (99% CI):")
     else:
         print("Qrack to greedy local cut value ratio (99% CI):")
-    ci, qrack_time, gw_time = benchmark_maxcut(hard_instance_graph, d=10)
+    ci, qrack_time, gw_time, best_qrack, best_gw = benchmark_maxcut(hard_instance_graph, d=10)
     print(f"Mean={ci[0]}")
     print(f"Range={ci[1]}")
+    if CVXPY_AVAILABLE:
+        print(f"Qrack to Goemans-Williamson best cut value ratio: {best_qrack / best_gw}")
+    else:
+        print(f"Qrack to greedy local cut value ratio: {best_qrack / best_gw}")
     print(f"Qrack average seconds per trial: {qrack_time}")
     print(f"Goemans-Williamson average seconds per trial: {gw_time}")
