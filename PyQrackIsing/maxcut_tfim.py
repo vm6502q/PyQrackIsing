@@ -205,9 +205,21 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
     return mask
 
 
+@njit
+def compute_energy(sample, G_m, n_qubits):
+    energy = 0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            eigen = 1 if sample[u] == sample[v] else -1
+            energy += G_m[u, v] * eigen
+
+    return energy
+
+
 @njit(parallel=True)
-def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n):
-    samples = np.empty((shots, n), dtype=np.bool_)  # (shots × n) boolean mask array
+def sample_for_solution(G_m, shots, thresholds, adjacency, degrees, weights, n):
+    best_solution = np.zeros(n, dtype=np.bool_)
+    best_energy = compute_energy(best_solution, G_m, n)
 
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -218,40 +230,18 @@ def local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        samples[s, :] = local_repulsion_choice(adjacency, degrees, weights, n, m)
+        sample = local_repulsion_choice(adjacency, degrees, weights, n, m)
 
-    return samples
+        energy = compute_energy(sample, G_m, n)
+        if energy < best_energy:
+            best_energy = energy
+            best_solution = sample
 
-
-def mask_array_to_python_ints(masks):
-    samples = []
-    for mask in masks:
-        sample = 0
-        for b in reversed(mask):
-            sample <<= 1
-            if b:
-                sample |= 1
-        samples.append(sample)
-
-    return samples
-
-
-def evaluate_cut_edges(G_m, samples):
-    n_qubits = len(G_m)
-    best_value = float("-inf")
-    best_solution = None
-    best_cut_edges = None
-
-    for state in samples:
-        cut_edges = []
-        cut_value = 0
-        for u in range(n_qubits):
-            for v in range(u + 1, n_qubits):
-                if ((state >> u) & 1) != ((state >> v) & 1):
-                    cut_value += G_m[u, v]
-        if cut_value > best_value:
-            best_value = cut_value
-            best_solution = state
+    best_value = 0
+    for u in range(n):
+        for v in range(u + 1, n):
+            if best_solution[u] != best_solution[v]:
+                best_value += G_m[u, v]
 
     return best_solution, float(best_value)
 
@@ -329,11 +319,6 @@ def compute_adjacency(G_m):
     return adjacency
 
 
-# By Gemini (Google Search AI)
-def int_to_bitstring(integer, length):
-    return (bin(integer)[2:].zfill(length))[::-1]
-
-
 def maxcut_tfim(
     G,
     quality=None,
@@ -399,13 +384,10 @@ def maxcut_tfim(
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
     adjacency = compute_adjacency(G_m)
-    weights = 1.0 / (1.0 + (2 ** -53) - J_eff)
-    # We only need unique instances
-    samples = list(set(mask_array_to_python_ints(local_repulsion_choice_sample(shots, thresholds, adjacency, degrees, weights, n_qubits))))
+    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    best_solution, best_value = sample_for_solution(G_m, shots, thresholds, adjacency, degrees, weights, n_qubits)
 
-    best_solution, best_value = evaluate_cut_edges(G_m, samples)
-
-    bit_string = int_to_bitstring(best_solution, n_qubits)
+    bit_string = "".join(["1" if b else "0" for b in best_solution])
     bit_list = list(bit_string)
     l, r = [], []
     for i in range(len(bit_list)):

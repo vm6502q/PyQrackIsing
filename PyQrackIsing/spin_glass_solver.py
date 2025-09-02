@@ -23,9 +23,8 @@ def compute_energy(theta_bits, G_m):
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            spin_u = 1 if theta_bits[u] else -1
-            spin_v = 1 if theta_bits[v] else -1
-            energy += G_m[u, v] * spin_u * spin_v
+            eigen = 1 if theta_bits[u] == theta_bits[v] else -1
+            energy += G_m[u, v] * eigen
 
     return energy
 
