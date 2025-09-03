@@ -162,7 +162,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
 
     weights = weights.copy()
     chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
-    available = np.ones(n, dtype=np.int32) # 1 = available, 0 = not
+    available = np.ones(n, dtype=np.bool_) # True = available, False = not
     mask = np.zeros(n, dtype=np.bool_)
     chosen_count = 0
 
@@ -170,7 +170,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         # Count available
         total_w = 0.0
         for i in range(n):
-            if available[i] == 1:
+            if available[i]:
                 total_w += weights[i]
         if total_w <= 0:
             break
@@ -180,7 +180,7 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         cum = 0.0
         node = -1
         for i in range(n):
-            if available[i] == 1:
+            if available[i]:
                 cum += weights[i] / total_w
                 if r < cum:
                     node = i
@@ -192,14 +192,13 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         # Select node
         chosen[chosen_count] = node
         chosen_count += 1
-        available[node] = 0
-        mask[node] = 1
+        available[node] = False
+        mask[node] = True
 
         # Repulsion: penalize neighbors
-        deg = degrees[node]
-        for j in range(deg):
+        for j in range(degrees[node]):
             nbr = adjacency[node, j]
-            if nbr >= 0 and available[nbr] == 1:
+            if available[nbr]:
                 weights[nbr] *= 0.5  # tunable penalty factor
 
     return mask
