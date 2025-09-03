@@ -217,7 +217,10 @@ def compute_energy(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_solution(G_m, shots, thresholds, adjacency, degrees, weights, n):
+def sample_for_solution(G_m, shots, thresholds, degrees, J_eff, n):
+    adjacency = compute_adjacency(G_m, max(degrees))
+    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
+
     best_solution = np.zeros(n, dtype=np.bool_)
     best_energy = compute_energy(best_solution, G_m, n)
 
@@ -303,11 +306,11 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
 
     return theta
 
-@njit
-def compute_adjacency(G_m):
+@njit(parallel=True)
+def compute_adjacency(G_m, max_degree):
     n_qubits = len(G_m)
-    adjacency = np.full((n_qubits, n_qubits), -1, dtype=np.int32)
-    for i in range(n_qubits):
+    adjacency = np.full((n_qubits, max_degree), -1, dtype=np.int32)
+    for i in prange(n_qubits):
         k = 0
         for j in range(n_qubits):
             if i == j:
@@ -383,9 +386,7 @@ def maxcut_tfim(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, thresholds)
 
-    adjacency = compute_adjacency(G_m)
-    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
-    best_solution, best_value = sample_for_solution(G_m, shots, thresholds, adjacency, degrees, weights, n_qubits)
+    best_solution, best_value = sample_for_solution(G_m, shots, thresholds, degrees, J_eff, n_qubits)
 
     bit_string = "".join(["1" if b else "0" for b in best_solution])
     bit_list = list(bit_string)
