@@ -219,7 +219,7 @@ def compute_energy(sample, G_m, n_qubits):
 
 @njit(parallel=True)
 def sample_for_solution(G_m, shots, thresholds, degrees, J_eff, n):
-    adjacency = compute_adjacency(G_m, max(degrees))
+    adjacency = compute_adjacency(G_m, degrees.max())
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     best_solution = np.zeros(n, dtype=np.bool_)
