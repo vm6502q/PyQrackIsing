@@ -198,6 +198,8 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
         # Repulsion: penalize neighbors
         for j in range(degrees[node]):
             nbr = adjacency[node, j]
+            if nbr < 0:
+                break
             if available[nbr]:
                 weights[nbr] *= 0.5  # tunable penalty factor
 
