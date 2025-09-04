@@ -401,7 +401,7 @@ def maxcut_tfim(
         if group_size <= 1024:
             cuda_maxcut_hamming_cdf_wide[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
         else:
-            cuda_maxcut_hamming_cdf[n_steps * n_qubits, 32](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+            cuda_maxcut_hamming_cdf[n_steps * n_qubits, 128](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         thresholds /= thresholds.sum()
         tot_prob = 0.0
