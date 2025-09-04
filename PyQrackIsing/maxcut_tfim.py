@@ -67,7 +67,7 @@ try:
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
 
-        n_threads = cuda.gridDim.y
+        n_threads = cuda.blockDim.x
         qo = cuda.threadIdx.x
         while qo < n_qubits:
             _qo = (n_qubits - (1 + qo)) if J_eff > 0.0 else qo
