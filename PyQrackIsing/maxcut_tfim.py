@@ -32,12 +32,12 @@ try:
         return result
 
     @cuda.jit
-    def cuda_maxcut_hamming_cdf(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+    def cuda_maxcut_hamming_cdf_wide(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
         step = cuda.blockIdx.x
         qi = cuda.blockIdx.y
         J_eff = J_func[qi]
         z = degrees[qi]
-        if abs(z * J_eff) <= (2 ** (-54)):
+        if abs(z * J_eff) <= (2 ** (-52)):
             return
 
         n_qubits = cuda.gridDim.y
@@ -52,6 +52,29 @@ try:
         diff = cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits)
         diff -= cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
         hamming_prob[qo] += diff
+
+    @cuda.jit
+    def cuda_maxcut_hamming_cdf(n_qubits, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+        step = cuda.blockIdx.x // n_qubits
+        qi = cuda.blockIdx.x % n_qubits
+        J_eff = J_func[qi]
+        z = degrees[qi]
+        if abs(z * J_eff) <= (2 ** (-52)):
+            return
+
+        theta_eff = theta[qi]
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        h_t = h_mult * (tot_t - t)
+
+        n_threads = cuda.gridDim.y
+        qo = cuda.threadIdx.x
+        while qo < n_qubits:
+            _qo = (n_qubits - (1 + qo)) if J_eff > 0.0 else qo
+            diff = cuda_probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits)
+            diff -= cuda_probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
+            hamming_prob[_qo] += diff
+            qo += n_threads
 
 except:
     IS_CUDA_AVAILABLE = False
@@ -375,8 +398,10 @@ def maxcut_tfim(
         # Warp size is 32:
         group_size = n_qubits - 1
         grid_dims = (n_steps, n_qubits)
-
-        cuda_maxcut_hamming_cdf[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        if group_size <= 1024:
+            cuda_maxcut_hamming_cdf_wide[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
+        else:
+            cuda_maxcut_hamming_cdf[n_steps * n_qubits, 32](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
 
         thresholds /= thresholds.sum()
         tot_prob = 0.0
