@@ -398,7 +398,7 @@ def maxcut_tfim(
         # Warp size is 32:
         group_size = n_qubits - 1
         grid_dims = (n_steps, n_qubits)
-        if group_size <= 1024:
+        if group_size <= 512:
             cuda_maxcut_hamming_cdf_wide[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
         else:
             cuda_maxcut_hamming_cdf[n_steps * n_qubits, 128](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, thresholds)
