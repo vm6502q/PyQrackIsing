@@ -342,7 +342,7 @@ def maxcut_tfim(
         group_size = n_qubits - 1
         if group_size > 256:
             group_size = 256
-        grid_dim = n_steps * n_qubits
+        grid_dim = n_steps * n_qubits * group_size
 
         # Move to GPU
         mf = cl.mem_flags
