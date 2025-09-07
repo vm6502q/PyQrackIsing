@@ -36,6 +36,47 @@ def hard_instance_graph(n=128, d=10, seed=None):
     return nx.random_regular_graph(d, n, seed=seed)
 
 
+# --- 4. Canonical worst-case (Khot-Vishnoi, UGC)
+def khot_vishnoi_graph(n, epsilon=0.1, seed=None):
+    """
+    Generate a Khot-Vishnoi style hard instance for MAXCUT (approximation hardness for GW).
+
+    Parameters:
+        n (int): number of vertices, should be a power of 2 (since construction uses hypercube structure).
+        epsilon (float): bias parameter controlling edge weights, typically small (e.g., 0.1).
+        seed (int or None): random seed for reproducibility.
+
+    Returns:
+        G (networkx.Graph): weighted graph instance.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Ensure n is a power of 2 for hypercube embedding
+    if not (n and ((n & (n - 1)) == 0)):
+        raise ValueError("n must be a power of 2 for Khot-Vishnoi construction")
+
+    # Vertices correspond to n-bit vectors in {0,1}^k with k = log2(n)
+    k = int(np.log2(n))
+    G = nx.Graph()
+    G.add_nodes_from(range(n))
+
+    # Construct adjacency: edges weighted by noise-perturbed inner product
+    for i in range(n):
+        for j in range(i + 1, n):
+            # Hamming distance between binary representations
+            vi = np.array(list(map(int, np.binary_repr(i, width=k))))
+            vj = np.array(list(map(int, np.binary_repr(j, width=k))))
+            hamming = np.sum(vi != vj)
+
+            # Weight depends on epsilon and parity of distance
+            weight = (1 - 2 * epsilon) ** hamming
+            if weight > 0:
+                G.add_edge(i, j, weight=weight)
+
+    return G
+
+
 def evaluate_cut_value(G, partition):
     """Compute cut value directly from graph and bitstring."""
     cut = 0
