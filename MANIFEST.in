@@ -1,2 +1,3 @@
 include CMakeLists.txt
 include PyQrackIsing/_pyqrack_ising.cpp
+include PyQrackIsing/kernels.cl
