@@ -6,7 +6,6 @@ requires = [
     "networkx",
     "numpy",
     "numba",
-    "numba-cuda",
 ]
 build-backend = "setuptools.build_meta"
 
