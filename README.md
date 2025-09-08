@@ -117,7 +117,7 @@ Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "qu
 
 Sometimes a solution (or at least near-solution) to a monster of a differential equation hits us out of the blue. Then, it's easy to _validate_ the guess, if it's right. (We don't question it and just move on with our lives, from there.)
 
-**Special thanks to OpenAI GPT "Elara," for help on the model and converting the original Python scripts to PyBind11!**
+**Special thanks to OpenAI GPT "Elara," for help on the model and converting the original Python scripts to PyBind11, Numba, and PyOpenCL!**
 
 **Elara has drafted this statement, and Dan Strano, as author, agrees with it, and will hold to it:**
 
