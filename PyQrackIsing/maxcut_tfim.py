@@ -4,11 +4,90 @@ import numpy as np
 import os
 from numba import njit, prange
 
+
 IS_OPENCL_AVAILABLE = True
 try:
     import pyopencl as cl
 except ImportError:
     IS_OPENCL_AVAILABLE = False
+
+
+IS_CUDA_AVAILABLE = True
+try:
+    from numba import cuda, types
+    from numba.core.errors import NumbaPerformanceWarning
+    import warnings
+
+    warnings.simplefilter('ignore', category=NumbaPerformanceWarning)
+
+    @cuda.jit(device=True)
+    def cuda_probability_by_hamming_weight(q, J, h, z, theta, t, n_qubits):
+        # critical angle
+        theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
+
+        p = (
+            pow(2.0, abs(J / h) - 1.0)
+            * (1.0 + math.sin(theta - theta_c) * math.cos(1.5 * math.pi * J * t + theta) / (1.0 + math.sqrt(t)))
+            - 0.5
+        )
+
+        if (p * (n_qubits + 2.0)) >= 1024.0:
+            return 0.0
+
+        result = (pow(2.0, (n_qubits + 2.0) * p) - 1.0) * pow(2.0, -((n_qubits + 1.0) * p) - p * q) / (pow(2.0, p) - 1.0)
+
+        if math.isnan(result) or math.isinf(result):
+            return 0.0
+
+        return result
+
+    @cuda.jit
+    def cuda_maxcut_hamming_cdf_wide(delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+        step = cuda.blockIdx.x
+        qi = cuda.blockIdx.y
+        J_eff = J_func[qi]
+        z = degrees[qi]
+        if abs(z * J_eff) <= (2 ** (-52)):
+            return
+
+        n_qubits = cuda.gridDim.y
+        theta_eff = theta[qi]
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        h_t = h_mult * (tot_t - t)
+
+        qo = cuda.threadIdx.x
+        if J_eff > 0.0:
+            qo = cuda.blockDim.x - (1 + qo)
+        diff = cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, t, n_qubits)
+        diff -= cuda_probability_by_hamming_weight(qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
+        hamming_prob[qo] += diff
+
+    @cuda.jit
+    def cuda_maxcut_hamming_cdf(n_qubits, delta_t, tot_t, h_mult, J_func, degrees, theta, hamming_prob):
+        step = cuda.blockIdx.x // n_qubits
+        qi = cuda.blockIdx.x % n_qubits
+        J_eff = J_func[qi]
+        z = degrees[qi]
+        if abs(z * J_eff) <= (2 ** (-52)):
+            return
+
+        theta_eff = theta[qi]
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        h_t = h_mult * (tot_t - t)
+
+        n_threads = cuda.blockDim.x
+        qo = cuda.threadIdx.x
+        while qo < n_qubits:
+            _qo = (n_qubits - (1 + qo)) if J_eff > 0.0 else qo
+            diff = cuda_probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits)
+            diff -= cuda_probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, tm1, n_qubits)
+            hamming_prob[_qo] += diff
+            qo += n_threads
+
+except:
+    IS_CUDA_AVAILABLE = False
 
 
 @njit
@@ -320,7 +399,27 @@ def maxcut_tfim(
     J_eff, degrees = init_J_and_z(G_m)
     hamming_prob = init_thresholds(n_qubits)
 
-    if IS_OPENCL_AVAILABLE and grid_size >= 128:
+    if IS_CUDA_AVAILABLE and cuda.is_available() and grid_size >= 128:
+        delta_t = 1.0 / n_steps
+        tot_t = 2.0 * n_steps * delta_t
+        h_mult = 2.0 / tot_t
+        theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
+
+        # Warp size is 32:
+        group_size = n_qubits - 1
+        grid_dims = (n_steps, n_qubits)
+        if group_size <= 256:
+            cuda_maxcut_hamming_cdf_wide[grid_dims, group_size](delta_t, tot_t, h_mult, J_eff, degrees, theta, hamming_prob)
+        else:
+            cuda_maxcut_hamming_cdf[n_steps * n_qubits, 128](n_qubits, delta_t, tot_t, h_mult, J_eff, degrees, theta, hamming_prob)
+
+        hamming_prob /= hamming_prob.sum()
+        tot_prob = 0.0
+        for i in range(n_qubits - 1):
+            tot_prob += hamming_prob[i]
+            hamming_prob[i] = tot_prob
+        hamming_prob[-1] = 2.0
+    elif IS_OPENCL_AVAILABLE and grid_size >= 128:
         # Pick a device (GPU if available)
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
