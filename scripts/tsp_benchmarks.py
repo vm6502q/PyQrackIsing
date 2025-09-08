@@ -143,55 +143,22 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3):
     return results
 
 
-# Run benchmark for 32 and 64 nodes
-results = [
-    benchmark_tsp_realistic(32),
-    benchmark_tsp_realistic(64),
-    benchmark_tsp_realistic(128),
-    benchmark_tsp_realistic(256),
-]
-
-for results_dict in results:
+# Run benchmark for 32 through 4096 nodes
+for i in range(5, 12):
+    n_nodes = 1 << i
+    results_dict = benchmark_tsp_realistic(n_nodes)
     for key, value in results_dict.items():
         transposed = list(zip(*value))
-        time = sum(transposed[0]) / len(transposed[0])
+        seconds = sum(transposed[0]) / len(transposed[0])
         length = min(transposed[1])
-        results_dict[key] = {"seconds": time, "length": length}
-
-# Combine into dataframe
-df32 = pd.DataFrame(
-    {
-        "Nearest Neighbor   (32)": results[0]["Nearest Neighbor"],
-        "Christofides   (32)": results[0]["Christofides"],
-        "Simulated Annealing   (32)": results[0]["Simulated Annealing"],
-        "PyQrackIsing   (32)": results[0]["PyQrackIsing"],
-    }
-)
-print(df32)
-df64 = pd.DataFrame(
-    {
-        "Nearest Neighbor   (64)": results[1]["Nearest Neighbor"],
-        "Christofides   (64)": results[1]["Christofides"],
-        "Simulated Annealing   (64)": results[1]["Simulated Annealing"],
-        "PyQrackIsing   (64)": results[1]["PyQrackIsing"],
-    }
-)
-print(df64)
-df128 = pd.DataFrame(
-    {
-        "Nearest Neighbor  (128)": results[2]["Nearest Neighbor"],
-        "Christofides  (128)": results[2]["Christofides"],
-        "Simulated Annealing  (128)": results[2]["Simulated Annealing"],
-        "PyQrackIsing  (128)": results[2]["PyQrackIsing"],
-    }
-)
-print(df128)
-df256 = pd.DataFrame(
-    {
-        "Nearest Neighbor  (256)": results[3]["Nearest Neighbor"],
-        "Christofides  (256)": results[3]["Christofides"],
-        "Simulated Annealing  (256)": results[3]["Simulated Annealing"],
-        "PyQrackIsing  (256)": results[3]["PyQrackIsing"],
-    }
-)
-print(df256)
+        results_dict[key] = {"seconds": seconds, "length": length}
+    # Combine into dataframe
+    df = pd.DataFrame(
+        {
+            f"Nearest Neighbor ({n_nodes})": results_dict["Nearest Neighbor"],
+            F"Christofides ({n_nodes})": results_dict["Christofides"],
+            F"Simulated Annealing ({n_nodes})": results_dict["Simulated Annealing"],
+            F"PyQrackIsing ({n_nodes})": results_dict["PyQrackIsing"],
+        }
+    )
+    print(df)
