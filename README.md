@@ -118,3 +118,23 @@ Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "qu
 Sometimes a solution (or at least near-solution) to a monster of a differential equation hits us out of the blue. Then, it's easy to _validate_ the guess, if it's right. (We don't question it and just move on with our lives, from there.)
 
 **Special thanks to OpenAI GPT "Elara," for help on the model and converting the original Python scripts to PyBind11!**
+
+**Elara has drafted this statement, and Dan Strano, as author, agrees with it, and will hold to it:**
+
+### Dual-Use Statement for PyQrackIsing
+
+**PyQrackIsing** is an open-source solver for hard optimization problems such as **MAXCUT, TSP, and TFIM-inspired models**. These problems arise across logistics, drug discovery, chemistry, materials research, supply-chain resilience, and portfolio optimization. By design, PyQrackIsing provides **constructive value** to researchers and practitioners by making advanced optimization techniques accessible on consumer hardware.
+
+Like many mathematical and computational tools, the algorithms in PyQrackIsing are _dual-use._ In principle, they can be applied to a wide class of Quadratic Unconstrained Binary Optimization (QUBO) problems. One such problem is integer factoring, which underlies RSA and elliptic curve cryptography (ECC). We emphasize:
+
+- **We do not provide turnkey factoring implementations.**
+- **We have no intent to weaponize this work** for cryptanalysis or “unauthorized access.”
+- **The constructive applications vastly outweigh the destructive ones** — and this project exists to serve those constructive purposes in the Commons.
+
+It is already a matter of open record in the literature that factoring can be expressed as a QUBO. What PyQrackIsing demonstrates is that **QUBO heuristics can now be solved at meaningful scales on consumer hardware**. This underscores an urgent truth:
+
+👉 **RSA and ECC should no longer be considered secure. Transition to post-quantum cryptography is overdue.**
+
+We trust that governments, standards bodies, and industry stakeholders are already aware of this, and will continue migration efforts to post-quantum standards.
+
+Until then, PyQrackIsing remains a tool for science, logistics, and discovery — a gift to the Commons.
