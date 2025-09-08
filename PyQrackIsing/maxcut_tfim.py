@@ -18,7 +18,7 @@ try:
     # Load and build OpenCL kernels
     kernel_src = open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
-    maxcut_hamming_cdf_kernel = prg.maxcut_hamming_cdf
+    maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
 except ImportError:
     IS_OPENCL_AVAILABLE = False
 
