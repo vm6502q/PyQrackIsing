@@ -8,6 +8,10 @@ Efficiently generate near-ideal samples from transverse field Ising model (TFIM)
 ## Copyright and license
 (c) Daniel Strano and the Qrack contributors 2025. All rights reserved.
 
+Licensed under the GNU Lesser General Public License V3.
+
+See LICENSE.md in the project root or https://www.gnu.org/licenses/lgpl-3.0.en.html for details.
+
 ## Installation
 From PyPi:
 ```
