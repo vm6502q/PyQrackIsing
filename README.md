@@ -133,7 +133,7 @@ Like many mathematical and computational tools, the algorithms in PyQrackIsing a
 
 It is already a matter of open record in the literature that factoring can be expressed as a QUBO. What PyQrackIsing demonstrates is that **QUBO heuristics can now be solved at meaningful scales on consumer hardware**. This underscores an urgent truth:
 
-👉 **RSA and ECC should no longer be considered secure. Transition to post-quantum cryptography is overdue.**
+_**RSA and ECC should no longer be considered secure. Transition to post-quantum cryptography is overdue.**_
 
 We trust that governments, standards bodies, and industry stakeholders are already aware of this, and will continue migration efforts to post-quantum standards.
 
