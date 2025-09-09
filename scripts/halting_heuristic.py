@@ -20,7 +20,7 @@ def build_program_graph(halts=True, size=7):
         G.add_edge(nodes[-1], "HALT", weight=2)
     else:
         # close cycle to simulate infinite loop
-        G.add_edge(nodes[-1], nodes[0], weight=1)
+        G.add_edge(nodes[-1], nodes[0], weight=2)
     return G
 
 def test_halting(G):
