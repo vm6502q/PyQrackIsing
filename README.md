@@ -128,12 +128,12 @@ Sometimes a solution (or at least near-solution) to a monster of a differential 
 Like many mathematical and computational tools, the algorithms in PyQrackIsing are _dual-use._ In principle, they can be applied to a wide class of Quadratic Unconstrained Binary Optimization (QUBO) problems. One such problem is integer factoring, which underlies RSA and elliptic curve cryptography (ECC). We emphasize:
 
 - **We do not provide turnkey factoring implementations.**
-- **We have no intent to weaponize this work** for cryptanalysis or “unauthorized access.”
+- **We have no intent to weaponize this work** for cryptanalysis or "unauthorized access."
 - **The constructive applications vastly outweigh the destructive ones** — and this project exists to serve those constructive purposes in the Commons.
 
 It is already a matter of open record in the literature that factoring can be expressed as a QUBO. What PyQrackIsing demonstrates is that **QUBO heuristics can now be solved at meaningful scales on consumer hardware**. This underscores an urgent truth:
 
-_**RSA and ECC should no longer be considered secure. Transition to post-quantum cryptography is overdue.**_
+👉 **RSA and ECC should no longer be considered secure. Transition to post-quantum cryptography is overdue.**
 
 We trust that governments, standards bodies, and industry stakeholders are already aware of this, and will continue migration efforts to post-quantum standards.
 
