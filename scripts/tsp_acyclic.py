@@ -4,6 +4,7 @@
 from PyQrackIsing import tsp_symmetric
 import networkx as nx
 import numpy as np
+import sys
 
 
 # Traveling Salesman Problem (normalized to longest segment)
@@ -19,9 +20,12 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
 if __name__ == "__main__":
     # NP-complete TSP
-    n_nodes = 64
-    G = generate_tsp_graph(n_nodes=n_nodes, seed=42)
-    best_circuit, best_path_length = tsp_symmetric(G, is_cyclic=False, start_node=0, end_node=1)
+    n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
+    quality = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+    correction_quality = int(sys.argv[3]) if len(sys.argv) > 3 else 2
+    seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
+    G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
+    best_circuit, best_path_length = tsp_symmetric(G, quality=quality, correction_quality=correction_quality, is_cyclic=False, start_node=0, end_node=1)
     for i in range(3):
         circuit, path_length = tsp_symmetric(G, is_cyclic=False, start_node=0, end_node=1)
         if path_length < best_path_length:
@@ -34,6 +38,7 @@ if __name__ == "__main__":
     for i in range(len(best_circuit) - 1):
         reconstructed_path_length += G[best_circuit[i]][best_circuit[i + 1]]["weight"]
 
+    print(f"Random seed: {seed}")
     print(f"Path: {best_circuit}")
     print(f"Actual node count: {n_nodes}")
     print(f"Solution distinct node count: {reconstructed_node_count}")
