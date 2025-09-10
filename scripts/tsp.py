@@ -1,7 +1,7 @@
 # Traveling Salesman Problem (considered NP-complete)
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
-from PyQrackIsing import tsp_symmetric
+from pyqrackising import tsp_symmetric
 import networkx as nx
 import numpy as np
 import sys

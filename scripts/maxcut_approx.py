@@ -7,7 +7,7 @@
 
 import networkx as nx
 import numpy as np
-from PyQrackIsing import maxcut_tfim, spin_glass_solver
+from pyqrackising import maxcut_tfim, spin_glass_solver
 
 # from cvxgraphalgs.algorithms import goemans_williamson_weighted
 

@@ -1,7 +1,7 @@
 # Spin Glass Ground State (considered NP-complete)
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
-from PyQrackIsing import spin_glass_solver
+from pyqrackising import spin_glass_solver
 import networkx as nx
 import numpy as np
 

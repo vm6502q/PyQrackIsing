@@ -50,8 +50,8 @@ with open(README_PATH) as readme_file:
 ext_modules = [CMakeExtension('tfim_sampler')]
 
 setup(
-    name='PyQrackIsing',
-    version='1.29.0',
+    name='pyqrackising',
+    version='2.0.0',
     author='Dan Strano',
     author_email='stranoj@gmail.com',
     description='Near-ideal closed-form solutions for transverse field Ising model (TFIM)',
@@ -72,6 +72,6 @@ setup(
     install_requires=["pybind11"],
     ext_modules=ext_modules,
     cmdclass=dict(build_ext=CMakeBuild),
-    packages=['PyQrackIsing'],
+    packages=['pyqrackising'],
     zip_safe=False,
 )

@@ -1,7 +1,7 @@
 import itertools
 import networkx as nx
 
-from PyQrackIsing import tsp_symmetric
+from pyqrackising import tsp_symmetric
 
 def toy_factoring_as_tsp(N, factors=None, cyclic=False, fixed_endpoints=None):
     """

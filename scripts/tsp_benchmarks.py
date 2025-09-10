@@ -5,7 +5,7 @@ import math
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from PyQrackIsing import tsp_symmetric
+from pyqrackising import tsp_symmetric
 
 
 # Generate a Euclidean TSP instance with n nodes in the unit square

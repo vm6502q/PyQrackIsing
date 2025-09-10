@@ -4,7 +4,7 @@ import time
 
 from networkx.algorithms.approximation import maxcut as nx_maxcut
 
-from PyQrackIsing import spin_glass_solver
+from pyqrackising import spin_glass_solver
 
 # Try to import cvxpy for GW SDP implementation
 try:

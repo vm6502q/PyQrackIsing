@@ -5,7 +5,7 @@ import time
 
 from collections import Counter
 
-from PyQrackIsing import spin_glass_solver
+from pyqrackising import spin_glass_solver
 
 def build_program_graph(halts=True, size=7):
     """
