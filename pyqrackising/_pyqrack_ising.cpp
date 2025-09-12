@@ -39,10 +39,10 @@ static inline std::vector<double> probability_by_hamming_weight(double J, double
         std::fill(bias.begin(), bias.end(), 1.0 / (n_qubits + 1.0));
     } else {
         const double sin_delta = std::sin(delta_theta);
-        const double omega = 1.5 * M_PI;
-        const double t2 = 1.0;
+        constexpr double omega = 1.5 * M_PI;
+        constexpr double t2 = 1.0;
         const double p = std::pow(2.0, std::abs(J / h) - 1.0) * (1.0 + sin_delta * std::cos(J * omega * t + theta) / (1.0 + std::sqrt(t / t2))) - 0.5;
-        if (p >= 1024) {
+        if ((p * n_qubits) >= 1024) {
             bias[0] = 1.0;
         } else {
             double tot_n = 0.0;
