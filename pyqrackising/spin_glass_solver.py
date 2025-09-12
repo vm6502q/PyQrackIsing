@@ -6,15 +6,16 @@ from numba import njit, prange
 import os
 
 
-def evaluate_cut_edges(state, G_m):
+@njit
+def evaluate_cut_edges(theta_bits, G_m):
     n_qubits = len(G_m)
-    cut_value = 0
+    cut = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            if ((state >> u) & 1) != ((state >> v) & 1):
-                cut_value += G_m[u, v]
+            if theta_bits[u] != theta_bits[v]:
+                cut += G_m[u, v]
 
-    return float(cut_value)
+    return cut
 
 
 @njit
@@ -122,7 +123,6 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
                 improved = True
                 break
 
-    sample = 0
     bitstring = ""
     l, r = [], []
     for i in range(len(best_theta)):
@@ -130,11 +130,10 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
         if b:
             bitstring += "1"
             r.append(nodes[i])
-            sample |= 1 << i
         else:
             bitstring += "0"
             l.append(nodes[i])
 
-    cut_value = evaluate_cut_edges(sample, G_m)
+    cut_value = evaluate_cut_edges(best_theta, G_m)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
