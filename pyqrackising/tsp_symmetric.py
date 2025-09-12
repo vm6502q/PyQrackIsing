@@ -1,6 +1,6 @@
 from .spin_glass_solver import spin_glass_solver
 import networkx as nx
-from numba import njit
+from numba import njit, prange
 import numpy as np
 
 
@@ -175,18 +175,18 @@ def targeted_three_opt(path, W, k_neighbors=20):
     return best_path, best_dist
 
 
-@njit
+@njit(parallel=True)
 def init_G_a_b(G_m, a, b):
     n_a_nodes = len(a)
     n_b_nodes = len(b)
     G_a = np.zeros((n_a_nodes, n_a_nodes), dtype=np.float64)
     G_b = np.zeros((n_b_nodes, n_b_nodes), dtype=np.float64)
-    for i in range(n_a_nodes):
+    for i in prange(n_a_nodes):
         for j in range(n_a_nodes):
             if i == j:
                 continue
             G_a[i, j] = G_m[a[i], a[j]]
-    for i in range(n_b_nodes):
+    for i in prange(n_b_nodes):
         for j in range(n_b_nodes):
             if i == j:
                 continue
@@ -257,6 +257,19 @@ def stitch(G_m, path_a, path_b, sol_weight):
     return best_path, best_weight
 
 
+def monte_carlo_loop(n_nodes):
+    bits = ([], [])
+    while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+        bits = ([], [])
+        for i in range(n_nodes):
+            if np.random.random() < 0.5:
+                bits[0].append(i)
+            else:
+                bits[1].append(i)
+
+    return bits
+
+
 def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, is_3_opt=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
@@ -288,26 +301,17 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, corr
     b = []
     c = []
     if (start_node is None) and (end_node is None):
-        best_energy = float("inf")
-        for _ in range(multi_start):
-            energy = 0.0
-            _a = []
-            _b = []
-            while (len(_a) == 0) or (len(_b) == 0):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_energy = float("inf")
+            for _ in range(multi_start):
                 bits = ([], [])
-                if monte_carlo:
-                    for i in range(n_nodes):
-                        if np.random.random() < 0.5:
-                            bits[0].append(i)
-                        else:
-                            bits[1].append(i)
-                else:
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
                     _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
-                _a = list(bits[0])
-                _b = list(bits[1])
-            if energy < best_energy:
-                best_energy = energy
-                a, b = _a, _b
+                if energy < best_energy:
+                    best_energy = energy
+                    a, b = bits
     else:
         is_cyclic = False
         a.append(nodes.index(start_node))
