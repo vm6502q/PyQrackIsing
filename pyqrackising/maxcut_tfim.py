@@ -376,14 +376,14 @@ def maxcut_tfim(
 
     best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, degrees, J_eff, n_qubits)
 
-    bit_string = "".join(["1" if b else "0" for b in best_solution])
-    bit_list = list(bit_string)
+    bit_string = ""
     l, r = [], []
-    for i in range(len(bit_list)):
-        b = bit_list[i] == "1"
-        if b:
+    for i in range(len(best_solution)):
+        if best_solution[i]:
+            bit_string += "1"
             r.append(nodes[i])
         else:
+            bit_string += "0"
             l.append(nodes[i])
 
     return bit_string, best_value, (l, r)
