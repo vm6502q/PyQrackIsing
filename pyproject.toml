@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyqrackising"
-version = "2.0.2"
+version = "2.0.3"
 requires-python = ">=3.8"
 description = "Near-ideal closed-form solutions for transverse field Ising model (TFIM)"
 readme = {file = "README.txt", content-type = "text/markdown"}

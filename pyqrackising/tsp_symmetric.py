@@ -4,12 +4,6 @@ from numba import njit, prange
 import numpy as np
 
 
-
-# By Gemini (Google Search AI)
-def int_to_bitstring(integer, length):
-    return (bin(integer)[2:].zfill(length))[::-1]
-
-
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
 @njit
 def path_length(path, G_m):
@@ -30,7 +24,7 @@ def one_way_two_opt(path, G):
     while improved:
         improved = False
         for i in range(1, path_len - 1):
-            for j in range(i + 2, path_len + 1):
+            for j in range(i + 2, path_len):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]
                 new_dist = path_length(new_path, G)
@@ -50,7 +44,7 @@ def anchored_two_opt(path, G):
 
     while improved:
         improved = False
-        for i in range(1, path_len - 1):
+        for i in range(2, path_len - 1):
             for j in range(i + 2, path_len):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]
@@ -67,11 +61,12 @@ def two_opt(path, G):
     improved = True
     best_path = path
     best_dist = path_length(best_path, G)
+    path_len = len(path)
 
     while improved:
         improved = False
-        for i in range(1, len(path) - 2):
-            for j in range(i + 2, len(path) - 1):
+        for i in range(1, path_len - 2):
+            for j in range(i + 2, path_len - 1):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
                 new_dist = path_length(new_path, G)
@@ -356,9 +351,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, corr
         elif not end_node is None:
             best_path, best_weight = two_opt(best_path, G_m)
         elif not start_node is None:
-            best_path.reverse()
             best_path, best_weight = anchored_two_opt(best_path, G_m)
-            best_path.reverse()
         else:
             best_path, best_weight = one_way_two_opt(best_path, G_m)
 
