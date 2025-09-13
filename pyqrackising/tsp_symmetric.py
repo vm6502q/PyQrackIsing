@@ -30,9 +30,7 @@ def one_way_two_opt(path, G):
     while improved:
         improved = False
         for i in range(1, path_len - 1):
-            for j in range(i+1, path_len + 1):
-                if j - i == 1:  # adjacent edges, skip
-                    continue
+            for j in range(i + 2, path_len + 1):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]
                 new_dist = path_length(new_path, G)
@@ -53,9 +51,7 @@ def anchored_two_opt(path, G):
     while improved:
         improved = False
         for i in range(1, path_len - 1):
-            for j in range(i+1, path_len):
-                if j - i == 1:  # adjacent edges, skip
-                    continue
+            for j in range(i + 2, path_len):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]
                 new_dist = path_length(new_path, G)
@@ -75,9 +71,7 @@ def two_opt(path, G):
     while improved:
         improved = False
         for i in range(1, len(path) - 2):
-            for j in range(i+1, len(path) - 1):
-                if j - i == 1:  # adjacent edges, skip
-                    continue
+            for j in range(i + 2, len(path) - 1):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
                 new_dist = path_length(new_path, G)
