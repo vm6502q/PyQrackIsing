@@ -1,6 +1,6 @@
 from .spin_glass_solver import spin_glass_solver
 import networkx as nx
-from numba import njit, prange
+from numba import njit
 import numpy as np
 
 
