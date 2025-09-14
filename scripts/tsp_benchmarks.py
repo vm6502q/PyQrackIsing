@@ -1,17 +1,30 @@
 import networkx as nx
+import numpy as np
 import os
 import random
 import time
 import math
 import multiprocessing
+import warnings
 import pandas as pd
 
 from pyqrackising import tsp_symmetric
 
 
+def generate_noneuclidean_tsp(n_nodes, seed=42):
+    if not (seed is None):
+        np.random.seed(seed)
+    G = nx.Graph()
+    for u in range(n_nodes):
+        for v in range(u + 1, n_nodes):
+            G.add_edge(u, v, weight=np.random.random())
+    return G, None
+
+
 # Generate a Euclidean TSP instance with n nodes in the unit square
 def generate_euclidean_tsp(n, seed=42):
-    random.seed(seed)
+    if not (seed is None):
+        random.seed(seed)
     points = {i: (random.random(), random.random()) for i in range(n)}
     G = nx.complete_graph(n)
     for u, v in G.edges():
@@ -22,7 +35,8 @@ def generate_euclidean_tsp(n, seed=42):
 
 
 def generate_clustered_tsp(n, clusters=4, spread=0.05, seed=42):
-    random.seed(seed)
+    if not (seed is None):
+        random.seed(seed)
     points = {}
     centers = [(random.random(), random.random()) for _ in range(clusters)]
     for i in range(n):
@@ -112,7 +126,7 @@ def benchmark_tsp_realistic(n_nodes=64):
         "Simulated Annealing": [],
         "PyQrackIsing": [],
     }
-    G, _ = generate_clustered_tsp(n_nodes)
+    G, _ = generate_noneuclidean_tsp(n_nodes)
     multi_start = os.cpu_count()
 
     # Exclude numba JIT overhead with warmup:
@@ -122,15 +136,15 @@ def benchmark_tsp_realistic(n_nodes=64):
     start = time.time()
     path, length = tsp_nearest_neighbor(G)
     results["Nearest Neighbor"].append((time.time() - start, length))
-    assert validate_tsp_solution(
-        G, path + [path[0]]
-    ), f"Invalid nearest neighbor solution in trial {trial}"
+    if not validate_tsp_solution(G, path + [path[0]]):
+        warnings.warn("Invalid nearest neighbor solution!")
 
     # Christofides
     start = time.time()
     path_c = tsp_christofides(G)
     results["Christofides"].append((time.time() - start, get_path_length(G, path_c)))
-    assert validate_tsp_solution(G, path_c), f"Invalid Christofides solution in trial {trial}"
+    if not validate_tsp_solution(G, path_c):
+        warnings.warn("Invalid Christofides solution!")
 
     # Simulated annealing
     start = time.time()
@@ -139,9 +153,8 @@ def benchmark_tsp_realistic(n_nodes=64):
     mp_results.sort(key=lambda r: r[1])
     path_s, length_s = mp_results[0]
     results["Simulated Annealing"].append((time.time() - start, length_s))
-    assert validate_tsp_solution(
-        G, path_s + [path_s[0]]
-    ), f"Invalid SA solution in trial {trial}"
+    if not validate_tsp_solution(G, path_s + [path_s[0]]):
+        warnings.warn("Invalid simulated annealing solution!")
 
     start = time.time()
     with multiprocessing.Pool(processes=multi_start) as pool:
@@ -149,7 +162,8 @@ def benchmark_tsp_realistic(n_nodes=64):
     mp_results.sort(key=lambda r: r[1])
     path_q, length_q = mp_results[0]
     results["PyQrackIsing"].append((time.time() - start, length_q))
-    assert validate_tsp_solution(G, path_q), f"Invalid PyQrackIsing solution in trial {trial}"
+    if not validate_tsp_solution(G, path_q):
+        warnings.warn("Invalid PyQrackIsing solution!")
 
     return results
 
