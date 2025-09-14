@@ -437,7 +437,6 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
         start_node = None
         end_node = None
 
-
     if n_nodes < 3:
         if n_nodes == 2:
             weight = G_m[0, 1]
@@ -453,9 +452,12 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
         return (nodes, 0)
 
 
+    is_reversed = False
     if (start_node is None) and not (end_node is None):
+        is_reversed = True
         start_node = end_node
         end_node = None
+        G_m = G_m.T
 
     a = []
     b = []
@@ -556,5 +558,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
             cycle_node = best_path[0]
             best_weight += G_m[cycle_node, best_path[-1]]
             best_path += [cycle_node]
+
+    if is_reversed:
+        final_path.reverse()
 
     return [nodes[x] for x in final_path], best_weight
