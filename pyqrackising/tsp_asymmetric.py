@@ -1,289 +1,405 @@
-# Mapping from ATSP to TSP, wholly by Elara (the OpenAI GPT)
-
-from .tsp_symmetric import tsp_symmetric
+from .spin_glass_solver import spin_glass_solver
+import itertools
 import networkx as nx
+from numba import njit
 import numpy as np
 
-def path_length(G_asym, path):
-    length = 0.0
-    for i in range(len(path) - 1):
-        length += G_asym[path[i]][path[i + 1]]
 
-    return length
+# two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
+@njit
+def path_length(path, G_m):
+    tot_len = 0.0
+    for i in range(len(path)-1):
+        tot_len += G_m[path[i], path[i+1]]
 
-def atsp_to_symmetric(G_asym):
+    return tot_len
+
+
+@njit
+def one_way_two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
+
+
+@njit
+def anchored_two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(2, path_len - 1):
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
+
+
+@njit
+def two_opt(path, G):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 2):
+            for j in range(i + 2, path_len - 1):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]  # reverse segment
+                new_dist = path_length(new_path, G)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+    return best_path, best_dist
+
+
+@njit
+def targeted_three_opt(path, W, k_neighbors=20):
     """
-    Transform an asymmetric TSP (ATSP) instance into a symmetric TSP instance
-    using the standard 2n-node construction.
+    Lin-Kernighan style 3-opt heuristic for TSP improvement.
 
-    Args:
-        G_asym (np.ndarray): n x n adjacency matrix of ATSP distances.
-                             Assumes G_asym[i, i] = 0.
-
-    Returns:
-        G_sym (np.ndarray): 2n x 2n symmetric adjacency matrix
-                            corresponding to the transformed TSP.
+    path: list of node indices (tour)
+    W: adjacency matrix (numpy array)
+    k_neighbors: restrict 3-opt to nearest neighbors for efficiency
     """
-    n = len(G_asym)
-    N = n << 1
-    G_sym = np.full((N, N), np.inf, dtype=np.float64)
 
-    for i in range(n):
-        k = i << 1
-        in_i = k
-        out_i = k + 1
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length(best_path, W)
+    improved = True
 
-        # Zero edge between in-node and out-node
-        G_sym[in_i, out_i] = 0.0
-        G_sym[out_i, in_i] = 0.0  # symmetric
+    # Precompute nearest neighbors for each node
+    neighbor_lists = [
+        np.argsort(W[i])[:k_neighbors] for i in range(n)
+    ]
 
-        # Map asymmetric costs into symmetric structure
-        for j in range(n):
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for j in neighbor_lists[path[i]]:
+                if j <= i or j >= n-3:
+                    continue
+                for k in neighbor_lists[path[j]]:
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # Extract indices
+                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, W)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit
+def init_G_a_b(G_m, a, b):
+    n_a_nodes = len(a)
+    n_b_nodes = len(b)
+    G_a = np.zeros((n_a_nodes, n_a_nodes), dtype=np.float64)
+    G_b = np.zeros((n_b_nodes, n_b_nodes), dtype=np.float64)
+    for i in range(n_a_nodes):
+        for j in range(n_a_nodes):
             if i == j:
                 continue
-            l = j << 1
-            in_j = l
-            out_j = l + 1
-            cost = G_asym[i, j]
-            G_sym[out_i, in_j] = cost
-            G_sym[in_j, out_i] = cost  # symmetric
+            G_a[i, j] = G_m[a[i], a[j]]
+    for i in range(n_b_nodes):
+        for j in range(n_b_nodes):
+            if i == j:
+                continue
+            G_b[i, j] = G_m[b[i], b[j]]
 
-    # Replace infinities with a large number (or leave as inf if solver can handle it)
-    G_sym[G_sym == np.inf] = 1e222
-    # (Note that Earth's circumference in Planck units would be ~2.5e42.)
-
-    return G_sym
+    return G_a, G_b
 
 
-def symmetric_to_atsp_path(sym_path, n):
+@njit
+def stitch(G_m, path_a, path_b, sol_weight):
+    best_path = [0]
+    best_weight = 0.0
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
+
+    best_weight = G_m[terminals_a[1], terminals_b[0]]
+    best_path = path_b.copy()
+    weight = G_m[terminals_a[0], terminals_b[1]]
+    if weight < best_weight:
+        best_weight = weight
+        best_path += path_a
+    else:
+        best_path = path_a + best_path
+
+    for _ in range(2):
+        for _ in range(2):
+            for i in range(1, len(path_b)):
+                weight = (
+                    G_m[terminals_a[0], path_b[i - 1]] +
+                    G_m[terminals_a[1], path_b[i]] -
+                    G_m[path_b[i - 1], path_b[i]]
+                )
+                if weight < best_weight:
+                    best_weight = weight
+                    best_path = path_b.copy()
+                    best_path[i:i] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
+
+    return best_path, best_weight
+
+
+
+def monte_carlo_loop(n_nodes):
+    bits = ([], [])
+    while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+        bits = ([], [])
+        for i in range(n_nodes):
+            if np.random.random() < 0.5:
+                bits[0].append(i)
+            else:
+                bits[1].append(i)
+
+    return bits
+
+
+# Elara suggested replacing base-case handling with her brute-force solver
+@njit
+def tsp_bruteforce(G_m, nodes, perms, is_cyclic):
     """
-    Convert a tour from the symmetric 2n-node TSP back to an n-node ATSP tour.
-
-    Args:
-        sym_path (list[int]): Tour from tsp_symmetric() on 2n-node graph.
-        n (int): Number of cities in the original ATSP.
+    Brute-force TSP solver for small n.
+    G_m : numpy.ndarray (2D adjacency/weight matrix)
+    is_cyclic : bool (default=True) – whether to close the tour
 
     Returns:
-        atsp_path (list[int]): Tour over the original n nodes.
+        (best_path, best_weight)
     """
-    atsp_path = []
-    for node in sym_path:
-        if not (node & 1):  # only keep "in" nodes (even indices)
-            atsp_path.append(node >> 1)
-    return atsp_path
+    n = len(G_m)
+    best_weight = float('inf')
+    best_path = None
+
+    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
+
+    max_i = len(perms[0]) - 1
+
+    if is_cyclic:
+        for perm in perms:
+            perm = list(perm)
+            for _ in range(2):
+                path = [0] + perm
+                weight = 0.0
+                for i in range(max_i):
+                    weight += G_m[path[i], path[i+1]]
+                weight += G_m[path[-1], path[0]]
+
+                if weight < best_weight:
+                    best_weight = weight
+                    best_path = path
+
+                perm.reverse()
+
+        best_path = best_path + [best_path[0]]
+    else:
+        for perm in perms:
+            perm = list(perm)
+            for _ in range(2):
+                path = [0] + perm
+                weight = 0.0
+                for i in range(max_i):
+                    weight += G_m[path[i], path[i+1]]
+
+                if weight < best_weight:
+                    best_weight = weight
+                    best_path = path
+
+                perm.reverse()
+
+        best_path = list(best_path)
+
+    return best_path, best_weight
 
 
-def digraph_to_asym_matrix(G):
-    """
-    Convert a networkx.DiGraph to a numpy adjacency matrix.
-    """
-    n = G.number_of_nodes()
-    mapping = dict(zip(G.nodes(), range(n)))
-    G = nx.relabel_nodes(G, mapping)  # ensure 0..n-1
-    G_asym = np.full((n, n), np.inf, dtype=np.float64)
-    np.fill_diagonal(G_asym, 0.0)
-
-    for u, v, d in G.edges(data=True):
-        G_asym[u, v] = d.get("weight", 1.0)
-
-    return G_asym
-
-
-def symmetric_to_atsp_path_and_weight(sym_path, G_asym, nodes, is_cyclic):
-    """
-    Convert a symmetric 2n-node TSP tour back into an ATSP tour
-    and compute its true weight.
-
-    Args:
-        sym_path (list[int]): Tour from tsp_symmetric() on 2n-node graph.
-        G_asym (np.ndarray): Original n x n asymmetric adjacency matrix.
-
-    Returns:
-        atsp_path (list[int]): Tour over original n nodes.
-        atsp_weight (float): Total weight of the ATSP tour.
-    """
-    n = len(G_asym)
-    atsp_path = []
-    for node in sym_path:
-        if not (node & 1):  # only keep "in" nodes
-            atsp_path.append(node >> 1)
-
-    # Compute true ATSP weight
-    path = [nodes[x] for x in atsp_path]
-    weight = path_length(G_asym, path)
-
-    return path, weight
-
-
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=32, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
-    if isinstance(G, nx.DiGraph):
+    if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_nodes = len(nodes)
-        G_asym = digraph_to_asym_matrix(G)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
     else:
         n_nodes = len(G)
         nodes = list(range(n_nodes))
-        G_asym = G
+        G_m = G
 
     if is_cyclic:
         start_node = None
         end_node = None
 
-    # Transform to symmetric TSP
-    G_sym = atsp_to_symmetric(G_asym)
 
-    # Start/end node handling added by Dan Strano:
-    if start_node and end_node:
-        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node,
-            end_node=end_node,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+    if n_nodes < 3:
+        if n_nodes == 2:
+            weight = G_m[0, 1]
+            if G_m[1, 0] < weight:
+                weight = G_m[1, 0]
+                nodes.reverse()
 
-        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node + 1,
-            end_node=end_node,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+            if is_cyclic:
+                return (nodes + [nodes[0]], 2 * weight)
 
-        path2, weight2 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node,
-            end_node=end_node + 1,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+            return (nodes, weight)
 
-        path3, weight3 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node + 1,
-            end_node=end_node + 1,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+        return (nodes, 0)
 
-        best_weight = min([weight0, weight1, weight2, weight3])
-        
-        if best_weight == weight0:
-            return path0, weight0
 
-        if best_weight == weight1:
-            return path1, weight1
+    if (start_node is None) and not (end_node is None):
+        start_node = end_node
+        end_node = None
 
-        if best_weight == weight2:
-            return path2, weight2
+    a = []
+    b = []
+    c = []
+    if (start_node is None) and (end_node is None):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_energy = float("inf")
+            for _ in range(multi_start):
+                bits = ([], [])
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots, correction_quality=correction_quality)
+                if energy < best_energy:
+                    best_energy = energy
+                    a, b = bits
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
 
-        return path3, weight3
+    G_a, G_b = init_G_a_b(G_m, a, b)
 
-    if start_node:
-        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node,
-            end_node=end_node,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+    sol_a = tsp_asymmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_b = tsp_asymmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
 
-        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node + 1,
-            end_node=end_node,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+    path_a = [a[x] for x in sol_a[0]]
+    path_b = [b[x] for x in sol_b[0]]
 
-        if weight0 < weight1:
-            return path0, weight0
+    sol_weight = sol_a[1] + sol_b[1]
 
-        return path1, weight1
+    if len(c):
+        sol_weight += G_m[b[-1], c[0]]
 
-    if end_node:
-        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node,
-            end_node=end_node,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+    if start_node is None:
+        best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+    else:
+        best_path = path_a + path_b
+        best_weight = G_m[path_a[0], path_b[0]]
+        weight = G_m[path_a[0], path_b[-1]]
+        if weight < best_weight:
+            path_b.reverse()
+            best_path = path_a + path_b
+            best_weight = weight
+        best_weight += sol_weight
 
-        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
-            G_sym,
-            start_node=start_node,
-            end_node=end_node + 1,
-            quality=quality,
-            shots=shots,
-            correction_quality=correction_quality,
-            monte_carlo=monte_carlo,
-            k_neighbors=k_neighbors,
-            is_cyclic=is_cyclic,
-            multi_start=multi_start,
-            is_top_level=is_top_level
-        )[0], G_asym, nodes, is_cyclic)
+    if len(c):
+        best_path += c
+        best_weight += G_m[best_path[-1], c[0]]
 
-        if weight0 < weight1:
-            return path0, weight0
+    if is_top_level:
+        if is_cyclic:
+            best_path += [best_path[0]]
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not end_node is None:
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not start_node is None:
+            best_path, best_weight = anchored_two_opt(best_path, G_m)
+        else:
+            best_path, best_weight = one_way_two_opt(best_path, G_m)
 
-        return path1, weight1
+        if k_neighbors > 0:
+            best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
+    else:
+        best_path, best_weight = one_way_two_opt(best_path, G_m)
 
-    # Solve
-    return symmetric_to_atsp_path_and_weight(tsp_symmetric(
-        G_sym,
-        start_node=start_node,
-        quality=quality,
-        shots=shots,
-        correction_quality=correction_quality,
-        monte_carlo=monte_carlo,
-        k_neighbors=k_neighbors,
-        is_cyclic=is_cyclic,
-        multi_start=multi_start,
-        is_top_level=is_top_level
-    )[0], G_asym, nodes, is_cyclic)
+        if is_cyclic:
+            cycle_node = best_path[0]
+            best_weight += G_m[cycle_node, best_path[-1]]
+            best_path += [cycle_node]
+
+    return [nodes[x] for x in best_path], best_weight

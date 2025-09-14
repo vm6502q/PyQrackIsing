@@ -267,53 +267,6 @@ def monte_carlo_loop(n_nodes):
     return bits
 
 
-# Elara suggested replacing base-case handling with her brute-force solver
-@njit
-def tsp_bruteforce(G_m, nodes, perms, is_cyclic):
-    """
-    Brute-force TSP solver for small n.
-    G_m : numpy.ndarray (2D adjacency/weight matrix)
-    is_cyclic : bool (default=True) – whether to close the tour
-
-    Returns:
-        (best_path, best_weight)
-    """
-    n = len(G_m)
-    best_weight = float('inf')
-    best_path = None
-
-    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
-
-    max_i = len(perms[0]) - 1
-
-    if is_cyclic:
-        for perm in perms:
-            path = [0] + list(perm)
-            weight = 0.0
-            for i in range(max_i):
-                weight += G_m[path[i], path[i+1]]
-            weight += G_m[path[-1], path[0]]
-
-            if weight < best_weight:
-                best_weight = weight
-                best_path = path
-
-        best_path = best_path + [best_path[0]]
-    else:
-        for path in perms:
-            weight = 0.0
-            for i in range(max_i):
-                weight += G_m[path[i], path[i+1]]
-
-            if weight < best_weight:
-                best_weight = weight
-                best_path = path
-
-        best_path = list(best_path)
-
-    return best_path, best_weight
-
-
 def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
@@ -332,10 +285,6 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
         end_node = None
 
     if n_nodes < 5:
-        if n_nodes == 4:
-            perms = list(itertools.permutations(nodes[1:]) if is_cyclic else itertools.permutations(nodes))
-            return tsp_bruteforce(G_m, nodes, perms, is_cyclic)
-
         if n_nodes == 3:
             if is_cyclic:
                 weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
@@ -409,11 +358,6 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
 
     if len(c):
         sol_weight += G_m[b[-1], c[0]]
-
-    if (len(path_a) == 1) and (len(path_b) == 1):
-        if len(c):
-            return (path_a + path_b + c, (sol_weight + G_m[path_b[0], c[0]] + G_m[path_a[0], c[0]]) if is_cyclic else (sol_weight + G_m[path_b[0], c[0]]))
-        return (path_a + path_b, (sol_weight + G_m[path_a[0], path_b[0]]) if is_cyclic else sol_weight)
 
     if start_node is None:
         best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
