@@ -541,10 +541,11 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
             best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
     else:
         best_path, best_weight = one_way_two_opt(best_path, G_m)
-        path = list(reversed(best_path))
-        path, weight = one_way_two_opt(path, G_m)
-        if weight < best_weight:
-            best_path, best_weight = path, weight
+        if not start_node and not end_node:
+            path = list(reversed(best_path))
+            path, weight = one_way_two_opt(path, G_m)
+            if weight < best_weight:
+                best_path, best_weight = path, weight
 
         if is_cyclic:
             cycle_node = best_path[0]
