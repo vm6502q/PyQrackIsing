@@ -1,9 +1,10 @@
 import networkx as nx
+import os
 import random
 import time
 import math
+import multiprocessing
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from pyqrackising import tsp_symmetric
 
@@ -90,6 +91,10 @@ def tsp_simulated_annealing(G, temp=1000, cooling=0.995, max_iter=5000):
     return best, best_length
 
 
+def tsp_qrack(G):
+    return tsp_symmetric(G, monte_carlo=True)
+
+
 # Validation: check if path is a Hamiltonian cycle
 def validate_tsp_solution(G, path):
     return len(path) == len(G.nodes) + 1 and set(path[:-1]) == set(G.nodes)
@@ -100,7 +105,7 @@ def get_path_length(G, path):
 
 
 # Benchmark framework with realistic (Euclidean) TSP graphs
-def benchmark_tsp_realistic(n_nodes=64, trials=3):
+def benchmark_tsp_realistic(n_nodes=64):
     results = {
         "Nearest Neighbor": [],
         "Christofides": [],
@@ -108,37 +113,43 @@ def benchmark_tsp_realistic(n_nodes=64, trials=3):
         "PyQrackIsing": [],
     }
     G, _ = generate_clustered_tsp(n_nodes)
+    multi_start = os.cpu_count()
 
     # Exclude numba JIT overhead with warmup:
-    tsp_symmetric(G)
+    tsp_qrack(nx.Graph())
 
-    for trial in range(trials):
-        # Nearest neighbor
-        start = time.time()
-        path, length = tsp_nearest_neighbor(G)
-        results["Nearest Neighbor"].append((time.time() - start, length))
-        assert validate_tsp_solution(
-            G, path + [path[0]]
-        ), f"Invalid nearest neighbor solution in trial {trial}"
+    # Nearest neighbor
+    start = time.time()
+    path, length = tsp_nearest_neighbor(G)
+    results["Nearest Neighbor"].append((time.time() - start, length))
+    assert validate_tsp_solution(
+        G, path + [path[0]]
+    ), f"Invalid nearest neighbor solution in trial {trial}"
 
-        # Christofides
-        start = time.time()
-        path_c = tsp_christofides(G)
-        results["Christofides"].append((time.time() - start, get_path_length(G, path_c)))
-        assert validate_tsp_solution(G, path_c), f"Invalid Christofides solution in trial {trial}"
+    # Christofides
+    start = time.time()
+    path_c = tsp_christofides(G)
+    results["Christofides"].append((time.time() - start, get_path_length(G, path_c)))
+    assert validate_tsp_solution(G, path_c), f"Invalid Christofides solution in trial {trial}"
 
-        # Simulated annealing
-        start = time.time()
-        path_s, length_s = tsp_simulated_annealing(G)
-        results["Simulated Annealing"].append((time.time() - start, length_s))
-        assert validate_tsp_solution(
-            G, path_s + [path_s[0]]
-        ), f"Invalid SA solution in trial {trial}"
+    # Simulated annealing
+    start = time.time()
+    with multiprocessing.Pool(processes=multi_start) as pool:
+        mp_results = pool.map(tsp_simulated_annealing, (G,))
+    mp_results.sort(key=lambda r: r[1])
+    path_s, length_s = mp_results[0]
+    results["Simulated Annealing"].append((time.time() - start, length_s))
+    assert validate_tsp_solution(
+        G, path_s + [path_s[0]]
+    ), f"Invalid SA solution in trial {trial}"
 
-        start = time.time()
-        path_q, length_q = tsp_symmetric(G)
-        results["PyQrackIsing"].append((time.time() - start, length_q))
-        assert validate_tsp_solution(G, path_q), f"Invalid PyQrackIsing solution in trial {trial}"
+    start = time.time()
+    with multiprocessing.Pool(processes=multi_start) as pool:
+        mp_results = pool.map(tsp_qrack, (G,))
+    mp_results.sort(key=lambda r: r[1])
+    path_q, length_q = mp_results[0]
+    results["PyQrackIsing"].append((time.time() - start, length_q))
+    assert validate_tsp_solution(G, path_q), f"Invalid PyQrackIsing solution in trial {trial}"
 
     return results
 
