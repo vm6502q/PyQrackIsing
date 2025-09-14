@@ -327,6 +327,10 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, corr
         nodes = list(range(n_nodes))
         G_m = G
 
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
     if n_nodes < 5:
         if n_nodes == 4:
             perms = list(itertools.permutations(nodes[1:]) if is_cyclic else itertools.permutations(nodes))

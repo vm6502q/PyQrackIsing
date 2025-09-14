@@ -122,6 +122,10 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
         nodes = list(range(n_nodes))
         G_asym = G
 
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
     # Transform to symmetric TSP
     G_sym = atsp_to_symmetric(G_asym)
 
