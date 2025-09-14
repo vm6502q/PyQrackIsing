@@ -284,7 +284,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
         start_node = None
         end_node = None
 
-    if n_nodes < 5:
+    if n_nodes < 4:
         if n_nodes == 3:
             if is_cyclic:
                 weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
@@ -350,6 +350,120 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
 
     sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
     sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+
+    path_a = [a[x] for x in sol_a[0]]
+    path_b = [b[x] for x in sol_b[0]]
+
+    sol_weight = sol_a[1] + sol_b[1]
+
+    if len(c):
+        sol_weight += G_m[b[-1], c[0]]
+
+    if start_node is None:
+        best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+    else:
+        best_path = path_a + path_b
+        best_weight = G_m[path_a[0], path_b[0]]
+        weight = G_m[path_a[0], path_b[-1]]
+        if weight < best_weight:
+            path_b.reverse()
+            best_path = path_a + path_b
+            best_weight = weight
+        best_weight += sol_weight
+
+    if len(c):
+        best_path += c
+        best_weight += G_m[best_path[-1], c[0]]
+
+    if is_top_level:
+        if is_cyclic:
+            best_path += [best_path[0]]
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not end_node is None:
+            best_path, best_weight = two_opt(best_path, G_m)
+        elif not start_node is None:
+            best_path, best_weight = anchored_two_opt(best_path, G_m)
+        else:
+            best_path, best_weight = one_way_two_opt(best_path, G_m)
+
+        if k_neighbors > 0:
+            best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
+    else:
+        best_path, best_weight = one_way_two_opt(best_path, G_m)
+
+        if is_cyclic:
+            cycle_node = best_path[0]
+            best_weight += G_m[cycle_node, best_path[-1]]
+            best_path += [cycle_node]
+
+    return [nodes[x] for x in best_path], best_weight
+
+
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
+    nodes = None
+    n_nodes = 0
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_nodes = len(nodes)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    else:
+        n_nodes = len(G)
+        nodes = list(range(n_nodes))
+        G_m = G
+
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
+
+    if n_nodes < 3:
+        if n_nodes == 2:
+            weight = G_m[0, 1]
+            if G_m[1, 0] < weight:
+                weight = G_m[1, 0]
+                nodes.reverse()
+
+            if is_cyclic:
+                return (nodes + [nodes[0]], 2 * weight)
+
+            return (nodes, weight)
+
+        return (nodes, 0)
+
+
+    if (start_node is None) and not (end_node is None):
+        start_node = end_node
+        end_node = None
+
+    a = []
+    b = []
+    c = []
+    if (start_node is None) and (end_node is None):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_energy = float("inf")
+            for _ in range(multi_start):
+                bits = ([], [])
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots, correction_quality=correction_quality)
+                if energy < best_energy:
+                    best_energy = energy
+                    a, b = bits
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
+
+    G_a, G_b = init_G_a_b(G_m, a, b)
+
+    sol_a = tsp_asymmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_b = tsp_asymmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
