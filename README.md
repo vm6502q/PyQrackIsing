@@ -106,14 +106,14 @@ circuit, path_length = tsp_symmetric(
     correction_quality=2,
     is_cyclic=True,
     multi_start=1,
-    k_neighbors=20
+    k_neighbors=16
 )
 
 print(f"Node count: {n_nodes}")
 print(f"Path: {circuit}")
 print(f"Path length: {path_length}")
 ```
-We provide solvers for both the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A") and asymmetric version (`tsp_asymmetric()`). `monte_carlo=True` switches out the MAXCUT-based heuristic for pure Monte Carlo recursive bipartitioning. `multi_start` controls how many stochastic repeats of MAXCUT are tried to select the best result, at every level of recursion.
+We provide solvers for both the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A") and asymmetric version (`tsp_asymmetric()`). `monte_carlo=True` switches out the MAXCUT-based heuristic for pure Monte Carlo recursive bipartitioning. `multi_start` controls how many stochastic repeats of MAXCUT are tried to select the best result, at every level of recursion. `k_neighbors` limits the count of nearest-neighbor connections considered for 3-opt.
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.

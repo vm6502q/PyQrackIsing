@@ -110,7 +110,7 @@ def symmetric_to_atsp_path_and_weight(sym_path, G_asym, nodes, is_cyclic):
     return [nodes[x] for x in atsp_path], atsp_weight
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=32, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None

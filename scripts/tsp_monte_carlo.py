@@ -28,7 +28,7 @@ if __name__ == "__main__":
     # NP-complete TSP
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     multi_start = int(sys.argv[2]) if len(sys.argv) > 2 else os.cpu_count()
-    k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 20
+    k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 16
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
     G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
