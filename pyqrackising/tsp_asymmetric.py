@@ -41,7 +41,8 @@ def atsp_to_symmetric(G_asym):
             G_sym[in_j, out_i] = cost  # symmetric
 
     # Replace infinities with a large number (or leave as inf if solver can handle it)
-    G_sym[G_sym == np.inf] = 1e256
+    G_sym[G_sym == np.inf] = 1e222
+    # (Note that Earth's circumference in Planck units would be ~2.5e42.)
 
     return G_sym
 
