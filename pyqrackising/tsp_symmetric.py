@@ -285,32 +285,30 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, corr
                 weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
                 weight_1 = G_m[0, 2] + G_m[2, 1] + G_m[1, 0]
 
-                if weight_0 > weight1:
+                if weight_0 >= weight_1:
                     return (nodes + [nodes[0]], weight_0)
 
-                return ([nodes[0], nodes[2], nodes[1], nodes[0]], weight_1)
+                nodes.reverse()
 
-            weights = (
-                G_m[0, 1] + G_m[1, 2],
-                G_m[0, 1] + G_m[0, 2],
-                G_m[0, 2] + G_m[1, 2]
-            )
+                return ([nodes[2]] + nodes, weight_1)
 
-            max_weight = max(weights)
+            w_012 = G_m[0, 1] + G_m[1, 2]
+            w_021 = G_m[0, 1] + G_m[0, 2]
+            w_120 = G_m[0, 2] + G_m[1, 2]
 
-            if max_weight == weights[0]:
-                return (nodes, weights[0])
+            if w_012 >= w_021 and w_012 >= w_120:
+                return (nodes, w_012)
 
-            if max_weight == weights[1]:
-                return ([nodes[1], nodes[0], nodes[2]], weights[1])
+            if w_021 >= w_012 and w_021 >= w_120:
+                return ([nodes[1], nodes[0], nodes[2]], w_021)
 
-            return ([nodes[0], nodes[2], nodes[1]], weights[2])
+            return ([nodes[0], nodes[2], nodes[1]], w_120)
 
         if n_nodes == 2:
             if is_cyclic:
-                return ([nodes[0], nodes[1], nodes[0]], 2 * G_m[0, 1])
+                return (nodes + [nodes[0]], 2 * G_m[0, 1])
 
-            return ([nodes[0], nodes[1]], G_m[0, 1])
+            return (nodes, G_m[0, 1])
 
         return (nodes, 0)
 
