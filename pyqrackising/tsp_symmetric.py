@@ -281,13 +281,42 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, corr
 
     if n_nodes == 0:
         return ([], 0)
+
     if n_nodes == 1:
         return ([nodes[0]], 0)
+
     if n_nodes == 2:
         if is_cyclic:
             return ([nodes[0], nodes[1], nodes[0]], 2 * G_m[0, 1])
-        else:
-            return ([nodes[0], nodes[1]], G_m[0, 1])
+
+        return ([nodes[0], nodes[1]], G_m[0, 1])
+
+    if n_nodes == 3:
+        if is_cyclic:
+            weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
+            weight_1 = G_m[0, 2] + G_m[2, 1] + G_m[1, 0]
+
+            if weight_0 > weight1:
+                return (nodes + [nodes[0]], weight_0)
+
+            return ([nodes[0], nodes[2], nodes[1], nodes[0]], weight_1)
+
+        weights = (
+            G_m[0, 1] + G_m[1, 2],
+            G_m[0, 1] + G_m[0, 2],
+            G_m[0, 2] + G_m[1, 2]
+        )
+
+        max_weight = max(weights)
+
+        if max_weight == weights[0]:
+            return (nodes, weights[0])
+
+        if max_weight == weights[1]:
+            return ([nodes[1], nodes[0], nodes[2]], weights[1])
+
+        return ([nodes[0], nodes[2], nodes[1]], weights[2])
+
 
     if (start_node is None) and not (end_node is None):
         start_node = end_node
