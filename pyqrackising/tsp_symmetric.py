@@ -196,16 +196,19 @@ def stitch(G_m, path_a, path_b, sol_weight):
         if is_single_a:
             singlet = path_a[0]
             bulk = path_b
-        elif is_single_b:
+        else:
             singlet = path_b[0]
             bulk = path_a
 
+        best_path = bulk.copy()
         best_weight = G_m[singlet, bulk[0]]
-        best_path = [singlet] + bulk
         weight = G_m[singlet, bulk[-1]]
         if weight < best_weight:
             best_weight = weight
-            best_path = bulk + [singlet]
+            best_path += [singlet]
+        else:
+            best_path = [singlet] + best_path
+
         for i in range(1, len(bulk)):
             weight = (
                 G_m[singlet, bulk[i - 1]] +
@@ -221,11 +224,14 @@ def stitch(G_m, path_a, path_b, sol_weight):
         terminals_b = [path_b[0], path_b[-1]]
 
         best_weight = G_m[terminals_a[1], terminals_b[0]]
-        best_path = path_a + path_b
+        best_path = path_b.copy()
         weight = G_m[terminals_a[0], terminals_b[1]]
         if weight < best_weight:
             best_weight = weight
-            best_path = path_b + path_a
+            best_path += path_a
+        else:
+            best_path = path_a + best_path
+
         for _ in range(2):
             for _ in range(2):
                 for i in range(1, len(path_b)):
@@ -244,6 +250,7 @@ def stitch(G_m, path_a, path_b, sol_weight):
             terminals_a, terminals_b = terminals_b, terminals_a
 
     return best_path, best_weight
+
 
 
 def monte_carlo_loop(n_nodes):
