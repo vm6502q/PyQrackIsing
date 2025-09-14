@@ -80,7 +80,7 @@ def digraph_to_asym_matrix(G):
     return G_asym
 
 
-def symmetric_to_atsp_path_and_weight(sym_path, G_asym):
+def symmetric_to_atsp_path_and_weight(sym_path, G_asym, nodes, is_cyclic):
     """
     Convert a symmetric 2n-node TSP tour back into an ATSP tour
     and compute its true weight.
@@ -103,16 +103,166 @@ def symmetric_to_atsp_path_and_weight(sym_path, G_asym):
     atsp_weight = 0.0
     for i in range(len(atsp_path) - 1):
         atsp_weight += G_asym[atsp_path[i], atsp_path[i+1]]
-    atsp_weight += G_asym[atsp_path[-1], atsp_path[0]]  # close cycle
+    if is_cyclic:
+        atsp_weight += G_asym[atsp_path[-1], atsp_path[0]]  # close cycle
 
-    return atsp_path, atsp_weight
+    return [nodes[x] for x in atsp_path], atsp_weight
 
 
-def tsp_asymmetric(G, start_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
-    G_asym = digraph_to_asym_matrix(G) if isinstance(G, nx.DiGraph) else G
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+    nodes = None
+    n_nodes = 0
+    G_m = None
+    if isinstance(G, nx.DiGraph):
+        nodes = list(G.nodes())
+        n_nodes = len(nodes)
+        G_asym = digraph_to_asym_matrix(G)
+    else:
+        n_nodes = len(G)
+        nodes = list(range(n_nodes))
+        G_asym = G
 
     # Transform to symmetric TSP
     G_sym = atsp_to_symmetric(G_asym)
+
+    # Start/end node handling added by Dan Strano:
+    if start_node and end_node:
+        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node,
+            end_node=end_node,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node + 1,
+            end_node=end_node,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        path2, weight2 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node,
+            end_node=end_node + 1,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        path3, weight3 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node + 1,
+            end_node=end_node + 1,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        best_weight = min([weight0, weight1, weight2, weight3])
+        
+        if best_weight == weight0:
+            return path0, weight0
+
+        if best_weight == weight1:
+            return path1, weight1
+
+        if best_weight == weight2:
+            return path2, weight2
+
+        return path3, weight3
+
+    if start_node:
+        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node,
+            end_node=end_node,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node + 1,
+            end_node=end_node,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        if weight0 < weight1:
+            return path0, weight0
+
+        return path1, weight1
+
+    if end_node:
+        path0, weight0 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node,
+            end_node=end_node,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        path1, weight1 = symmetric_to_atsp_path_and_weight(tsp_symmetric(
+            G_sym,
+            start_node=start_node,
+            end_node=end_node + 1,
+            quality=quality,
+            shots=shots,
+            correction_quality=correction_quality,
+            monte_carlo=monte_carlo,
+            k_neighbors=k_neighbors,
+            is_cyclic=is_cyclic,
+            multi_start=multi_start,
+            is_top_level=is_top_level
+        )[0], G_asym, nodes, is_cyclic)
+
+        if weight0 < weight1:
+            return path0, weight0
+
+        return path1, weight1
 
     # Solve
     return symmetric_to_atsp_path_and_weight(tsp_symmetric(
@@ -126,4 +276,4 @@ def tsp_asymmetric(G, start_node=None, quality=1, shots=None, correction_quality
         is_cyclic=is_cyclic,
         multi_start=multi_start,
         is_top_level=is_top_level
-    )[0], G_asym)
+    )[0], G_asym, nodes, is_cyclic)
