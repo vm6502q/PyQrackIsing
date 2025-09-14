@@ -4,6 +4,12 @@ from .tsp_symmetric import tsp_symmetric
 import networkx as nx
 import numpy as np
 
+def path_length(G_asym, path):
+    length = 0.0
+    for i in range(len(path) - 1):
+        length += G_asym[path[i]][path[i + 1]]
+
+    return length
 
 def atsp_to_symmetric(G_asym):
     """
@@ -19,12 +25,13 @@ def atsp_to_symmetric(G_asym):
                             corresponding to the transformed TSP.
     """
     n = len(G_asym)
-    N = 2 * n
+    N = n << 1
     G_sym = np.full((N, N), np.inf, dtype=np.float64)
 
     for i in range(n):
-        in_i = 2 * i
-        out_i = 2 * i + 1
+        k = i << 1
+        in_i = k
+        out_i = k + 1
 
         # Zero edge between in-node and out-node
         G_sym[in_i, out_i] = 0.0
@@ -34,8 +41,9 @@ def atsp_to_symmetric(G_asym):
         for j in range(n):
             if i == j:
                 continue
-            in_j = 2 * j
-            out_j = 2 * j + 1
+            l = j << 1
+            in_j = l
+            out_j = l + 1
             cost = G_asym[i, j]
             G_sym[out_i, in_j] = cost
             G_sym[in_j, out_i] = cost  # symmetric
@@ -60,8 +68,8 @@ def symmetric_to_atsp_path(sym_path, n):
     """
     atsp_path = []
     for node in sym_path:
-        if node % 2 == 0:  # only keep "in" nodes (even indices)
-            atsp_path.append(node // 2)
+        if not (node & 1):  # only keep "in" nodes (even indices)
+            atsp_path.append(node >> 1)
     return atsp_path
 
 
@@ -97,17 +105,14 @@ def symmetric_to_atsp_path_and_weight(sym_path, G_asym, nodes, is_cyclic):
     n = len(G_asym)
     atsp_path = []
     for node in sym_path:
-        if node % 2 == 0:  # only keep "in" nodes
-            atsp_path.append(node // 2)
+        if not (node & 1):  # only keep "in" nodes
+            atsp_path.append(node >> 1)
 
     # Compute true ATSP weight
-    atsp_weight = 0.0
-    for i in range(len(atsp_path) - 1):
-        atsp_weight += G_asym[atsp_path[i], atsp_path[i+1]]
-    if is_cyclic:
-        atsp_weight += G_asym[atsp_path[-1], atsp_path[0]]  # close cycle
+    path = [nodes[x] for x in atsp_path]
+    weight = path_length(G_asym, path)
 
-    return [nodes[x] for x in atsp_path], atsp_weight
+    return path, weight
 
 
 def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=32, is_cyclic=True, multi_start=1, is_top_level=True):
