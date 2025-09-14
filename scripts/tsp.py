@@ -26,7 +26,7 @@ if __name__ == "__main__":
     multi_start = int(sys.argv[4]) if len(sys.argv) > 4 else 1
     seed = int(sys.argv[5]) if len(sys.argv) > 5 else None
     G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
-    best_circuit, best_path_length = tsp_symmetric(G, quality=quality, correction_quality=correction_quality, multi_start=multi_start)
+    best_circuit, best_path_length = tsp_symmetric(G, quality=quality, correction_quality=correction_quality, multi_start=multi_start, monte_carlo=False)
 
     reconstructed_node_count = len(set(best_circuit))
     reconstructed_path_length = 0

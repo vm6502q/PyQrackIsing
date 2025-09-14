@@ -314,7 +314,7 @@ def tsp_bruteforce(G_m, nodes, perms, is_cyclic):
     return best_path, best_weight
 
 
-def tsp_symmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=False, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
