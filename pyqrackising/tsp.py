@@ -9,8 +9,8 @@ import numpy as np
 @njit
 def path_length(path, G_m):
     tot_len = 0.0
-    for i in range(len(path)-1):
-        tot_len += G_m[path[i], path[i+1]]
+    for i in range(len(path) - 1):
+        tot_len += G_m[path[i], path[i + 1]]
 
     return tot_len
 
@@ -207,79 +207,108 @@ def init_G_a_b(G_m, a, b):
 
 
 @njit
-def stitch(G_m, path_a, path_b, is_asym):
-    is_single_a = len(path_a) == 1
-    is_single_b = len(path_b) == 1
-    best_path = [0]
-    best_weight = 0.0
-    if is_single_a or is_single_b:
-        singlet = 0
-        bulk = [0]
-        if is_single_a:
-            singlet = path_a[0]
-            bulk = path_b
-        else:
-            singlet = path_b[0]
-            bulk = path_a
+def stich_singlet(G_m, singlet, bulk):
+    best_path = bulk.copy()
+    best_weight = G_m[singlet, bulk[0]]
+    weight = G_m[singlet, bulk[-1]]
+    if weight < best_weight:
+        best_weight = weight
+        best_path += [singlet]
+    else:
+        best_path = [singlet] + best_path
 
-        best_path = bulk.copy()
-        best_weight = G_m[singlet, bulk[0]]
-        weight = G_m[singlet, bulk[-1]]
+    for i in range(1, len(bulk)):
+        weight = (
+            G_m[singlet, bulk[i - 1]] +
+            G_m[singlet, bulk[i]] -
+            G_m[bulk[i - 1], bulk[i]]
+        )
         if weight < best_weight:
             best_weight = weight
-            best_path += [singlet]
-        else:
-            best_path = [singlet] + best_path
-
-        for i in range(1, len(bulk)):
-            weight = (
-                G_m[singlet, bulk[i - 1]] +
-                G_m[singlet, bulk[i]] -
-                G_m[bulk[i - 1], bulk[i]]
-            )
-            if weight < best_weight:
-                best_weight = weight
-                best_path = bulk.copy()
-                best_path.insert(i, singlet)
-    else:
-        terminals_a = [path_a[0], path_a[-1]]
-        terminals_b = [path_b[0], path_b[-1]]
-
-        best_connect = G_m[terminals_a[1], terminals_b[0]]
-        best_path = path_b.copy()
-        weight = G_m[terminals_a[0], terminals_b[1]]
-        if weight < best_connect:
-            best_connect = weight
-            best_path += path_a
-        else:
-            best_path = path_a + best_path
-
-        if not is_asym:
-            path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
-            best_weight = best_connect + path_weight
-
-        for _ in range(2):
-            for _ in range(2):
-                if is_asym:
-                    path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
-                    best_weight = best_connect + path_weight
-                for i in range(1, len(path_b)):
-                    weight = (
-                        G_m[terminals_a[0], path_b[i - 1]] +
-                        G_m[terminals_a[1], path_b[i]] -
-                        G_m[path_b[i - 1], path_b[i]]
-                    )
-                    if (weight + path_weight) < best_weight:
-                        best_weight = weight + path_weight
-                        best_path = path_b.copy()
-                        best_path[i:i] = path_a
-                path_a.reverse()
-                terminals_a.reverse()
-            path_a, path_b = path_b, path_a
-            terminals_a, terminals_b = terminals_b, terminals_a
+            best_path = bulk.copy()
+            best_path.insert(i, singlet)
 
     return best_path
 
+@njit
+def stitch_symmetric(G_m, path_a, path_b):
+    if len(path_a) == 1:
+        return stich_singlet(G_m, path_a[0], path_b)
+
+    if len(path_b) == 1:
+        return stich_singlet(G_m, path_b[0], path_a)
+
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
+
+    best_connect = G_m[terminals_a[1], terminals_b[0]]
+    best_path = path_b.copy()
+    weight = G_m[terminals_a[0], terminals_b[1]]
+    if weight < best_connect:
+        best_connect = weight
+        best_path += path_a
+    else:
+        best_path = path_a + best_path
+
+    for _ in range(2):
+        for _ in range(2):
+            for i in range(1, len(path_b)):
+                weight = (
+                    G_m[terminals_a[0], path_b[i - 1]] +
+                    G_m[terminals_a[1], path_b[i]] -
+                    G_m[path_b[i - 1], path_b[i]]
+                )
+                if weight < best_connect:
+                    best_connect = weight
+                    best_path = path_b.copy()
+                    best_path[i:i] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
+
+    return best_path
+
+
+def stitch_asymmetric(G_m, path_a, path_b):
+    if len(path_a) == 1:
+        return stich_singlet(G_m, path_a[0], path_b)
+
+    if len(path_b) == 1:
+        return stich_singlet(G_m, path_b[0], path_a)
+
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
+
+    best_connect = G_m[terminals_a[1], terminals_b[0]]
+    best_path = path_b.copy()
+    weight = G_m[terminals_a[0], terminals_b[1]]
+    if weight < best_connect:
+        best_connect = weight
+        best_path += path_a
+    else:
+        best_path = path_a + best_path
+
+    for _ in range(2):
+        for _ in range(2):
+            path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
+            best_weight = best_connect + path_weight
+            for i in range(1, len(path_b)):
+                weight = (
+                    G_m[terminals_a[0], path_b[i - 1]] +
+                    G_m[terminals_a[1], path_b[i]] -
+                    G_m[path_b[i - 1], path_b[i]]
+                )
+                if (weight + path_weight) < best_weight:
+                    best_weight = weight + path_weight
+                    best_path = path_b.copy()
+                    best_path[i:i] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
+
+    return best_path
 
 
 def monte_carlo_loop(n_nodes):
@@ -293,6 +322,72 @@ def monte_carlo_loop(n_nodes):
                 bits[1].append(i)
 
     return bits
+
+
+# Elara suggested replacing base-case handling with her brute-force solver
+@njit
+def tsp_bruteforce_cyclic(G_m, node0, perms):
+    """
+    Brute-force TSP solver for small n.
+    G_m : numpy.ndarray (2D adjacency/weight matrix)
+    is_cyclic : bool (default=True) – whether to close the tour
+
+    Returns:
+        (best_path, best_weight)
+    """
+    n = len(G_m)
+    best_weight = float('inf')
+    best_path = None
+
+    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
+
+    max_i = len(perms[0]) - 1
+
+    for perm in perms:
+        path = [node0] + list(perm)
+        weight = 0.0
+        for i in range(max_i):
+            weight += G_m[path[i], path[i+1]]
+        weight += G_m[path[-1], path[0]]
+
+        if weight < best_weight:
+            best_weight = weight
+            best_path = path
+
+    best_path = best_path + [best_path[0]]
+
+    return best_path, best_weight
+
+@njit
+def tsp_bruteforce_acyclic(G_m, perms):
+    """
+    Brute-force TSP solver for small n.
+    G_m : numpy.ndarray (2D adjacency/weight matrix)
+    is_cyclic : bool (default=True) – whether to close the tour
+
+    Returns:
+        (best_path, best_weight)
+    """
+    n = len(G_m)
+    best_weight = float('inf')
+    best_path = None
+
+    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
+
+    max_i = len(perms[0]) - 1
+
+    for path in perms:
+        weight = 0.0
+        for i in range(max_i):
+            weight += G_m[path[i], path[i+1]]
+
+        if weight < best_weight:
+            best_weight = weight
+            best_path = path
+
+    best_path = list(best_path)
+
+    return best_path, best_weight
 
 
 def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
@@ -312,7 +407,13 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
         start_node = None
         end_node = None
 
-    if n_nodes < 4:
+    if n_nodes < 6:
+        if n_nodes > 3:
+            if is_cyclic:
+                return tsp_bruteforce_cyclic(G_m, nodes[0], list(itertools.permutations(nodes[1:])))
+
+            return tsp_bruteforce_acyclic(G_m, list(itertools.permutations(nodes)))
+
         if n_nodes == 3:
             if is_cyclic:
                 weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
@@ -383,7 +484,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     path_b = [b[x] for x in sol_b[0]]
 
     if start_node is None:
-        best_path = stitch(G_m, path_a, path_b, False)
+        best_path = stitch_symmetric(G_m, path_a, path_b)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
@@ -437,7 +538,13 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
         start_node = None
         end_node = None
 
-    if n_nodes < 3:
+    if n_nodes < 6:
+        if n_nodes > 2:
+            if is_cyclic:
+                return tsp_bruteforce_cyclic(G_m, nodes[0], list(itertools.permutations(nodes[1:])))
+
+            return tsp_bruteforce_acyclic(G_m, list(itertools.permutations(nodes)))
+
         if n_nodes == 2:
             weight = G_m[0, 1]
             if G_m[1, 0] < weight:
@@ -492,7 +599,7 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
     path_b = [b[x] for x in sol_b[0]]
 
     if start_node is None:
-        best_path = stitch(G_m, path_a, path_b, True)
+        best_path = stitch_asymmetric(G_m, path_a, path_b)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
