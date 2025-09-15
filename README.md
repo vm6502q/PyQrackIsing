@@ -101,7 +101,7 @@ circuit, path_length = tsp_symmetric(
     G,
     start_node=None,
     end_node=None,
-    monte_carlo=False,
+    monte_carlo=True,
     quality=2,
     correction_quality=2,
     is_cyclic=True,
