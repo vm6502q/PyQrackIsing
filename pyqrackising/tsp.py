@@ -207,7 +207,7 @@ def init_G_a_b(G_m, a, b):
 
 
 @njit
-def stitch(G_m, path_a, path_b):
+def stitch(G_m, path_a, path_b, is_asym):
     is_single_a = len(path_a) == 1
     is_single_b = len(path_b) == 1
     best_path = [0]
@@ -245,25 +245,32 @@ def stitch(G_m, path_a, path_b):
         terminals_a = [path_a[0], path_a[-1]]
         terminals_b = [path_b[0], path_b[-1]]
 
-        best_weight = G_m[terminals_a[1], terminals_b[0]]
+        best_connect = G_m[terminals_a[1], terminals_b[0]]
         best_path = path_b.copy()
         weight = G_m[terminals_a[0], terminals_b[1]]
-        if weight < best_weight:
-            best_weight = weight
+        if weight < best_connect:
+            best_connect = weight
             best_path += path_a
         else:
             best_path = path_a + best_path
 
+        if not is_asym:
+            path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
+            best_weight = best_connect + path_weight
+
         for _ in range(2):
             for _ in range(2):
+                if is_asym:
+                    path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
+                    best_weight = best_connect + path_weight
                 for i in range(1, len(path_b)):
                     weight = (
                         G_m[terminals_a[0], path_b[i - 1]] +
                         G_m[terminals_a[1], path_b[i]] -
                         G_m[path_b[i - 1], path_b[i]]
                     )
-                    if weight < best_weight:
-                        best_weight = weight
+                    if (weight + path_weight) < best_weight:
+                        best_weight = weight + path_weight
                         best_path = path_b.copy()
                         best_path[i:i] = path_a
                 path_a.reverse()
@@ -376,7 +383,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     path_b = [b[x] for x in sol_b[0]]
 
     if start_node is None:
-        best_path = stitch(G_m, path_a, path_b)
+        best_path = stitch(G_m, path_a, path_b, False)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
@@ -485,7 +492,7 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
     path_b = [b[x] for x in sol_b[0]]
 
     if start_node is None:
-        best_path = stitch(G_m, path_a, path_b)
+        best_path = stitch(G_m, path_a, path_b, True)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
