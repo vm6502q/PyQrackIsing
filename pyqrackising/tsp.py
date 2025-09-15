@@ -326,7 +326,7 @@ def monte_carlo_loop(n_nodes):
 
 # Elara suggested replacing base-case handling with her brute-force solver
 @njit
-def tsp_bruteforce_cyclic(G_m, node0, perms):
+def tsp_bruteforce_cyclic(G_m, perms):
     """
     Brute-force TSP solver for small n.
     G_m : numpy.ndarray (2D adjacency/weight matrix)
@@ -344,7 +344,7 @@ def tsp_bruteforce_cyclic(G_m, node0, perms):
     max_i = len(perms[0]) - 1
 
     for perm in perms:
-        path = [node0] + list(perm)
+        path = [0] + list(perm)
         weight = 0.0
         for i in range(max_i):
             weight += G_m[path[i], path[i+1]]
@@ -410,9 +410,11 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     if n_nodes < 6:
         if n_nodes > 3:
             if is_cyclic:
-                return tsp_bruteforce_cyclic(G_m, nodes[0], list(itertools.permutations(nodes[1:])))
+                best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
+            else:
+                best_path, best_weight = tsp_bruteforce_acyclic(G_m, list(itertools.permutations(list(range(n_nodes)))))
 
-            return tsp_bruteforce_acyclic(G_m, list(itertools.permutations(nodes)))
+            return [nodes[x] for x in best_path], best_weight
 
         if n_nodes == 3:
             if is_cyclic:
@@ -541,9 +543,11 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
     if n_nodes < 6:
         if n_nodes > 2:
             if is_cyclic:
-                return tsp_bruteforce_cyclic(G_m, nodes[0], list(itertools.permutations(nodes[1:])))
+                best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
+            else:
+                best_path, best_weight = tsp_bruteforce_acyclic(G_m, list(itertools.permutations(list(range(n_nodes)))))
 
-            return tsp_bruteforce_acyclic(G_m, list(itertools.permutations(nodes)))
+            return [nodes[x] for x in best_path], best_weight
 
         if n_nodes == 2:
             weight = G_m[0, 1]
