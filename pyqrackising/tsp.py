@@ -207,7 +207,7 @@ def init_G_a_b(G_m, a, b):
 
 
 @njit
-def stitch(G_m, path_a, path_b, sol_weight):
+def stitch(G_m, path_a, path_b):
     is_single_a = len(path_a) == 1
     is_single_b = len(path_b) == 1
     best_path = [0]
@@ -271,7 +271,7 @@ def stitch(G_m, path_a, path_b, sol_weight):
             path_a, path_b = path_b, path_a
             terminals_a, terminals_b = terminals_b, terminals_a
 
-    return best_path, best_weight
+    return best_path
 
 
 
@@ -375,13 +375,8 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
-    sol_weight = sol_a[1] + sol_b[1]
-
-    if len(c):
-        sol_weight += G_m[b[-1], c[0]]
-
     if start_node is None:
-        best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+        best_path = stitch(G_m, path_a, path_b)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
@@ -390,11 +385,9 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
             path_b.reverse()
             best_path = path_a + path_b
             best_weight = weight
-        best_weight += sol_weight
 
     if len(c):
         best_path += c
-        best_weight += G_m[best_path[-1], c[0]]
 
     if is_top_level:
         if is_cyclic:
@@ -491,13 +484,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
-    sol_weight = sol_a[1] + sol_b[1]
-
-    if len(c):
-        sol_weight += G_m[b[-1], c[0]]
-
     if start_node is None:
-        best_path, best_weight = stitch(G_m, path_a, path_b, sol_weight)
+        best_path = stitch(G_m, path_a, path_b)
     else:
         best_path = path_a + path_b
         best_weight = G_m[path_a[0], path_b[0]]
@@ -506,11 +494,9 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
             path_b.reverse()
             best_path = path_a + path_b
             best_weight = weight
-        best_weight += sol_weight
 
     if len(c):
         best_path += c
-        best_weight += G_m[best_path[-1], c[0]]
 
     if is_top_level:
         if is_cyclic:
