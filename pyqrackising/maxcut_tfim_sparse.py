@@ -167,34 +167,37 @@ def local_repulsion_choice(adjacency, degrees, weights, n, m):
 
 
 @njit
-def compute_energy(sample, G_m, n_qubits):
+def compute_energy(sample, G_data, G_rows, G_cols):
+    n_qubits = G_rows.shape[0] - 1
     energy = 0
     for u in range(n_qubits):
-        for v in range(u + 1, n_qubits):
-            energy += G_m[u, v] * (1 if sample[u] == sample[v] else -1)
+        for col in range(G_rows[u], G_rows[u + 1]):
+            v = G_cols[col]
+            if v < (u + 1):
+                continue
+            energy += G_data[col] * (1 if sample[u] == sample[v] else -1)
 
     return energy
 
 
 @njit(parallel=True)
-def compute_adjacency(G_m, max_degree):
-    n_qubits = len(G_m)
+def compute_adjacency(G_data, G_rows, G_cols, max_degree):
+    n_qubits = G_rows.shape[0] - 1
     adjacency = np.full((n_qubits, max_degree), -1, dtype=np.int32)
     for i in prange(n_qubits):
         k = 0
-        for j in range(n_qubits):
-            if i == j:
-                continue
-            if G_m[i, j] > 0.0:
-                adjacency[i, k] = j
+        for j in range(G_rows[i], G_rows[i + 1]):
+            if G_data[j] > 0.0:
+                adjacency[i, k] = G_cols[j]
                 k += 1
 
     return adjacency
 
 
 @njit(parallel=True)
-def sample_for_solution(G_m, shots, thresholds, degrees, J_eff, n):
-    adjacency = compute_adjacency(G_m, degrees.max())
+def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, degrees, J_eff):
+    n = G_rows.shape[0] - 1
+    adjacency = compute_adjacency(G_data, G_rows, G_cols, degrees.max())
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -210,30 +213,34 @@ def sample_for_solution(G_m, shots, thresholds, degrees, J_eff, n):
 
         # Second dimension: permutation within Hamming weight
         sample = local_repulsion_choice(adjacency, degrees, weights, n, m)
-
         solutions[s] = sample
-        energies[s] = compute_energy(sample, G_m, n)
+        energies[s] = compute_energy(sample, G_data, G_rows, G_cols)
 
     best_solution = solutions[np.argmin(energies)]
 
     best_value = 0.0
     for u in range(n):
-        for v in range(u + 1, n):
+        for col in range(G_rows[u], G_rows[u + 1]):
+            v = G_cols[col]
+            if v < (u + 1):
+                continue
             if best_solution[u] != best_solution[v]:
-                best_value += G_m[u, v]
+                best_value += G_data[col]
 
     return best_solution, best_value
 
 
 @njit
-def init_J_and_z(G_m):
-    n_qubits = len(G_m)
+def init_J_and_z(G_data, G_rows, G_cols):
+    n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     J_max = -float("inf")
     for n in range(n_qubits):
-        degree = sum(G_m[n] != 0.0)
-        J = -G_m[n].sum() / degree if degree > 0 else 0
+        start = G_rows[n]
+        end = G_rows[n + 1]
+        degree = end - start
+        J = -np.mean(G_data[start:end]) / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
         J_abs = abs(J)
@@ -242,7 +249,6 @@ def init_J_and_z(G_m):
     J_eff /= J_max
 
     return J_eff, degrees
-
 
 @njit
 def init_thresholds(n_qubits):
@@ -284,7 +290,7 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     return theta
 
 
-def maxcut_tfim(
+def maxcut_tfim_sparse(
     G,
     quality=None,
     shots=None,
@@ -295,9 +301,9 @@ def maxcut_tfim(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+        G_m = nx.to_scipy_sparse_matrix(G, weight='weight')
     else:
-        n_qubits = len(G)
+        n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
         G_m = G
 
@@ -324,7 +330,7 @@ def maxcut_tfim(
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
 
-    J_eff, degrees = init_J_and_z(G_m)
+    J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices)
     hamming_prob = init_thresholds(n_qubits)
 
     if IS_OPENCL_AVAILABLE and grid_size >= 128:
@@ -369,7 +375,7 @@ def maxcut_tfim(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, degrees, J_eff, n_qubits)
+    best_solution, best_value = sample_for_solution(G_m.data, G_m.indptr, G_m.indices, shots, hamming_prob, degrees, J_eff)
 
     bit_string = ""
     l, r = [], []

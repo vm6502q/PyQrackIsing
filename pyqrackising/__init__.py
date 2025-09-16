@@ -2,5 +2,6 @@ from .generate_tfim_samples import generate_tfim_samples
 from .tfim_magnetization import tfim_magnetization
 from .tfim_square_magnetization import tfim_square_magnetization
 from .maxcut_tfim import maxcut_tfim
+from .maxcut_tfim_sparse import maxcut_tfim_sparse
 from .spin_glass_solver import spin_glass_solver
 from .tsp import tsp_symmetric, tsp_asymmetric
