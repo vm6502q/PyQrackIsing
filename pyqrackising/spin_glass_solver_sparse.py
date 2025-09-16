@@ -68,7 +68,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, correction_quality=Non
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_scipy_sparse_matrix(G, weight='weight')
+        G_m = nx.to_scipy_sparse_array(G, weight='weight')
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
