@@ -37,11 +37,11 @@ if __name__ == "__main__":
 
     G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
     _G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    G = None
     shm = shared_memory.SharedMemory(create=True, size=_G_m.nbytes)
     G_m = np.ndarray(_G_m.shape, dtype=_G_m.dtype, buffer=shm.buf)
     G_m[:] = _G_m[:]
     _G_m = None
-    G = None
 
     args = []
     for i in range(multi_start):
