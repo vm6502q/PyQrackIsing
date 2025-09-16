@@ -7,7 +7,7 @@
 
 import networkx as nx
 import numpy as np
-from pyqrackising import maxcut_tfim, spin_glass_solver
+from pyqrackising import maxcut_tfim_sparse, spin_glass_solver_sparse
 
 # from cvxgraphalgs.algorithms import goemans_williamson_weighted
 
@@ -77,9 +77,9 @@ if __name__ == "__main__":
     # NP-complete spin glass
     # G = generate_spin_glass_graph(seed=42)
 
-    # bitstring, cut_value, cut = maxcut_tfim(G)
-    bitstring, cut_value, cut, energy = spin_glass_solver(G)
-    # bitstring, cut_value, cut, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=8)[0])
+    bitstring, cut_value, cut = maxcut_tfim_sparse(G)
+    # bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G)
+    # bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G, best_guess=maxcut_tfim_sparse(G, quality=8)[0])
     print((bitstring, cut_value, cut))
 
     # cut = goemans_williamson_weighted(G)
@@ -92,5 +92,5 @@ if __name__ == "__main__":
     # gw_energy = compute_energy(gw_bit_string, G)
     # print(f"GW: {(gw_bit_string, gw_energy)}")
 
-    # bitstring, cut_value, energy = spin_glass_solver(G, best_guess=gw_bit_string)
+    # bitstring, cut_value, energy = spin_glass_solver_sparse(G, best_guess=gw_bit_string)
     # print(f"vs: {(bitstring, energy)}")

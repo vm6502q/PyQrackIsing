@@ -4,4 +4,5 @@ from .tfim_square_magnetization import tfim_square_magnetization
 from .maxcut_tfim import maxcut_tfim
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
 from .spin_glass_solver import spin_glass_solver
+from .spin_glass_solver_sparse import spin_glass_solver_sparse
 from .tsp import tsp_symmetric, tsp_asymmetric
