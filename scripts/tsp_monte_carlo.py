@@ -14,9 +14,14 @@ import sys
 def generate_tsp_graph(n_nodes=64, seed=None):
     if not (seed is None):
         np.random.seed(seed)
-    G_m = np.empty((n_nodes, n_nodes), dtype=np.float64)
-    shm = shared_memory.SharedMemory(create=True, size=G_m.nbytes)
-    G_m = np.ndarray(G_m.shape, dtype=G_m.dtype, buffer=shm.buf)
+
+    G_m = np.ndarray((n_nodes, n_nodes), dtype=np.float64)
+    nbytes =  G_m.nbytes
+    G_m = None
+
+    shm = shared_memory.SharedMemory(create=True, size=nbytes)
+    G_m = np.ndarray((n_nodes, n_nodes), dtype=np.float64, buffer=shm.buf)
+
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
             weight=np.random.random()
