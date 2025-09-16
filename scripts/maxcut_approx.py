@@ -77,8 +77,8 @@ if __name__ == "__main__":
     # NP-complete spin glass
     # G = generate_spin_glass_graph(seed=42)
 
-    bitstring, cut_value, cut = maxcut_tfim_sparse(G)
-    # bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G)
+    # bitstring, cut_value, cut = maxcut_tfim_sparse(G)
+    bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G)
     # bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G, best_guess=maxcut_tfim_sparse(G, quality=8)[0])
     print((bitstring, cut_value, cut))
 
