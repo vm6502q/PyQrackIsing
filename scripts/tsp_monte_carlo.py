@@ -14,11 +14,16 @@ import sys
 def generate_tsp_graph(n_nodes=64, seed=None):
     if not (seed is None):
         np.random.seed(seed)
-    G = nx.Graph()
+    G_m = np.empty((n_nodes, n_nodes), dtype=np.float64)
+    shm = shared_memory.SharedMemory(create=True, size=G_m.nbytes)
+    G_m = np.ndarray(G_m.shape, dtype=G_m.dtype, buffer=shm.buf)
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
-            G.add_edge(u, v, weight=np.random.random())
-    return G
+            weight=np.random.random()
+            G_m[u, v] = weight
+            G_m[v, u] = weight
+
+    return shm, G_m
 
 
 def bootstrap_worker(args):
@@ -35,13 +40,7 @@ if __name__ == "__main__":
     k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 16
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
-    G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
-    _G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
-    G = None
-    shm = shared_memory.SharedMemory(create=True, size=_G_m.nbytes)
-    G_m = np.ndarray(_G_m.shape, dtype=_G_m.dtype, buffer=shm.buf)
-    G_m[:] = _G_m[:]
-    _G_m = None
+    shm, G_m = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
 
     args = []
     for i in range(multi_start):
