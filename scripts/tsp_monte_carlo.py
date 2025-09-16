@@ -4,42 +4,42 @@
 from pyqrackising import tsp_symmetric
 from multiprocessing import shared_memory
 import multiprocessing
-import networkx as nx
 import numpy as np
 import os
 import sys
 
-
-# Traveling Salesman Problem (normalized to longest segment)
 def generate_tsp_graph(n_nodes=64, seed=None):
-    if not (seed is None):
+    if seed is not None:
         np.random.seed(seed)
 
-    G_m = np.ndarray((n_nodes, n_nodes), dtype=np.float64)
-    nbytes =  G_m.nbytes
-    G_m = None
-
+    # allocate shared memory
+    nbytes = n_nodes * n_nodes * np.dtype(np.float64).itemsize
     shm = shared_memory.SharedMemory(create=True, size=nbytes)
+
+    # construct numpy view into shared memory
     G_m = np.ndarray((n_nodes, n_nodes), dtype=np.float64, buffer=shm.buf)
 
+    # fill with symmetric random weights
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
-            weight=np.random.random()
+            weight = np.random.random()
             G_m[u, v] = weight
             G_m[v, u] = weight
 
     return shm, G_m
 
-
 def bootstrap_worker(args):
-    path, length = tsp_symmetric(G=args[0], monte_carlo=True, k_neighbors=args[1])
-    args[2].close()
+    shm_name, shape, dtype, k_neighbors = args
+    # Reattach to existing shared memory by name
+    existing_shm = shared_memory.SharedMemory(name=shm_name)
+    G = np.ndarray(shape, dtype=dtype, buffer=existing_shm.buf)
 
+    path, length = tsp_symmetric(G=G, monte_carlo=True, k_neighbors=k_neighbors)
+
+    existing_shm.close()  # worker should not unlink, just close
     return path, length
 
-
 if __name__ == "__main__":
-    # NP-complete TSP
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     multi_start = int(sys.argv[2]) if len(sys.argv) > 2 else os.cpu_count()
     k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 16
@@ -47,23 +47,22 @@ if __name__ == "__main__":
 
     shm, G_m = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
 
-    args = []
-    for i in range(multi_start):
-        args.append((G_m, k_neighbors, shm))
+    args = [(shm.name, G_m.shape, G_m.dtype, k_neighbors)] * multi_start
+
     with multiprocessing.Pool(processes=multi_start) as pool:
         results = pool.map(bootstrap_worker, args)
 
     results.sort(key=lambda r: r[1])
     best_circuit, best_path_length = results[0]
 
+    # verify result using original shared array
     reconstructed_node_count = len(set(best_circuit))
-    reconstructed_path_length = 0
-    best_nodes = None
-    for i in range(len(best_circuit) - 1):
-        reconstructed_path_length += G_m[best_circuit[i]][best_circuit[i + 1]]
+    reconstructed_path_length = sum(
+        G_m[best_circuit[i], best_circuit[i+1]] for i in range(len(best_circuit)-1)
+    )
 
-    G_m = None
-    shm.unlink()
+    shm.close()
+    shm.unlink()  # only unlink once, after workers are done
 
     print(f"Random seed: {seed}")
     print(f"Path: {best_circuit}")
