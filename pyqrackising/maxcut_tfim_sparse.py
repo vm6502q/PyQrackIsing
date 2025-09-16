@@ -303,7 +303,7 @@ def maxcut_tfim_sparse(
         n_qubits = len(nodes)
         G_m = nx.to_scipy_sparse_matrix(G, weight='weight')
     else:
-        n_qubits = G.shape[0]
+        n_qubits = G.shape[0] - 1
         nodes = list(range(n_qubits))
         G_m = G
 
