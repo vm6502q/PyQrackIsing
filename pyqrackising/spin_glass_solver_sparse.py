@@ -8,7 +8,7 @@ import os
 
 @njit
 def evaluate_cut_edges(theta_bits, G_data, G_rows, G_cols):
-    n_qubits = G_rows.shape[0] - 1
+    n = G_rows.shape[0] - 1
     cut = 0.0
     for u in range(n):
         for col in range(G_rows[u], G_rows[u + 1]):
@@ -103,7 +103,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, correction_quality=Non
 
     
 
-    min_energy = compute_energy(best_theta, G_m)
+    min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
     while improved:
         improved = False
