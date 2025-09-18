@@ -120,6 +120,7 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
                 improved = True
                 correction_quality = k
                 break
+
             k = k + 1
 
     bitstring = ""
