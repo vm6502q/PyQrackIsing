@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyqrackising"
-version = "3.5.0"
+version = "3.5.1"
 requires-python = ">=3.8"
 description = "Fast MAXCUT, TSP, and sampling heuristics from near-ideal transverse field Ising model (TFIM)"
 readme = {file = "README.txt", content-type = "text/markdown"}

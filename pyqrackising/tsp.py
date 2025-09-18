@@ -496,8 +496,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
             best_path = path_a + path_b
             best_weight = weight
 
-    if len(c):
-        best_path += c
+    best_path += c
 
     if is_top_level:
         if is_cyclic:
@@ -513,17 +512,12 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
         if k_neighbors > 0:
             best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
     else:
-        best_path, best_weight = one_way_two_opt(best_path, G_m)
-
-        if is_cyclic:
-            cycle_node = best_path[0]
-            best_weight += G_m[cycle_node, best_path[-1]]
-            best_path += [cycle_node]
+        best_weight = path_length(best_path, G_m)
 
     return [nodes[x] for x in best_path], best_weight
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=16, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -606,15 +600,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
         best_path = stitch_asymmetric(G_m, path_a, path_b)
     else:
         best_path = path_a + path_b
-        best_weight = G_m[path_a[0], path_b[0]]
-        weight = G_m[path_a[0], path_b[-1]]
-        if weight < best_weight:
-            path_b.reverse()
-            best_path = path_a + path_b
-            best_weight = weight
 
-    if len(c):
-        best_path += c
+    best_path += c
 
     if is_top_level:
         if is_cyclic:
@@ -651,17 +638,7 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=1, shots=None, cor
             if weight < best_weight:
                 final_path, best_weight = path, weight
     else:
-        final_path, best_weight = one_way_two_opt(best_path.copy(), G_m)
-        if not start_node and not end_node:
-            best_path.reverse()
-            path, weight = one_way_two_opt(best_path, G_m)
-            if weight < best_weight:
-                final_path, best_weight = path, weight
-
-        if is_cyclic:
-            cycle_node = best_path[0]
-            best_weight += G_m[cycle_node, best_path[-1]]
-            best_path += [cycle_node]
+        best_weight = path_length(path, G_m)
 
     if is_reversed:
         final_path.reverse()
