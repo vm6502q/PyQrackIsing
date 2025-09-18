@@ -520,18 +520,23 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     if is_top_level:
         if is_cyclic:
             best_path += [best_path[0]]
-            best_path, best_weight = two_opt(best_path, G_m)
+            best_path, _ = two_opt(best_path, G_m)
         elif not end_node is None:
-            best_path, best_weight = two_opt(best_path, G_m)
+            best_path, _ = two_opt(best_path, G_m)
         elif not start_node is None:
-            best_path, best_weight = anchored_two_opt(best_path, G_m)
+            best_path, _ = anchored_two_opt(best_path, G_m)
         else:
-            best_path, best_weight = one_way_two_opt(best_path, G_m)
+            best_path, _ = one_way_two_opt(best_path, G_m)
 
         if k_neighbors > 0:
-            best_path, best_weight = targeted_three_opt(best_path, G_m, k_neighbors)
-    else:
-        best_weight = path_length(best_path, G_m)
+            best_path, _ = targeted_three_opt(best_path, G_m, k_neighbors)
+
+        # We just corrected segments of 2 and 3,
+        # and this is top level,
+        # so correct segments of 4 to 7.
+        restitch(G_m, best_path, True)
+
+    best_weight = path_length(best_path, G_m)
 
     return [nodes[x] for x in best_path], best_weight
 
@@ -659,9 +664,15 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
             path, weight = targeted_three_opt(best_path.copy(), G_m, k_neighbors)
             if weight < best_weight:
                 final_path, best_weight = path, weight
+
+        # We just corrected segments of 2 and 3,
+        # and this is top level,
+        # so correct segments of 4 to 7.
+        restitch(G_m, final_path, True)
     else:
-        best_weight = path_length(best_path, G_m)
         final_path = best_path
+
+    best_weight = path_length(best_path, G_m)
 
     if is_reversed:
         final_path.reverse()
