@@ -318,13 +318,8 @@ def restitch(G_m, path, is_sym):
     if mid < 4:
         return path
 
-    path_a = path[:mid]
-    if mid > 7:
-        path_a = restitch(G_m, path_a, is_sym)
-
-    path_b = path[mid:]
-    if (l - mid) > 7:
-        path_b = restitch(G_m, path_b, is_sym)
+    path_a = restitch(G_m, path[:mid], is_sym)
+    path_b = restitch(G_m, path[mid:], is_sym)
 
     if is_sym:
         return stitch_symmetric(G_m, path_a, path_b)
