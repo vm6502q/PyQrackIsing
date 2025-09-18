@@ -406,7 +406,7 @@ def tsp_bruteforce_acyclic(G_m, perms):
     return best_path, best_weight
 
 
-def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -480,7 +480,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, correction_quality=correction_quality)
+                    _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots)
                 if energy < best_energy:
                     best_energy = energy
                     a, b = bits
@@ -495,8 +495,8 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    sol_a = tsp_symmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
-    sol_b = tsp_symmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_a = tsp_symmetric(G_a, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_b = tsp_symmetric(G_b, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
@@ -541,7 +541,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     return [nodes[x] for x in best_path], best_weight
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -599,7 +599,7 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots, correction_quality=correction_quality)
+                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots)
                 if energy < best_energy:
                     best_energy = energy
                     a, b = bits
@@ -614,8 +614,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    sol_a = tsp_asymmetric(G_a, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
-    sol_b = tsp_asymmetric(G_b, quality=quality, correction_quality=correction_quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_a = tsp_asymmetric(G_a, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_b = tsp_asymmetric(G_b, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
