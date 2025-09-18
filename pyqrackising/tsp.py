@@ -312,7 +312,8 @@ def stitch_asymmetric(G_m, path_a, path_b):
 
 
 def restitch(G_m, path, is_sym):
-    mid = len(path) >> 1
+    mid = len(path)
+    mid = ((mid + 1) if (mid & 1) and (np.random.random() < 0.5) else mid) >> 1
     if mid < 4:
         return path
 
