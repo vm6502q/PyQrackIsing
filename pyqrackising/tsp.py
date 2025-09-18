@@ -638,7 +638,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
             if weight < best_weight:
                 final_path, best_weight = path, weight
     else:
-        best_weight = path_length(path, G_m)
+        best_weight = path_length(best_path, G_m)
+        final_path = best_path
 
     if is_reversed:
         final_path.reverse()
