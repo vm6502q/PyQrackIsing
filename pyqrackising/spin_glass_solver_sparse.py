@@ -125,7 +125,8 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
                 for i in indices:
                     best_theta[i] = not best_theta[i]
                 improved = True
-                correction_quality = k + 1
+                if correction_quality < (k + 1):
+                    correction_quality = k + 1
                 break
 
             k = k + 1
