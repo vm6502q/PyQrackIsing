@@ -99,7 +99,7 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
     while improved:
         improved = False
         k = 1
-        while k < (correction_quality + 1):
+        while k <= correction_quality:
             if n_qubits < k:
                 break
 
@@ -118,7 +118,7 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
                 for i in indices:
                     best_theta[i] = not best_theta[i]
                 improved = True
-                correction_quality = k
+                correction_quality = k + 1
                 break
 
             k = k + 1
