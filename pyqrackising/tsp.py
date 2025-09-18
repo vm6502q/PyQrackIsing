@@ -423,7 +423,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
         start_node = None
         end_node = None
 
-    if n_nodes < 6:
+    if n_nodes < 7:
         if n_nodes > 3:
             if is_cyclic:
                 best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
@@ -553,7 +553,7 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
         start_node = None
         end_node = None
 
-    if n_nodes < 6:
+    if n_nodes < 7:
         if n_nodes > 2:
             if is_cyclic:
                 best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
