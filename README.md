@@ -106,7 +106,7 @@ circuit, path_length = tsp_symmetric(
     correction_quality=2,
     is_cyclic=True,
     multi_start=1,
-    k_neighbors=32
+    k_neighbors=24
 )
 
 print(f"Node count: {n_nodes}")
