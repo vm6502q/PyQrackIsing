@@ -311,6 +311,20 @@ def stitch_asymmetric(G_m, path_a, path_b):
     return best_path
 
 
+def restitch(G_m, path, is_sym):
+    mid = len(path) >> 1
+    if mid < 4:
+        return path
+
+    path_a = path[:mid]
+    path_b = path[mid:]
+
+    if is_sym:
+        return stitch_symmetric(G_m, path_a, path_b)
+
+    return stitch_asymmetric(G_m, path_a, path_b)
+
+
 def monte_carlo_loop(n_nodes):
     bits = ([], [])
     while (len(bits[0]) == 0) or (len(bits[1]) == 0):
@@ -485,6 +499,9 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
+    restitch(G_m, path_a, True)
+    restitch(G_m, path_b, True)
+
     if start_node is None:
         best_path = stitch_symmetric(G_m, path_a, path_b)
     else:
@@ -595,6 +612,9 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, cor
 
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
+
+    restitch(G_m, path_a, False)
+    restitch(G_m, path_b, False)
 
     if start_node is None:
         best_path = stitch_asymmetric(G_m, path_a, path_b)
