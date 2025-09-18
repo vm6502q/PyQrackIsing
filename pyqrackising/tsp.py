@@ -406,7 +406,7 @@ def tsp_bruteforce_acyclic(G_m, perms):
     return best_path, best_weight
 
 
-def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=24, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -536,7 +536,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, corr
     return [nodes[x] for x in best_path], best_weight
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=24, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, correction_quality=2, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None

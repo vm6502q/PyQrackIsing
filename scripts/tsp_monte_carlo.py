@@ -42,7 +42,7 @@ def bootstrap_worker(args):
 if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     multi_start = int(sys.argv[2]) if len(sys.argv) > 2 else os.cpu_count()
-    k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 24
+    k_neighbors = int(sys.argv[3]) if len(sys.argv) > 3 else 20
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
     shm, G_m = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
