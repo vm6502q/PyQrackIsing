@@ -87,9 +87,6 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
 
         return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
-    if correction_quality is None:
-        correction_quality = 2
-
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
@@ -130,6 +127,8 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
                 improved = True
                 correction_quality = k
                 break
+
+            k = k + 1
 
     bitstring = ""
     l, r = [], []

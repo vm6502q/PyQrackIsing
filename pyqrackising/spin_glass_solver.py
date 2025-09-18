@@ -56,7 +56,7 @@ def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
 
 
-def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best_guess=None):
+def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
     nodes = None
     n_qubits = 0
     G_m = None
@@ -82,11 +82,6 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
 
         return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
-    if correction_quality is None:
-        # maxcut_tfim(G) scales roughly like n^4,
-        # so its match order of overhead.
-        correction_quality = 2
-
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
@@ -100,9 +95,11 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
 
     min_energy = compute_energy(best_theta, G_m)
     improved = True
+    correction_quality = 1
     while improved:
         improved = False
-        for k in range(1, max(1, correction_quality + 1)):
+        k = 1
+        while k < (correction_quality + 1):
             if n_qubits < k:
                 break
 
@@ -121,7 +118,9 @@ def spin_glass_solver(G, quality=None, shots=None, correction_quality=None, best
                 for i in indices:
                     best_theta[i] = not best_theta[i]
                 improved = True
+                correction_quality = k
                 break
+            k = k + 1
 
     bitstring = ""
     l, r = [], []
