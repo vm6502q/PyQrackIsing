@@ -99,8 +99,6 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
         bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots)
     best_theta = [b == "1" for b in list(bitstring)]
 
-    
-
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
     correction_quality = 1
