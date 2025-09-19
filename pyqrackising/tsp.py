@@ -270,6 +270,7 @@ def stitch_symmetric(G_m, path_a, path_b):
     return best_path
 
 
+@njit
 def stitch_asymmetric(G_m, path_a, path_b):
     if len(path_a) == 1:
         return stich_singlet(G_m, path_a[0], path_b)
@@ -311,6 +312,7 @@ def stitch_asymmetric(G_m, path_a, path_b):
     return best_path
 
 
+@njit
 def restitch(G_m, path, is_sym):
     l = len(path)
     mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
@@ -327,6 +329,7 @@ def restitch(G_m, path, is_sym):
     return stitch_asymmetric(G_m, path_a, path_b)
 
 
+@njit
 def monte_carlo_loop(n_nodes):
     bits = ([], [])
     while (len(bits[0]) == 0) or (len(bits[1]) == 0):
@@ -406,6 +409,87 @@ def tsp_bruteforce_acyclic(G_m, perms):
     return best_path, best_weight
 
 
+@njit
+def tsp_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
+    if n_nodes == 3:
+        if is_cyclic:
+            weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
+            weight_1 = G_m[0, 2] + G_m[2, 1] + G_m[1, 0]
+
+            if weight_0 >= weight_1:
+                return (nodes + [nodes[0]], weight_0)
+
+            nodes.reverse()
+
+            return ([nodes[2]] + nodes, weight_1)
+
+        w_012 = G_m[0, 1] + G_m[1, 2]
+        w_021 = G_m[0, 1] + G_m[0, 2]
+        w_120 = G_m[0, 2] + G_m[1, 2]
+
+        if w_012 >= w_021 and w_012 >= w_120:
+            return (nodes, w_012)
+
+        if w_021 >= w_012 and w_021 >= w_120:
+            return ([nodes[1], nodes[0], nodes[2]], w_021)
+
+        return ([nodes[0], nodes[2], nodes[1]], w_120)
+
+    if n_nodes == 2:
+        if is_cyclic:
+            return (nodes + [nodes[0]], 2 * G_m[0, 1])
+
+        return (nodes, G_m[0, 1])
+
+    return (nodes, 0)
+
+
+@njit
+def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c):
+    path_a = [a[x] for x in sol_a[0]]
+    path_b = [b[x] for x in sol_b[0]]
+
+    restitch(G_m, path_a, True)
+    restitch(G_m, path_b, True)
+
+    if start_node is None:
+        best_path = stitch_symmetric(G_m, path_a, path_b)
+    else:
+        best_path = path_a + path_b
+        best_weight = G_m[path_a[0], path_b[0]]
+        weight = G_m[path_a[0], path_b[-1]]
+        if weight < best_weight:
+            path_b.reverse()
+            best_path = path_a + path_b
+            best_weight = weight
+
+    if not c is None:
+        best_path += [c]
+
+    if is_top_level:
+        if is_cyclic:
+            best_path += [best_path[0]]
+            best_path, _ = two_opt(best_path, G_m)
+        elif not end_node is None:
+            best_path, _ = two_opt(best_path, G_m)
+        elif not start_node is None:
+            best_path, _ = anchored_two_opt(best_path, G_m)
+        else:
+            best_path, _ = one_way_two_opt(best_path, G_m)
+
+        if k_neighbors > 0:
+            best_path, _ = targeted_three_opt(best_path, G_m, k_neighbors)
+
+        # We just corrected segments of 2 and 3,
+        # and this is top level,
+        # so correct segments of 4 to 7.
+        restitch(G_m, best_path, True)
+
+    best_weight = path_length(best_path, G_m)
+
+    return [nodes[x] for x in best_path], best_weight
+
+
 def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
@@ -432,38 +516,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, mont
 
             return [nodes[x] for x in best_path], best_weight
 
-        if n_nodes == 3:
-            if is_cyclic:
-                weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
-                weight_1 = G_m[0, 2] + G_m[2, 1] + G_m[1, 0]
-
-                if weight_0 >= weight_1:
-                    return (nodes + [nodes[0]], weight_0)
-
-                nodes.reverse()
-
-                return ([nodes[2]] + nodes, weight_1)
-
-            w_012 = G_m[0, 1] + G_m[1, 2]
-            w_021 = G_m[0, 1] + G_m[0, 2]
-            w_120 = G_m[0, 2] + G_m[1, 2]
-
-            if w_012 >= w_021 and w_012 >= w_120:
-                return (nodes, w_012)
-
-            if w_021 >= w_012 and w_021 >= w_120:
-                return ([nodes[1], nodes[0], nodes[2]], w_021)
-
-            return ([nodes[0], nodes[2], nodes[1]], w_120)
-
-        if n_nodes == 2:
-            if is_cyclic:
-                return (nodes + [nodes[0]], 2 * G_m[0, 1])
-
-            return (nodes, G_m[0, 1])
-
-        return (nodes, 0)
-
+        return tsp_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
 
     if (start_node is None) and not (end_node is None):
         start_node = end_node
@@ -498,47 +551,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, mont
     sol_a = tsp_symmetric(G_a, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
     sol_b = tsp_symmetric(G_b, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
 
-    path_a = [a[x] for x in sol_a[0]]
-    path_b = [b[x] for x in sol_b[0]]
-
-    restitch(G_m, path_a, True)
-    restitch(G_m, path_b, True)
-
-    if start_node is None:
-        best_path = stitch_symmetric(G_m, path_a, path_b)
-    else:
-        best_path = path_a + path_b
-        best_weight = G_m[path_a[0], path_b[0]]
-        weight = G_m[path_a[0], path_b[-1]]
-        if weight < best_weight:
-            path_b.reverse()
-            best_path = path_a + path_b
-            best_weight = weight
-
-    best_path += c
-
-    if is_top_level:
-        if is_cyclic:
-            best_path += [best_path[0]]
-            best_path, _ = two_opt(best_path, G_m)
-        elif not end_node is None:
-            best_path, _ = two_opt(best_path, G_m)
-        elif not start_node is None:
-            best_path, _ = anchored_two_opt(best_path, G_m)
-        else:
-            best_path, _ = one_way_two_opt(best_path, G_m)
-
-        if k_neighbors > 0:
-            best_path, _ = targeted_three_opt(best_path, G_m, k_neighbors)
-
-        # We just corrected segments of 2 and 3,
-        # and this is top level,
-        # so correct segments of 4 to 7.
-        restitch(G_m, best_path, True)
-
-    best_weight = path_length(best_path, G_m)
-
-    return [nodes[x] for x in best_path], best_weight
+    return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
 
 
 def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
