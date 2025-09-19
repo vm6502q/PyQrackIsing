@@ -329,7 +329,6 @@ def restitch(G_m, path, is_sym):
     return stitch_asymmetric(G_m, path_a, path_b)
 
 
-@njit
 def monte_carlo_loop(n_nodes):
     bits = ([], [])
     while (len(bits[0]) == 0) or (len(bits[1]) == 0):
@@ -410,7 +409,7 @@ def tsp_bruteforce_acyclic(G_m, perms):
 
 
 @njit
-def tsp_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
+def tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
     if n_nodes == 3:
         if is_cyclic:
             weight_0 = G_m[0, 1] + G_m[1, 2] + G_m[2, 0]
@@ -464,7 +463,7 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
             best_weight = weight
 
     if not c is None:
-        best_path += [c]
+        best_path.append(c)
 
     if is_top_level:
         if is_cyclic:
@@ -516,7 +515,7 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, mont
 
             return [nodes[x] for x in best_path], best_weight
 
-        return tsp_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
+        return tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
 
     if (start_node is None) and not (end_node is None):
         start_node = end_node
@@ -554,82 +553,24 @@ def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, mont
     return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
-    nodes = None
-    n_nodes = 0
-    G_m = None
-    if isinstance(G, nx.Graph):
-        nodes = list(G.nodes())
-        n_nodes = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
-    else:
-        n_nodes = len(G)
-        nodes = list(range(n_nodes))
-        G_m = G
+@njit
+def tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
+    if n_nodes == 2:
+        weight = G_m[0, 1]
+        if G_m[1, 0] < weight:
+            weight = G_m[1, 0]
+            nodes.reverse()
 
-    if is_cyclic:
-        start_node = None
-        end_node = None
+        if is_cyclic:
+            return (nodes + [nodes[0]], 2 * weight)
 
-    if n_nodes < 7:
-        if n_nodes > 2:
-            if is_cyclic:
-                best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
-            else:
-                best_path, best_weight = tsp_bruteforce_acyclic(G_m, list(itertools.permutations(list(range(n_nodes)))))
+        return (nodes, weight)
 
-            return [nodes[x] for x in best_path], best_weight
-
-        if n_nodes == 2:
-            weight = G_m[0, 1]
-            if G_m[1, 0] < weight:
-                weight = G_m[1, 0]
-                nodes.reverse()
-
-            if is_cyclic:
-                return (nodes + [nodes[0]], 2 * weight)
-
-            return (nodes, weight)
-
-        return (nodes, 0)
+    return (nodes, 0)
 
 
-    is_reversed = False
-    if (start_node is None) and not (end_node is None):
-        is_reversed = True
-        start_node = end_node
-        end_node = None
-        G_m = G_m.T
-
-    a = []
-    b = []
-    c = []
-    if (start_node is None) and (end_node is None):
-        if monte_carlo:
-            a, b = monte_carlo_loop(n_nodes)
-        else:
-            best_energy = float("inf")
-            for _ in range(multi_start):
-                bits = ([], [])
-                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots)
-                if energy < best_energy:
-                    best_energy = energy
-                    a, b = bits
-    else:
-        is_cyclic = False
-        a.append(nodes.index(start_node))
-        b = list(range(n_nodes))
-        b.remove(a[0])
-        if end_node is not None:
-            c.append(nodes.index(end_node))
-            b.remove(c[0])
-
-    G_a, G_b = init_G_a_b(G_m, a, b)
-
-    sol_a = tsp_asymmetric(G_a, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
-    sol_b = tsp_asymmetric(G_b, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
-
+@njit
+def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -641,7 +582,8 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, mon
     else:
         best_path = path_a + path_b
 
-    best_path += c
+    if not c is None:
+        best_path.append(c)
 
     if is_top_level:
         if is_cyclic:
@@ -685,9 +627,77 @@ def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, mon
     else:
         final_path = best_path
 
-    best_weight = path_length(best_path, G_m)
+    best_weight = path_length(final_path, G_m)
 
     if is_reversed:
         final_path.reverse()
 
     return [nodes[x] for x in final_path], best_weight
+
+
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+    nodes = None
+    n_nodes = 0
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_nodes = len(nodes)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    else:
+        n_nodes = len(G)
+        nodes = list(range(n_nodes))
+        G_m = G
+
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
+    if n_nodes < 7:
+        if n_nodes > 2:
+            if is_cyclic:
+                best_path, best_weight = tsp_bruteforce_cyclic(G_m, list(itertools.permutations(list(range(1, n_nodes)))))
+            else:
+                best_path, best_weight = tsp_bruteforce_acyclic(G_m, list(itertools.permutations(list(range(n_nodes)))))
+
+            return [nodes[x] for x in best_path], best_weight
+
+        return tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
+
+
+    is_reversed = False
+    if (start_node is None) and not (end_node is None):
+        is_reversed = True
+        start_node = end_node
+        end_node = None
+        G_m = G_m.T
+
+    a = []
+    b = []
+    c = []
+    if (start_node is None) and (end_node is None):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_energy = float("inf")
+            for _ in range(multi_start):
+                bits = ([], [])
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots)
+                if energy < best_energy:
+                    best_energy = energy
+                    a, b = bits
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
+
+    G_a, G_b = init_G_a_b(G_m, a, b)
+
+    sol_a = tsp_asymmetric(G_a, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+    sol_b = tsp_asymmetric(G_b, quality=quality, monte_carlo=monte_carlo, is_cyclic=False, is_top_level=False, k_neighbors=0, multi_start=multi_start)
+
+    return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
