@@ -140,7 +140,7 @@ def benchmark_tsp_realistic(n_nodes=64):
     multi_start = os.cpu_count()
 
     # Exclude numba JIT overhead with warmup:
-    tsp_symmetric(nx.Graph())
+    tsp_symmetric(np.empty((2, 2)))
 
     # Nearest neighbor
     start = time.time()
