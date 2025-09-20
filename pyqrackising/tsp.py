@@ -329,17 +329,25 @@ def restitch(G_m, path, is_sym):
     return stitch_asymmetric(G_m, path_a, path_b)
 
 
-def monte_carlo_loop(n_nodes):
-    bits = ([], [])
-    while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-        bits = ([], [])
-        for i in range(n_nodes):
-            if np.random.random() < 0.5:
-                bits[0].append(i)
-            else:
-                bits[1].append(i)
+@njit
+def monte_carlo_driver(n_nodes):
+    a, b = [], []
+    for i in range(n_nodes):
+        if np.random.random() < 0.5:
+            a.append(i)
+        else:
+            b.append(i)
 
-    return bits
+    return a, b
+
+
+@njit
+def monte_carlo_loop(n_nodes):
+    a, b = monte_carlo_driver(n_nodes)
+    while (len(a) == 0) or (len(b) == 0):
+        a, b = monte_carlo_driver(n_nodes)
+
+    return a, b
 
 
 # Elara suggested replacing base-case handling with her brute-force solver
