@@ -108,10 +108,8 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(adjacency_data, adjacency_rows, weights, n, m):
+def local_repulsion_choice(adjacency_data, adjacency_vals, adjacency_rows, weights, n, m):
     """
-
-
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
@@ -158,7 +156,7 @@ def local_repulsion_choice(adjacency_data, adjacency_rows, weights, n, m):
         for j in range(adjacency_rows[node], adjacency_rows[node + 1]):
             nbr = adjacency_data[j]
             if available[nbr]:
-                weights[nbr] *= 0.5  # tunable penalty factor
+                weights[nbr] *= adjacency_vals[j]  # tunable penalty factor
 
     return mask
 
@@ -176,26 +174,33 @@ def compute_energy(sample, G_m, n_qubits):
 @njit(parallel=True)
 def compute_adjacency(G_m, size):
     n_qubits = G_m.shape[0]
+    nrm = G_m.max()
     adjacency_rows = np.empty(n_qubits + 1, dtype=np.int32)
     adjacency_rows[0] = 0
-    adjacency_data = np.full(size, -1, dtype=np.int32)
+    adjacency_data = np.empty(size, dtype=np.int32)
+    adjacency_vals = np.empty(size, dtype=np.float64)
     k = 0
     for i in prange(n_qubits):
         for j in range(n_qubits):
-            if (i == j) or (G_m[i, j] <= 0.0):
+            if i == j:
+                continue
+            val = G_m[i, j]
+            if val <= 0.0:
                 continue
             adjacency_data[k] = j
+            adjacency_vals[k] = 0.5 ** (val / nrm)
             k += 1
         adjacency_rows[i + 1] = k
 
     np.resize(adjacency_data, k)
+    np.resize(adjacency_vals, k)
 
-    return adjacency_data, adjacency_rows
+    return adjacency_data, adjacency_vals, adjacency_rows
 
 
 @njit(parallel=True)
 def sample_for_solution(G_m, shots, thresholds, degrees_sum, J_eff, n):
-    adjacency_data, adjacency_rows = compute_adjacency(G_m, degrees_sum)
+    adjacency_data, adjacency_vals, adjacency_rows = compute_adjacency(G_m, degrees_sum)
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -210,7 +215,7 @@ def sample_for_solution(G_m, shots, thresholds, degrees_sum, J_eff, n):
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(adjacency_data, adjacency_rows, weights, n, m)
+        sample = local_repulsion_choice(adjacency_data, adjacency_vals, adjacency_rows, weights, n, m)
 
         solutions[s] = sample
         energies[s] = compute_energy(sample, G_m, n)
@@ -317,7 +322,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 8
+        quality = 6
 
     if shots is None:
         # Number of measurement shots
