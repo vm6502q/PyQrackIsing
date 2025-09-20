@@ -184,11 +184,8 @@ def compute_adjacency(G_m, size):
         for j in range(n_qubits):
             if i == j:
                 continue
-            val = G_m[i, j]
-            if val <= 0.0:
-                continue
             adjacency_data[k] = j
-            adjacency_vals[k] = 0.5 ** (val / nrm)
+            adjacency_vals[k] = 0.5 ** (G_m[i, j] / nrm)
             k += 1
         adjacency_rows[i + 1] = k
 

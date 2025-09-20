@@ -186,10 +186,9 @@ def compute_adjacency(G_data, G_rows, G_cols):
     k = 0
     for i in prange(n_qubits):
         for j in range(G_rows[i], G_rows[i + 1]):
-            if G_data[j] > 0.0:
-                adjacency_data[k] = G_cols[j]
-                adjacency_vals[k] = 0.5 ** (G_data[j] / nrm)
-                k += 1
+            adjacency_data[k] = G_cols[j]
+            adjacency_vals[k] = 0.5 ** (G_data[j] / nrm)
+            k += 1
         adjacency_rows[i + 1] = k
 
     np.resize(adjacency_data, k)
