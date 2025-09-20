@@ -298,7 +298,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits << quality
+        shots = 1 << quality
 
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits

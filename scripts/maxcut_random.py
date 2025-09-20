@@ -27,8 +27,7 @@ def generate_adjacency(n_nodes=64, seed=None):
 if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     quality = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    correction_quality = int(sys.argv[3]) if len(sys.argv) > 3 else 2
-    seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
+    seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
 
     start = time.perf_counter()
     G_m = generate_adjacency(n_nodes=n_nodes, seed=seed)
@@ -38,7 +37,7 @@ if __name__ == "__main__":
     print(f"Random seed: {seed}")
     print(f"Node count: {n_nodes}")
     start = time.perf_counter()
-    bitstring, cut_value, cut, energy = spin_glass_solver(G_m, quality=quality, correction_quality=correction_quality)
+    bitstring, cut_value, cut, energy = spin_glass_solver(G_m, quality=quality)
     seconds = time.perf_counter() - start
 
     print(f"Seconds to solution: {seconds}")
