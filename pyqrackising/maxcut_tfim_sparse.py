@@ -106,6 +106,25 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     hamming_prob[-1] = 2.0
 
 
+@njit
+def binary_search(l, t):
+  left = 0
+  right = len(l) - 1
+
+  while left <= right:
+    mid = (left + right) >> 1
+
+    if l[mid] == t:
+      return mid
+
+    if l[mid] < t:
+      left = mid + 1
+    else:
+      right = mid - 1
+
+  return len(l)
+
+
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
 def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
@@ -158,16 +177,12 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             if available[nbr]:
                 weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
-        for nbr in range(n - node, n):
+        for nbr in range(0, node):
             if not available[nbr]:
                 continue
             start = G_rows[nbr]
             end = G_rows[nbr + 1]
-            j = start
-            while j < end:
-                if G_cols[j] == r:
-                    break
-                j += 1
+            j = binary_search(G_cols[start:end], r) + start
             if j < end:
                 weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
