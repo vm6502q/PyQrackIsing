@@ -221,7 +221,7 @@ def init_J_and_z(G_data, G_rows, G_cols):
         start = G_rows[n]
         end = G_rows[n + 1]
         degree = end - start
-        J = -np.mean(G_data[start:end]) / degree if degree > 0 else 0
+        J = -np.mean(G_data[start:end]) if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
         J_abs = abs(J)
