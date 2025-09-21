@@ -108,7 +108,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(adjacency_data, adjacency_vals, adjacency_rows, max_weight, weights, n, m):
+def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -153,10 +153,21 @@ def local_repulsion_choice(adjacency_data, adjacency_vals, adjacency_rows, max_w
         mask[node] = True
 
         # Repulsion: penalize neighbors
-        for j in range(adjacency_rows[node], adjacency_rows[node + 1]):
-            nbr = adjacency_data[j]
+        for j in range(G_rows[node], G_rows[node + 1]):
+            nbr = G_cols[j]
             if available[nbr]:
-                weights[nbr] *= 0.5 ** (adjacency_vals[j] / max_weight)  # tunable penalty factor
+                weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
+
+        for j in range(n - node, n):
+            start = G_rows[j]
+            end = G_rows[j + 1]
+            nbr = start
+            while nbr < end:
+                if G_cols[nbr] == r:
+                    break
+                nbr += 1
+            if nbr < end:
+                weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
     return mask
 
@@ -168,8 +179,6 @@ def compute_energy(sample, G_data, G_rows, G_cols):
     for u in range(n_qubits):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if v < (u + 1):
-                continue
             energy += G_data[col] * (1 if sample[u] == sample[v] else -1)
 
     return energy
@@ -203,8 +212,6 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
     for u in range(n):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if v < (u + 1):
-                continue
             if best_solution[u] != best_solution[v]:
                 best_value += G_data[col]
 
@@ -217,13 +224,29 @@ def init_J_and_z(G_data, G_rows, G_cols):
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     J_max = -float("inf")
-    for n in range(n_qubits):
-        start = G_rows[n]
-        end = G_rows[n + 1]
+    for r in range(n_qubits):
+        # Row sum
+        start = G_rows[r]
+        end = G_rows[r + 1]
         degree = end - start
-        J = -np.mean(G_data[start:end]) if degree > 0 else 0
-        degrees[n] = degree
-        J_eff[n] = J
+        val = G_data[start:end].sum()
+
+        # Column sum
+        for c in range(n_qubits - r, n_qubits):
+            start = G_rows[c]
+            end = G_rows[c + 1]
+            idx = start
+            while idx < end:
+                if G_cols[idx] == r:
+                    break
+                idx += 1
+            if idx < end:
+                degree += 1
+                val += G_data[idx]
+
+        J = -val / degree if degree > 0 else 0
+        degrees[r] = degree
+        J_eff[r] = J
         J_abs = abs(J)
         if J_abs > J_max:
             J_max = J_abs
@@ -271,6 +294,18 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     return theta
 
 
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
+    for u in range(n_nodes):
+        u_node = nodes[u]
+        for v in range(u + 1, n_nodes):
+            v_node = nodes[v]
+            if G.has_edge(u_node, v_node):
+                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
+
+    return lil.tocsr()
+
+
 def maxcut_tfim_sparse(
     G,
     quality=None,
@@ -282,7 +317,7 @@ def maxcut_tfim_sparse(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_scipy_sparse_array(G, weight='weight')
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits)
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))

@@ -4,6 +4,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
+from scipy.sparse import lil_matrix, csr_matrix
 
 
 @njit
@@ -13,8 +14,6 @@ def evaluate_cut_edges(theta_bits, G_data, G_rows, G_cols):
     for u in range(n):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if v < (u + 1):
-                continue
             if theta_bits[u] != theta_bits[v]:
                 cut += G_data[col]
 
@@ -28,8 +27,6 @@ def compute_energy(sample, G_data, G_rows, G_cols):
     for u in range(n_qubits):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if v < (u + 1):
-                continue
             energy += G_data[col] * (1 if sample[u] == sample[v] else -1)
 
     return energy
@@ -56,6 +53,18 @@ def bootstrap(theta, G_data, G_rows, G_cols, k, indices_array):
     return energies
 
 
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
+    for u in range(n_nodes):
+        u_node = nodes[u]
+        for v in range(u + 1, n_nodes):
+            v_node = nodes[v]
+            if G.has_edge(u_node, v_node):
+                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
+
+    return lil.tocsr()
+
+
 # By Gemini (Google Search AI)
 def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
@@ -68,7 +77,7 @@ def spin_glass_solver_sparse(G, quality=6, shots=None, best_guess=None):
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_scipy_sparse_array(G, weight='weight')
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits)
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
