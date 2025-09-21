@@ -158,15 +158,15 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             if available[nbr]:
                 weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
-        for j in range(n - node, n):
-            start = G_rows[j]
-            end = G_rows[j + 1]
-            nbr = start
-            while nbr < end:
-                if G_cols[nbr] == r:
+        for nbr in range(n - node, n):
+            start = G_rows[nbr]
+            end = G_rows[nbr + 1]
+            j = start
+            while j < end:
+                if G_cols[j] == r:
                     break
-                nbr += 1
-            if nbr < end:
+                j += 1
+            if j < end and available[nbr]:
                 weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
     return mask

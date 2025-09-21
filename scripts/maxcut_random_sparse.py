@@ -18,7 +18,8 @@ def generate_adjacency(n_nodes=64, seed=None):
 
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
-            lil[u, v] = np.random.random()
+            if np.random.random() < 0.5:
+                lil[u, v] = np.random.random()
 
     return lil.tocsr()
 
