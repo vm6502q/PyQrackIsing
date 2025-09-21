@@ -16,10 +16,13 @@ def generate_adjacency(n_nodes=64, seed=None):
 
     lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
 
-    for u in range(n_nodes):
+    for u in range(n_nodes >> 1):
+        for v in range(u + 1, n_nodes >> 1):
+            lil[u, v] = np.random.random()
+
+    for u in range(n_nodes >> 1, n_nodes):
         for v in range(u + 1, n_nodes):
-            if np.random.random() < 0.5:
-                lil[u, v] = np.random.random()
+            lil[u, v] = np.random.random()
 
     return lil.tocsr()
 
@@ -44,5 +47,5 @@ if __name__ == "__main__":
     print(f"Bipartite cut bit string: {bitstring}")
     print(f"Cut weight: {cut_value}")
     print(
-        "(The average sparsity is 50%, and the randomized and symmetric average nonzero weight is about 0.5, from the range 0.0 to 1.0.)"
+        "(The sparsity is 50%, and the randomized and symmetric average nonzero weight is about 0.5, from the range 0.0 to 1.0.)"
     )
