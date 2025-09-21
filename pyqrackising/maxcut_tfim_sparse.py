@@ -182,7 +182,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
                 continue
             start = G_rows[nbr]
             end = G_rows[nbr + 1]
-            j = binary_search(G_cols[start:end], r) + start
+            j = binary_search(G_cols[start:end], node) + start
             if j < end:
                 weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
 
