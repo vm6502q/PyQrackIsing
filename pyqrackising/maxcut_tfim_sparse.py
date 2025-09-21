@@ -392,7 +392,16 @@ def maxcut_tfim_sparse(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
+    median = 0
+    while hamming_prob[median] < 0.5:
+        median += 1
+    if (median << 1) > n_qubits:
+        G_m.transpose().tocsr()
+
     best_solution, best_value = sample_for_solution(G_m.data, G_m.indptr, G_m.indices, shots, hamming_prob, J_eff)
+
+    if (median << 1) > n_qubits:
+        G_m.transpose().tocsr()
 
     bit_string = ""
     l, r = [], []
