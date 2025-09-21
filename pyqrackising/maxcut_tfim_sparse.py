@@ -307,7 +307,7 @@ def maxcut_tfim_sparse(
 
     if shots is None:
         # Number of measurement shots
-        shots = 1 << quality
+        shots = n_qubits << quality
 
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
