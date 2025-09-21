@@ -44,5 +44,5 @@ if __name__ == "__main__":
     print(f"Bipartite cut bit string: {bitstring}")
     print(f"Cut weight: {cut_value}")
     print(
-        "(The average randomized and symmetric weight between each and every node is about 0.5, from the range 0.0 to 1.0.)"
+        "(The average sparsity is 50%, and the randomized and symmetric average nonzero weight is about 0.5, from the range 0.0 to 1.0.)"
     )

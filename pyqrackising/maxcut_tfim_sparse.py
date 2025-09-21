@@ -233,22 +233,20 @@ def init_J_and_z(G_data, G_rows, G_cols):
         degree = end - start
         val = G_data[start:end].sum()
 
-        # Column sum
-        for c in range(n_qubits - r, n_qubits):
-            start = G_rows[c]
-            end = G_rows[c + 1]
-            idx = start
-            while idx < end:
-                if G_cols[idx] == r:
-                    break
-                idx += 1
-            if idx < end:
-                degree += 1
-                val += G_data[idx]
-
         J = -val / degree if degree > 0 else 0
-        degrees[r] = degree
-        J_eff[r] = J
+        degrees[r] += degree
+        J_eff[r] += J
+
+        # Column sum
+        for idx in range(start, end):
+            c = G_cols[idx]
+            degrees[c] += 1
+            J_eff[c] += G_data[idx]
+
+    for r in range(n_qubits):
+        J = J_eff[r]
+        degree = degrees[r]
+        J_eff[r] = -J / degree if degree > 0 else 0
         J_abs = abs(J)
         if J_abs > J_max:
             J_max = J_abs
