@@ -98,7 +98,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, m):
+def local_repulsion_choice(G_func, G_func_args_dict, nodes, max_weight, weights, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -145,23 +145,23 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         # Repulsion: penalize neighbors
         for nbr in range(n):
             if available[nbr]:
-                weights[nbr] *= 0.5 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
+                weights[nbr] *= 0.5 ** (G_func((nodes[node], nodes[nbr]), **G_func_args_dict) / max_weight)  # tunable penalty factor
 
     return mask
 
 
 @njit
-def compute_energy(sample, G_func, G_func_args_tuple, nodes, n_qubits):
+def compute_energy(sample, G_func, G_func_args_dict, nodes, n_qubits):
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            energy += G_func((nodes[u], nodes[v]), G_func_args_tuple) * (1 if sample[u] == sample[v] else -1)
+            energy += G_func((nodes[u], nodes[v]), **G_func_args_dict) * (1 if sample[u] == sample[v] else -1)
 
     return energy
 
 
 @njit(parallel=True)
-def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thresholds, degrees_sum, J_eff, n):
+def sample_for_solution(G_func, G_func_args_dict, nodes, max_weight, shots, thresholds, degrees_sum, J_eff, n):
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -176,10 +176,10 @@ def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thr
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, m)
+        sample = local_repulsion_choice(G_func, G_func_args_dict, nodes, max_weight, weights, n, m)
 
         solutions[s] = sample
-        energies[s] = compute_energy(sample, G_func, G_func_args_tuple, nodes, n)
+        energies[s] = compute_energy(sample, G_func, G_func_args_dict, nodes, n)
 
     best_solution = solutions[np.argmin(energies)]
 
@@ -187,13 +187,13 @@ def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thr
     for u in range(n):
         for v in range(u + 1, n):
             if best_solution[u] != best_solution[v]:
-                best_value += G_func((nodes[u], nodes[v]), G_func_args_tuple)
+                best_value += G_func((nodes[u], nodes[v]), **G_func_args_dict)
 
     return best_solution, best_value
 
 
 @njit
-def init_J_and_z(G_func, G_func_args_tuple, nodes):
+def init_J_and_z(G_func, G_func_args_dict, nodes):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
@@ -203,7 +203,7 @@ def init_J_and_z(G_func, G_func_args_tuple, nodes):
         degree = 0
         J = 0.0
         for m in range(n_qubits):
-            val = G_func((nodes[n], nodes[m]), G_func_args_tuple)
+            val = G_func((nodes[n], nodes[m]), **G_func_args_dict)
             if val != 0.0:
                 degree += 1
             J += val
@@ -263,7 +263,7 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
 def maxcut_tfim_streaming(
     G_func,
     nodes,
-    G_func_args_tuple=None,
+    G_func_args_dict={},
     quality=None,
     shots=None,
 ):
@@ -277,7 +277,7 @@ def maxcut_tfim_streaming(
             return "0", 0, (nodes, [])
 
         if n_qubits == 2:
-            weight = G_func((nodes[0], nodes[1]), G_func_args_tuple)
+            weight = G_func((nodes[0], nodes[1]), **G_func_args_dict)
             if weight < 0.0:
                 return "00", 0, (nodes, [])
 
@@ -293,7 +293,7 @@ def maxcut_tfim_streaming(
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
 
-    J_eff, degrees, G_max = init_J_and_z(G_func, G_func_args_tuple, nodes)
+    J_eff, degrees, G_max = init_J_and_z(G_func, kwargs, nodes)
     hamming_prob = init_thresholds(n_qubits)
 
     if IS_OPENCL_AVAILABLE and grid_size >= 128:
@@ -338,7 +338,7 @@ def maxcut_tfim_streaming(
     else:
         maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
+    best_solution, best_value = sample_for_solution(G_func, kwargs, nodes, G_max, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
 
     bit_string = ""
     l, r = [], []

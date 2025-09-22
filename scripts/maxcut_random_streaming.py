@@ -13,9 +13,9 @@ import time
 # (In practice, even if you use other Python functionality like itertools,
 # you can pre-calculate and load the data as a list through the arguments tuple.)
 @njit
-def G_func(node_pair, args_tuple):
+def G_func(node_pair, n_qubits=None):
     i, j = min(node_pair), max(node_pair)
-    return ((j + 1) % (i + 1)) / args_tuple[0]
+    return ((j + 1) % (i + 1)) / n_qubits
 
 
 if __name__ == "__main__":
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     print(f"Random seed: {seed}")
     print(f"Node count: {n_nodes}")
     start = time.perf_counter()
-    bitstring, cut_value, cut, energy = spin_glass_solver_streaming(G_func, list(range(n_nodes)), G_func_args_tuple=(n_nodes,), quality=quality)
+    bitstring, cut_value, cut, energy = spin_glass_solver_streaming(G_func, list(range(n_nodes)), G_func_args_dict={ 'n_qubits': n_nodes }, quality=quality)
     seconds = time.perf_counter() - start
 
     print(f"Seconds to solution: {seconds}")

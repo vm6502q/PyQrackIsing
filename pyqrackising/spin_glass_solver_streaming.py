@@ -7,46 +7,46 @@ import os
 
 
 @njit
-def evaluate_cut_edges(theta_bits, G_func, G_func_args_tuple, nodes):
+def evaluate_cut_edges(theta_bits, G_func, G_func_args_dict, nodes):
     n_qubits = len(nodes)
     cut = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
             if theta_bits[u] != theta_bits[v]:
-                cut += G_func((nodes[u], nodes[v]), G_func_args_tuple)
+                cut += G_func((nodes[u], nodes[v]), **G_func_args_dict)
 
     return cut
 
 
 @njit
-def compute_energy(theta_bits, G_func, G_func_args_tuple, nodes):
+def compute_energy(theta_bits, G_func, G_func_args_dict, nodes):
     n_qubits = len(nodes)
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
             eigen = 1 if theta_bits[u] == theta_bits[v] else -1
-            energy += G_func((nodes[u], nodes[v]), G_func_args_tuple) * eigen
+            energy += G_func((nodes[u], nodes[v]), **G_func_args_dict) * eigen
 
     return energy
 
 
 @njit
-def bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices):
+def bootstrap_worker(theta, G_func, G_func_args_dict, nodes, indices):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_func, G_func_args_tuple, nodes)
+    energy = compute_energy(local_theta, G_func, G_func_args_dict, nodes)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(theta, G_func, G_func_args_tuple, nodes, k, indices_array):
+def bootstrap(theta, G_func, G_func_args_dict, nodes, k, indices_array):
     n = len(indices_array) // k
     energies = np.empty(n, dtype=np.float64)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(theta, G_func, G_func_args_dict, nodes, indices_array[j : j + k])
 
     return energies
 
@@ -59,10 +59,10 @@ def int_to_bitstring(integer, length):
 def spin_glass_solver_streaming(
     G_func,
     nodes,
-    G_func_args_tuple=None,
+    G_func_args_dict={},
     quality=6,
     shots=None,
-    best_guess=None
+    best_guess=None,
 ):
     n_qubits = len(nodes)
 
@@ -74,7 +74,7 @@ def spin_glass_solver_streaming(
             return "0", 0, (nodes, []), 0
 
         if n_qubits == 2:
-            weight = G_func((nodes[0], nodes[1]), G_func_args_tuple)
+            weight = G_func((nodes[0], nodes[1]), G_func_args_dict)
             if weight < 0.0:
                 return "00", 0, (nodes, []), weight
 
@@ -88,10 +88,10 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=G_func_args_tuple, quality=quality, shots=shots)
+        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_dict=G_func_args_dict, quality=quality, shots=shots)
     best_theta = [b == "1" for b in list(bitstring)]
 
-    min_energy = compute_energy(best_theta, G_func, G_func_args_tuple, nodes)
+    min_energy = compute_energy(best_theta, G_func, G_func_args_dict, nodes)
     improved = True
     correction_quality = 1
     while improved:
@@ -106,7 +106,7 @@ def spin_glass_solver_streaming(
             combos = list(
                 item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
             )
-            energies = bootstrap(theta, G_func, G_func_args_tuple, nodes, k, combos)
+            energies = bootstrap(theta, G_func, G_func_args_dict, nodes, k, combos)
 
             energy = energies.min()
             if energy < min_energy:
@@ -133,6 +133,6 @@ def spin_glass_solver_streaming(
             bitstring += "0"
             l.append(nodes[i])
 
-    cut_value = evaluate_cut_edges(best_theta, G_func, G_func_args_tuple, nodes)
+    cut_value = evaluate_cut_edges(best_theta, G_func, G_func_args_dict, nodes)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
