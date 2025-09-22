@@ -4,21 +4,11 @@ import numpy as np
 import os
 from numba import njit, prange
 
+from .maxcut_tfim_util import opencl_context
 
 IS_OPENCL_AVAILABLE = True
-ctx = None
-queue = None
 try:
     import pyopencl as cl
-    
-    # Pick a device (GPU if available)
-    ctx = cl.create_some_context()
-    queue = cl.CommandQueue(ctx)
-
-    # Load and build OpenCL kernels
-    kernel_src = open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
-    program = cl.Program(ctx, kernel_src).build()
-    maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
 except ImportError:
     IS_OPENCL_AVAILABLE = False
 
@@ -324,20 +314,20 @@ def maxcut_tfim_streaming(
 
         # Move to GPU
         mf = cl.mem_flags
-        args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
-        J_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
-        deg_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-        theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
-        ham_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
+        args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
+        J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
+        deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
+        theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
+        ham_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
 
         # Kernel execution
-        maxcut_hamming_cdf_kernel(
-            queue, (grid_dim,), (group_size,),
+        opencl_context.maxcut_hamming_cdf_kernel(
+            opencl_context.queue, (grid_dim,), (group_size,),
             np.int32(n_qubits), deg_buf, args_buf, J_buf, theta_buf, ham_buf
         )
 
         # Fetch results
-        cl.enqueue_copy(queue, hamming_prob, ham_buf)
+        cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
 
         hamming_prob /= hamming_prob.sum()
         tot_prob = 0.0
