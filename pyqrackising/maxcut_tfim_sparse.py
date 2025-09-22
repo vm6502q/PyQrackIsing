@@ -15,7 +15,7 @@ except ImportError:
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    bias = np.empty(n_qubits - 1, dtype=np.float64)
+    bias = np.empty(n_qubits - 1, dtype=np.float32)
 
     # critical angle
     theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
@@ -56,7 +56,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
 
-    theta = np.empty(n_qubits, dtype=np.float64)
+    theta = np.empty(n_qubits, dtype=np.float32)
     for q in range(n_qubits):
         J = J_func[q]
         z = degrees[q]
@@ -198,7 +198,7 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=np.float64)
+    energies = np.empty(shots, dtype=np.float32)
 
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -229,7 +229,7 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
 def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_eff = np.empty(n_qubits, dtype=np.float32)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
@@ -262,7 +262,7 @@ def init_J_and_z(G_data, G_rows, G_cols):
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
-    thresholds = np.empty(n_bias, dtype=np.float64)
+    thresholds = np.empty(n_bias, dtype=np.float32)
     tot_prob = 0
     p = 1.0
     if n_qubits & 1:
@@ -282,7 +282,7 @@ def init_thresholds(n_qubits):
 
 @njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
-    theta = np.empty(n_qubits, dtype=np.float64)
+    theta = np.empty(n_qubits, dtype=np.float32)
     for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
@@ -300,7 +300,7 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):

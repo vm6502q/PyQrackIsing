@@ -15,7 +15,7 @@ except ImportError:
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    bias = np.empty(n_qubits - 1, dtype=np.float64)
+    bias = np.empty(n_qubits - 1, dtype=np.float32)
 
     # critical angle
     theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
@@ -56,7 +56,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
 
-    theta = np.empty(n_qubits, dtype=np.float64)
+    theta = np.empty(n_qubits, dtype=np.float32)
     for q in range(n_qubits):
         J = J_func[q]
         z = degrees[q]
@@ -166,7 +166,7 @@ def sample_for_solution(G_m, shots, thresholds, degrees_sum, J_eff, n):
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=np.float64)
+    energies = np.empty(shots, dtype=np.float32)
 
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -197,7 +197,7 @@ def sample_for_solution(G_m, shots, thresholds, degrees_sum, J_eff, n):
 def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_eff = np.empty(n_qubits, dtype=np.float32)
     J_max = -float("inf")
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
@@ -214,7 +214,7 @@ def init_J_and_z(G_m):
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
-    thresholds = np.empty(n_bias, dtype=np.float64)
+    thresholds = np.empty(n_bias, dtype=np.float32)
     tot_prob = 0
     p = 1.0
     if n_qubits & 1:
@@ -234,7 +234,7 @@ def init_thresholds(n_qubits):
 
 @njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
-    theta = np.empty(n_qubits, dtype=np.float64)
+    theta = np.empty(n_qubits, dtype=np.float32)
     for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
