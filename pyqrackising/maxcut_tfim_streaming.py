@@ -192,14 +192,14 @@ def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thr
     return best_solution, best_value
 
 
-@njit
+@njit(parallel=True)
 def init_J_and_z(G_func, G_func_args_tuple, nodes):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     J_max = -float("inf")
     G_max = -float("inf")
-    for n in range(n_qubits):
+    for n in prange(n_qubits):
         degree = 0
         J = 0.0
         for m in range(n_qubits):
@@ -207,14 +207,12 @@ def init_J_and_z(G_func, G_func_args_tuple, nodes):
             if val != 0.0:
                 degree += 1
             J += val
-            if val > G_max:
-                G_max = val
+            G_max = max(val, G_max)
         J = -J / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
         J_abs = abs(J)
-        if J_abs > J_max:
-            J_max = J_abs
+        J_max = max(J_abs, J_max)
     J_eff /= J_max
 
     return J_eff, degrees, G_max
@@ -241,10 +239,10 @@ def init_thresholds(n_qubits):
     return thresholds
 
 
-@njit
+@njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float64)
-    for q in range(n_qubits):
+    for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
         theta[q] = np.arcsin(

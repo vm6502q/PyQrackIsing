@@ -225,13 +225,12 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
     return best_solution, best_value
 
 
-@njit
+@njit(parallel=True)
 def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
-    J_max = -float("inf")
-    for r in range(n_qubits):
+    for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
         end = G_rows[r + 1]
@@ -248,16 +247,17 @@ def init_J_and_z(G_data, G_rows, G_cols):
             degrees[c] += 1
             J_eff[c] += G_data[idx]
 
-    for r in range(n_qubits):
+    J_max = -float("inf")
+    for r in prange(n_qubits):
         J = J_eff[r]
         degree = degrees[r]
         J_eff[r] = -J / degree if degree > 0 else 0
         J_abs = abs(J)
-        if J_abs > J_max:
-            J_max = J_abs
+        J_max = max(J_abs, J_max)
     J_eff /= J_max
 
     return J_eff, degrees
+
 
 @njit
 def init_thresholds(n_qubits):
@@ -280,10 +280,10 @@ def init_thresholds(n_qubits):
     return thresholds
 
 
-@njit
+@njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float64)
-    for q in range(n_qubits):
+    for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
         theta[q] = np.arcsin(
