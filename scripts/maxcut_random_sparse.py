@@ -2,7 +2,6 @@
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
 from pyqrackising import spin_glass_solver_sparse
-from numba import njit, prange
 import numpy as np
 from scipy.sparse import lil_matrix, csr_matrix
 import sys

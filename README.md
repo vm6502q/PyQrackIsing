@@ -114,6 +114,31 @@ print(f"Path length: {path_length}")
 ```
 We provide solvers for both the symmetric version of the TSP (i.e., the distance from "A" to "B" is considered the same as from "B" to "A") and asymmetric version (`tsp_asymmetric()`). `monte_carlo=True` switches out the MAXCUT-based heuristic for pure Monte Carlo recursive bipartitioning. `multi_start` controls how many stochastic repeats of MAXCUT are tried to select the best result, at every level of recursion. `k_neighbors` limits the count of nearest-neighbor connections considered for 3-opt.
 
+If memory footprint of the graph or adjacency matrix is a concern, but the weights can be reconstructed by formula on demand, we offer `maxcut_tfim_streaming()` and `spin_glass_solver_streaming()`:
+```py
+from pyqrackising import spin_glass_solver_streaming
+# from pyqrackising import maxcut_tfim_streaming
+from numba import njit
+
+
+# This is a contrived example.
+# The function must use numba NJIT.
+# (In practice, even if you use other Python functionality like itertools,
+# you can pre-calculate and load the data as a list through the arguments tuple.)
+@njit
+def G_func(node_pair, args_tuple):
+    i, j = min(node_pair), max(node_pair)
+    return ((j + 1) % (i + 1)) / args_tuple[0]
+
+
+n_qubits = 64
+nodes = list(range(n_qubits))
+args_tuple = (n_qubits,)
+
+solution_bit_string, cut_value, node_groups, energy = spin_glass_solver_streaming(G_func, nodes, G_func_args_tuple=args_tuple, quality=6, best_guess=None)
+# solution_bit_string, cut_value, node_groups = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=args_tuple)
+```
+
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
 
