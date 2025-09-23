@@ -5,6 +5,25 @@ import os
 from numba import njit, prange
 
 
+@njit(parallel=True)
+def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
+    theta = np.empty(n_qubits, dtype=np.float32)
+    for q in prange(n_qubits):
+        J = J_eff[q]
+        z = degrees[q]
+        theta[q] = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                ),
+            )
+        )
+
+    return theta
+
+
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
