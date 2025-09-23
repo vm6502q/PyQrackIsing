@@ -60,7 +60,7 @@ def spin_glass_solver_streaming(
     G_func,
     nodes,
     G_func_args_tuple=None,
-    quality=5,
+    quality=None,
     shots=None,
     best_guess=None
 ):
@@ -79,6 +79,9 @@ def spin_glass_solver_streaming(
                 return "00", 0, (nodes, []), weight
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
+
+    if quality is None:
+        quality = 6
 
     bitstring = ""
     if isinstance(best_guess, str):

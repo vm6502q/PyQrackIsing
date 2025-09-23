@@ -70,7 +70,7 @@ def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
 
 
-def spin_glass_solver_sparse(G, quality=5, shots=None, best_guess=None):
+def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
     nodes = None
     n_qubits = 0
     G_m = None
@@ -96,6 +96,9 @@ def spin_glass_solver_sparse(G, quality=5, shots=None, best_guess=None):
                 return "00", 0, (nodes, []), weight
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
+
+    if quality is None:
+        quuality = 6
 
     bitstring = ""
     if isinstance(best_guess, str):

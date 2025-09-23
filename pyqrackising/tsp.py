@@ -497,7 +497,7 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     return [nodes[x] for x in best_path], best_weight
 
 
-def tsp_symmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_symmetric(G, start_node=None, end_node=None, quality=None, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None
@@ -643,7 +643,7 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     return [nodes[x] for x in final_path], best_weight
 
 
-def tsp_asymmetric(G, start_node=None, end_node=None, quality=2, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
+def tsp_asymmetric(G, start_node=None, end_node=None, quality=None, shots=None, monte_carlo=True, k_neighbors=20, is_cyclic=True, multi_start=1, is_top_level=True):
     nodes = None
     n_nodes = 0
     G_m = None

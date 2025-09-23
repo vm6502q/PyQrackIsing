@@ -118,7 +118,7 @@ def init_J_and_z(G_m):
     J_max = -float("inf")
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
-        J = -G_m[n].sum() / degree if degree > 0 else 0
+        J = (-G_m[n].sum() / degree) if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
         J_abs = abs(J)
