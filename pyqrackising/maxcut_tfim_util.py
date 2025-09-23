@@ -152,5 +152,6 @@ try:
     maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
 except ImportError:
     IS_OPENCL_AVAILABLE = False
+    print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
 opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, maxcut_hamming_cdf_kernel)
