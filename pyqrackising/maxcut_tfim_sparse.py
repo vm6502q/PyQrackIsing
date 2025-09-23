@@ -154,9 +154,8 @@ def init_J_and_z(G_data, G_rows, G_cols):
         degree = end - start
         val = G_data[start:end].sum()
 
-        J = -val / degree if degree > 0 else 0
         degrees[r] += degree
-        J_eff[r] += J
+        J_eff[r] += val
 
         # Column sum
         for idx in range(start, end):
