@@ -138,6 +138,7 @@ class OpenCLContext:
 IS_OPENCL_AVAILABLE = True
 ctx = None
 queue = None
+maxcut_hamming_cdf_kernel = None
 try:
     import pyopencl as cl
     
