@@ -42,7 +42,7 @@ def bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices):
 
 @njit(parallel=True)
 def bootstrap(theta, G_func, G_func_args_tuple, nodes, k, indices_array):
-    n = len(indices_array) // k
+    n = theta.shape[0]
     energies = np.empty(n, dtype=np.float64)
     for i in prange(n):
         j = i * k
@@ -89,7 +89,7 @@ def spin_glass_solver_streaming(
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
         bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=G_func_args_tuple, quality=quality, shots=shots)
-    best_theta = [b == "1" for b in list(bitstring)]
+    best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     min_energy = compute_energy(best_theta, G_func, G_func_args_tuple, nodes)
     improved = True
@@ -106,7 +106,7 @@ def spin_glass_solver_streaming(
             combos = list(
                 item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
             )
-            energies = bootstrap(theta, G_func, G_func_args_tuple, nodes, k, combos)
+            energies = bootstrap(theta, G_m.data, G_m.indptr, G_m.indices, k, combos)
 
             energy = energies.min()
             if energy < min_energy:

@@ -42,7 +42,7 @@ def bootstrap_worker(theta, G_m, indices):
 
 @njit(parallel=True)
 def bootstrap(theta, G_m, k, indices_array):
-    n = len(indices_array) // k
+    n = theta.shape[0]
     energies = np.empty(n, dtype=np.float64)
     for i in prange(n):
         j = i * k
@@ -92,7 +92,7 @@ def spin_glass_solver(G, quality=5, shots=None, best_guess=None):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
         bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots)
-    best_theta = [b == "1" for b in list(bitstring)]
+    best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     min_energy = compute_energy(best_theta, G_m)
     improved = True
