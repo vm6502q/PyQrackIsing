@@ -32,6 +32,3 @@ if __name__ == "__main__":
     print(f"Seconds to solution: {seconds}")
     print(f"Bipartite cut bit string: {bitstring}")
     print(f"Cut weight: {cut_value}")
-    print(
-        "(The average randomized and symmetric weight between each and every node is about 0.5, from the range 0.0 to 1.0.)"
-    )
