@@ -60,7 +60,7 @@ def spin_glass_solver_streaming(
     G_func,
     nodes,
     G_func_args_tuple=None,
-    quality=6,
+    quality=5,
     shots=None,
     best_guess=None
 ):

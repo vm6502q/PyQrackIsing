@@ -51,7 +51,7 @@ ext_modules = [CMakeExtension('tfim_sampler')]
 
 setup(
     name='pyqrackising',
-    version='5.1.6',
+    version='5.2.0',
     author='Dan Strano',
     author_email='stranoj@gmail.com',
     description='Fast MAXCUT, TSP, and sampling heuristics from near-ideal transverse field Ising model (TFIM)',
