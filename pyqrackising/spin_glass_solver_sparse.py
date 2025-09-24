@@ -94,7 +94,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
     if quality is None:
-        quuality = 6
+        quuality = 2
 
     bitstring = ""
     if isinstance(best_guess, str):

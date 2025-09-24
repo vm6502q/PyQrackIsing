@@ -77,7 +77,7 @@ def spin_glass_solver_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
     if quality is None:
-        quality = 6
+        quality = 2
 
     bitstring = ""
     if isinstance(best_guess, str):

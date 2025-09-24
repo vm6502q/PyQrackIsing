@@ -3,6 +3,7 @@ import networkx as nx
 import numpy as np
 import os
 from numba import njit, prange
+from scipy.sparse import lil_matrix, csr_matrix
 
 from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
@@ -78,7 +79,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             nbr = G_cols[j]
             if used[nbr]:
                 continue
-            weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
+            weights[nbr] *= 0.03125 ** (G_data[j] / max_weight)  # tunable penalty factor
 
         for nbr in range(node):
             if used[nbr]:
@@ -87,7 +88,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             end = G_rows[nbr + 1]
             j = binary_search(G_cols[start:end], node) + start
             if j < end:
-                weights[nbr] *= 0.5 ** (G_data[j] / max_weight)  # tunable penalty factor
+                weights[nbr] *= 0.03125 ** (G_data[j] / max_weight)  # tunable penalty factor
 
     return used
 
@@ -245,7 +246,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 8
+        quality = 4
 
     if shots is None:
         # Number of measurement shots

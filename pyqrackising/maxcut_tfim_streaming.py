@@ -58,7 +58,7 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= 0.5 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
+            weights[nbr] *= 0.03125 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
 
     return used
 
@@ -185,7 +185,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 8
+        quality = 4
 
     if shots is None:
         # Number of measurement shots
