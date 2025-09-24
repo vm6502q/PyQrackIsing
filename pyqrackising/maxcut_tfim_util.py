@@ -23,6 +23,7 @@ def get_cut(solution, nodes):
 @njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float32)
+    h_mult = abs(h_mult)
     for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
@@ -31,7 +32,7 @@ def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
                 -1.0,
                 min(
                     1.0,
-                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
+                    np.sign(J) if np.isclose(abs(z * J), 0.0) else (h_mult / (z * J)),
                 ),
             )
         )
@@ -88,19 +89,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
 
-    theta = np.empty(n_qubits, dtype=np.float32)
-    for q in range(n_qubits):
-        J = J_func[q]
-        z = degrees[q]
-        theta[q] = np.arcsin(
-            max(
-                -1.0,
-                min(
-                    1.0,
-                    (1.0 if J > 0.0 else -1.0) if np.isclose(abs(z * J), 0.0) else (abs(h_mult) / (z * J)),
-                ),
-            )
-        )
+    theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_func, degrees)
 
     for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
