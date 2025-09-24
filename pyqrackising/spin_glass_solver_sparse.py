@@ -100,7 +100,8 @@ def run_bootstrap_opencl(best_theta, G_data_np, G_rows_np, G_cols_np, indices_ar
     min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
 
     # Local memory allocation (1 float per work item)
-    local_size = combo_count
+    local_size = min(64, n)
+    global_size = ((combo_count + local_size - 1) // local_size) * local_size
     local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
@@ -117,10 +118,6 @@ def run_bootstrap_opencl(best_theta, G_data_np, G_rows_np, G_cols_np, indices_ar
         local_energy_buf,
         local_index_buf
     )
-
-    # Run kernel
-    local_size = min(64, n)
-    global_size = max(n, ((combo_count + local_size - 1) // local_size) * local_size)
 
     cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
 
@@ -219,7 +216,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
             else:
                 combos = combos_list[k - 1]
 
-            if IS_OPENCL_AVAILABLE and len(combos) >= 128:
+            if IS_OPENCL_AVAILABLE:
                 energy = run_bootstrap_opencl(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)
             else:
                 energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)

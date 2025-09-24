@@ -107,7 +107,7 @@ __kernel void bootstrap(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int i = get_local_id(0);
+    const int i = get_global_id(0);
 
     float energy = INFINITY;
 
@@ -125,13 +125,11 @@ __kernel void bootstrap(
     loc_index[lt_id] = i;
 
     // Reduce within workgroup
-    for (int offset = lt_size / 2; offset > 0; offset /= 2) {
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            if (loc_energy[lt_id + offset] < loc_energy[lt_id]) {
-                loc_energy[lt_id] = loc_energy[lt_id + offset];
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
+        if ((lt_id < offset) && (loc_energy[lt_id + offset] < loc_energy[lt_id])) {
+            loc_energy[lt_id] = loc_energy[lt_id + offset];
+            loc_index[lt_id] = loc_index[lt_id + offset];
         }
     }
 
@@ -185,7 +183,7 @@ __kernel void bootstrap_sparse(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int i = get_local_id(0);
+    const int i = get_global_id(0);
 
     float energy = INFINITY;
 
@@ -203,13 +201,11 @@ __kernel void bootstrap_sparse(
     loc_index[lt_id] = i;
 
     // Reduce within workgroup
-    for (int offset = lt_size / 2; offset > 0; offset /= 2) {
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            if (loc_energy[lt_id + offset] < loc_energy[lt_id]) {
-                loc_energy[lt_id] = loc_energy[lt_id + offset];
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
+        if ((lt_id < offset) && (loc_energy[lt_id + offset] < loc_energy[lt_id])) {
+            loc_energy[lt_id] = loc_energy[lt_id + offset];
+            loc_index[lt_id] = loc_index[lt_id + offset];
         }
     }
 
