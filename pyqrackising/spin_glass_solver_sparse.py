@@ -1,4 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
+from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
 import numpy as np
@@ -63,11 +64,6 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
                 lil[u, v] = G[u_node][v_node].get('weight', 1.0)
 
     return lil.tocsr()
-
-
-# By Gemini (Google Search AI)
-def int_to_bitstring(integer, length):
-    return (bin(integer)[2:].zfill(length))[::-1]
 
 
 def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
@@ -142,17 +138,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
 
             k = k + 1
 
-    bitstring = ""
-    l, r = [], []
-    for i in range(len(best_theta)):
-        b = best_theta[i]
-        if b:
-            bitstring += "1"
-            r.append(nodes[i])
-        else:
-            bitstring += "0"
-            l.append(nodes[i])
-
+    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)

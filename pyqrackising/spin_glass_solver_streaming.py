@@ -1,4 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
+from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
 import numpy as np
@@ -49,11 +50,6 @@ def bootstrap(theta, G_func, G_func_args_tuple, nodes, k, indices_array):
         energies[i] = bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices_array[j : j + k])
 
     return energies
-
-
-# By Gemini (Google Search AI)
-def int_to_bitstring(integer, length):
-    return (bin(integer)[2:].zfill(length))[::-1]
 
 
 def spin_glass_solver_streaming(
@@ -125,17 +121,7 @@ def spin_glass_solver_streaming(
 
             k = k + 1
 
-    bitstring = ""
-    l, r = [], []
-    for i in range(len(best_theta)):
-        b = best_theta[i]
-        if b:
-            bitstring += "1"
-            r.append(nodes[i])
-        else:
-            bitstring += "0"
-            l.append(nodes[i])
-
+    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     cut_value = evaluate_cut_edges(best_theta, G_func, G_func_args_tuple, nodes)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
