@@ -133,11 +133,12 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 class OpenCLContext:
-    def __init__(self, a, c, q, k):
+    def __init__(self, a, c, q, m, b):
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
         self.queue = q
-        self.maxcut_hamming_cdf_kernel = k
+        self.maxcut_hamming_cdf_kernel = m
+        self.bootstrap_kernel = b
 
 IS_OPENCL_AVAILABLE = True
 ctx = None
@@ -154,8 +155,9 @@ try:
     kernel_src = open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
     maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
+    bootstrap_kernel = program.bootstrap
 except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, maxcut_hamming_cdf_kernel)
+opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, maxcut_hamming_cdf_kernel, bootstrap_kernel)

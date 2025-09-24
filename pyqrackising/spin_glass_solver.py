@@ -1,10 +1,18 @@
 from .maxcut_tfim import maxcut_tfim
+from .maxcut_tfim_util import opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
+
+
+IS_OPENCL_AVAILABLE = True
+try:
+    import pyopencl as cl
+except ImportError:
+    IS_OPENCL_AVAILABLE = False
 
 
 @njit
@@ -41,8 +49,8 @@ def bootstrap_worker(theta, G_m, indices):
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_m, k, indices_array, min_energy):
-    n = best_theta.shape[0]
+def bootstrap(best_theta, G_m, indices_array, k, min_energy):
+    n = len(indices_array) // k
     energies = np.empty(n, dtype=np.float32)
     for i in prange(n):
         j = i * k
@@ -57,6 +65,78 @@ def bootstrap(best_theta, G_m, k, indices_array, min_energy):
             best_theta[i] = not best_theta[i]
 
     return min_energy
+
+
+def run_bootstrap_opencl(best_theta, G_m_np, indices_array_np, k, min_energy):
+    ctx = opencl_context.ctx
+    queue = opencl_context.queue
+    bootstrap_kernel = opencl_context.bootstrap_kernel
+
+    n = best_theta.shape[0]
+    combo_count = len(indices_array_np) // k
+
+    best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
+
+    # Args: [n, k]
+    args_np = np.array([n, k], dtype=np.int32)
+
+    # Buffers
+    mf = cl.mem_flags
+    best_theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=best_theta_np)
+    G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_np)
+    indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
+    args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
+
+    # Allocate min_energy and min_index result buffers per workgroup
+    min_energy_host = np.empty(combo_count, dtype=np.float32)
+    min_index_host = np.empty(combo_count, dtype=np.int32)
+
+    min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_energy_host.nbytes)
+    min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
+
+    # Local memory allocation (1 float per work item)
+    local_size = combo_count
+    local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
+    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
+
+    # Set kernel args
+    bootstrap_kernel.set_args(
+        G_m_buf,
+        best_theta_buf,
+        indices_buf,
+        args_buf,
+        min_energy_buf,
+        min_index_buf,
+        local_energy_buf,
+        local_index_buf
+    )
+
+    # Run kernel
+    local_size = min(64, n)
+    global_size = max(n, ((combo_count + local_size - 1) // local_size) * local_size)
+
+    cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
+
+    # Read results
+    cl.enqueue_copy(queue, min_energy_host, min_energy_buf)
+    cl.enqueue_copy(queue, min_index_host, min_index_buf)
+    queue.finish()
+
+    # Find global minimum
+    min_idx = np.argmin(min_energy_host)
+    energy = min_energy_host[min_idx]
+    if min_energy < energy:
+        return min_energy
+
+    best_i = min_index_host[min_idx]
+
+    flip_index_start = best_i * k
+    indices_to_flip = indices_array_np[flip_index_start : flip_index_start + k]
+
+    for i in indices_to_flip:
+        best_theta[i] = not best_theta[i]
+
+    return energy
 
 
 def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
@@ -113,14 +193,17 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
 
             combos = []
             if len(combos_list) < k:
-                combos = list(
+                combos = np.array(list(
                     item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                )
+                ))
                 combos_list.append(combos)
             else:
                 combos = combos_list[k - 1]
 
-            energy = bootstrap(best_theta, G_m, k, combos, min_energy)
+            if IS_OPENCL_AVAILABLE and len(combos) >= 128:
+                energy = run_bootstrap_opencl(best_theta, G_m, combos, k, min_energy)
+            else:
+                energy = bootstrap(best_theta, G_m, combos, k, min_energy)
 
             if energy < min_energy:
                 min_energy = energy

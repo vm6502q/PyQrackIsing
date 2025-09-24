@@ -42,29 +42,97 @@ __kernel void maxcut_hamming_cdf(
     __constant float* theta,
     __global float* hamming_prob
 ) {
-    float delta_t = args[0];
-    float tot_t = args[1];
-    float h_mult = args[2];
-    int step = get_group_id(0) / n_qubits;
-    int qi = get_group_id(0) % n_qubits;
-    float J_eff = J_func[qi];
-    float z = degrees[qi];
+    const float delta_t = args[0U];
+    const float tot_t = args[1U];
+    const float h_mult = args[2U];
+    const int step = get_group_id(0) / n_qubits;
+    const int qi = get_group_id(0) % n_qubits;
+    const float J_eff = J_func[qi];
+    const float z = degrees[qi];
     if (fabs(z * J_eff) <= (pow(2.0f, -52))) return;
 
-    float theta_eff = theta[qi];
-    float t = step * delta_t;
-    float tm1 = (step - 1) * delta_t;
-    float h_t = h_mult * (tot_t - t);
+    const float theta_eff = theta[qi];
+    const float t = step * delta_t;
+    const float tm1 = (step - 1) * delta_t;
+    const float h_t = h_mult * (tot_t - t);
 
-    int qo = get_local_id(0);
-    int n_threads = get_local_size(0);
+    const int n_threads = get_local_size(0);
 
-    while (qo < n_qubits) {
+    for (int qo = get_local_id(0); qo < n_qubits; qo += n_threads) {
         int _qo = (J_eff > 0.0f) ? (n_qubits - (1 + qo)) : qo;
         float diff = probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits);
         diff -= probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, tm1, n_qubits);
         AtomicAdd_g_f(&(hamming_prob[_qo]), diff);
-        qo += n_threads;
+    }
+}
+
+float bootstrap_worker(__constant char* theta, __global double* G_m, __constant int* indices, const int k, const int n) {
+    double energy = 0.0;
+    for (int u = 0; u < n; ++u) {
+        int u_offset = u * n;
+        bool u_bit = theta[u];
+        for (int x = 0; x < k; ++x) {
+            if (indices[x] == u) {
+                u_bit = !u_bit;
+                break;
+            }
+        }
+        for (int v = u + 1; v < n; ++v) {
+            double val = G_m[u_offset + v];
+            bool v_bit = theta[v];
+            for (int x = 0; x < k; ++x) {
+                if (indices[x] == v) {
+                    v_bit = !v_bit;
+                    break;
+                }
+            }
+            energy += (u_bit == v_bit) ? val : -val;
+        }
+    }
+
+    return (float)energy;
+}
+
+__kernel void bootstrap(
+    __global double* G_m,
+    __constant char* best_theta,
+    __constant int* indices_array,
+    __constant int* args,               // args[0] = n, args[1] = k
+    __global float* min_energy_ptr,     // output: per-group min energy
+    __global int* min_index_ptr,        // output: per-group best index (i)
+    __local float* loc_energy,          // local memory buffer
+    __local int* loc_index              // local memory buffer
+) {
+    const int n = args[0];
+    const int k = args[1];
+    const int i = get_local_id(0);
+    const int j = i * k;
+
+    // Compute energy for this combination
+    const float energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+
+    const int lt_id = get_local_id(0);
+    const int lt_size = get_local_size(0);
+
+    // Initialize local memory
+    loc_energy[lt_id] = energy;
+    loc_index[lt_id] = i;
+
+    // Reduce within workgroup
+    for (int offset = lt_size / 2; offset > 0; offset /= 2) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lt_id < offset) {
+            if (loc_energy[lt_id + offset] < loc_energy[lt_id]) {
+                loc_energy[lt_id] = loc_energy[lt_id + offset];
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            }
+        }
+    }
+
+    // Write out per-group result
+    if (lt_id == 0) {
+        min_energy_ptr[get_group_id(0)] = loc_energy[0];
+        min_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
