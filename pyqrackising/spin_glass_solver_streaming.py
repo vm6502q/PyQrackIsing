@@ -93,6 +93,7 @@ def spin_glass_solver_streaming(
     min_energy = compute_energy(best_theta, G_func, G_func_args_tuple, nodes)
     improved = True
     correction_quality = 1
+    combos_list = []
     while improved:
         improved = False
         k = 1
@@ -100,9 +101,15 @@ def spin_glass_solver_streaming(
             if n_qubits < k:
                 break
 
-            combos = list(
-                item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-            )
+            combos = []
+            if len(combos_list) < k:
+                combos = list(
+                    item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
+                )
+                combos_list.append(combos)
+            else:
+                combos = combos_list[k - 1]
+
             energies = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, k, combos)
 
             energy = energies.min()
