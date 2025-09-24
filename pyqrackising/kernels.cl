@@ -106,10 +106,14 @@ __kernel void bootstrap(
     const int n = args[0];
     const int k = args[1];
     const int i = get_local_id(0);
-    const int j = i * k;
 
-    // Compute energy for this combination
-    const float energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+    float energy = INFINITY;
+
+    if (i < n) {
+        const int j = i * k;
+        // Compute energy for this combination
+        energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+    }
 
     const int lt_id = get_local_id(0);
     const int lt_size = get_local_size(0);
