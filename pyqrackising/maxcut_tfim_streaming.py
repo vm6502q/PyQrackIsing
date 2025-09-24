@@ -26,45 +26,41 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
 
     weights = weights.copy()
     chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
-    available = np.ones(n, dtype=np.bool_) # True = available, False = not
-    mask = np.zeros(n, dtype=np.bool_)
+    used = np.zeros(n, dtype=np.bool_) # False = available, True = used
     chosen_count = 0
 
     for _ in range(m):
         # Count available
         total_w = 0.0
         for i in range(n):
-            if available[i]:
-                total_w += weights[i]
-        if total_w <= 0:
-            break
+            if used[i]:
+                continue
+            total_w += weights[i]
 
         # Normalize & sample
         r = np.random.rand()
         cum = 0.0
         node = -1
         for i in range(n):
-            if available[i]:
-                cum += weights[i] / total_w
-                if r < cum:
-                    node = i
-                    break
-
-        if node == -1:
-            continue
+            if used[i]:
+                continue
+            cum += weights[i]
+            if (total_w * r) < cum:
+                node = i
+                break
 
         # Select node
         chosen[chosen_count] = node
         chosen_count += 1
-        available[node] = False
-        mask[node] = True
+        used[node] = True
 
         # Repulsion: penalize neighbors
         for nbr in range(n):
-            if available[nbr]:
-                weights[nbr] *= 0.5 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
+            if used[nbr]:
+                continue
+            weights[nbr] *= 0.5 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
 
-    return mask
+    return used
 
 
 @njit
