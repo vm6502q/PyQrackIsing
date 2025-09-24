@@ -63,7 +63,7 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= (1.03125 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+            weights[nbr] *= max(0.03125, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
 
     return used
 

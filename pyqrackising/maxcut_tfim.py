@@ -63,7 +63,7 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m):
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= (1.03125 - G_m[node, nbr] / max_weight)
+            weights[nbr] *= max(0.0315, 1 - G_m[node, nbr] / max_weight)
 
     return used
 

@@ -84,7 +84,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             nbr = G_cols[j]
             if used[nbr]:
                 continue
-            weights[nbr] *= (1.03125 - G_data[j] / max_weight)
+            weights[nbr] *= max(0.03125, 1 - G_data[j] / max_weight)
 
         for nbr in range(node):
             if used[nbr]:
@@ -93,7 +93,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             end = G_rows[nbr + 1]
             j = binary_search(G_cols[start:end], node) + start
             if j < end:
-                weights[nbr] *= (1.03125 - G_data[j] / max_weight)
+                weights[nbr] *= max(0.03125, 1 - G_data[j] / max_weight)
 
     return used
 
