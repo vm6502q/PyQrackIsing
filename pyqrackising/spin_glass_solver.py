@@ -77,8 +77,8 @@ def run_bootstrap_opencl(best_theta, G_m_np, indices_array_np, k, min_energy):
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k]
-    args_np = np.array([n, k], dtype=np.int32)
+    # Args: [n, k, combo_count]
+    args_np = np.array([n, k, combo_count], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags

@@ -42,7 +42,7 @@ def bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices):
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, k, indices_array, min_energy):
+def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, min_energy):
     n = len(indices_array) // k
     energies = np.empty(n, dtype=np.float32)
     for i in prange(n):
@@ -111,14 +111,14 @@ def spin_glass_solver_streaming(
 
             combos = []
             if len(combos_list) < k:
-                combos = list(
+                combos = np.array(list(
                     item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                )
+                ))
                 combos_list.append(combos)
             else:
                 combos = combos_list[k - 1]
 
-            energy = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, k, combos, min_energy)
+            energy = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, combos, k, min_energy)
 
             if energy < min_energy:
                 min_energy = energy
