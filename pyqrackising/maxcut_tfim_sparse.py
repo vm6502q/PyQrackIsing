@@ -244,7 +244,7 @@ def maxcut_tfim_sparse(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 1 << (quality + 1)
+    n_steps = 2 << quality
     grid_size = n_steps * n_qubits
 
     if not (IS_OPENCL_AVAILABLE and grid_size >= 128):
