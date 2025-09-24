@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -205,18 +205,7 @@ def maxcut_tfim_sparse(
         G_m = G
 
     if n_qubits < 3:
-        if n_qubits == 0:
-            return "", 0, ([], [])
-
-        if n_qubits == 1:
-            return "0", 0, (nodes, [])
-
-        if n_qubits == 2:
-            weight = G_m[0, 1]
-            if weight < 0.0:
-                return "00", 0, (nodes, [])
-
-            return "01", weight, ([nodes[0]], [nodes[1]])
+        return low_width(G_m, nodes, n_qubits)
 
     if quality is None:
         quality = 8
