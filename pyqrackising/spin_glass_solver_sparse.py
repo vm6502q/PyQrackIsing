@@ -44,14 +44,22 @@ def bootstrap_worker(theta, G_data, G_rows, G_cols, indices):
 
 
 @njit(parallel=True)
-def bootstrap(theta, G_data, G_rows, G_cols, k, indices_array):
-    n = theta.shape[0]
+def bootstrap(best_theta, G_data, G_rows, G_cols, k, indices_array, min_energy):
+    n = best_theta.shape[0]
     energies = np.empty(n, dtype=np.float32)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(theta, G_data, G_rows, G_cols, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(best_theta, G_data, G_rows, G_cols, indices_array[j : j + k])
 
-    return energies
+    energy = energies.min()
+    if energy < min_energy:
+        index_match = np.random.choice(np.where(energies == energy)[0])
+        indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
+        min_energy = energy
+        for i in indices:
+            best_theta[i] = not best_theta[i]
+
+    return min_energy
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
@@ -127,15 +135,10 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
             else:
                 combos = combos_list[k - 1]
 
-            energies = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, k, combos)
+            energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, k, combos, min_energy)
 
-            energy = energies.min()
             if energy < min_energy:
-                index_match = np.random.choice(np.where(energies == energy)[0])
-                indices = combos[(index_match * k) : ((index_match + 1) * k)]
                 min_energy = energy
-                for i in indices:
-                    best_theta[i] = not best_theta[i]
                 improved = True
                 if correction_quality < (k + 1):
                     correction_quality = k + 1
