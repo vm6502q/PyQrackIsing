@@ -49,6 +49,11 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
                 node = i
                 break
 
+        if node == -1:
+            node = 0
+            while used[node]:
+                node += 1
+
         # Select node
         chosen[chosen_count] = node
         chosen_count += 1
@@ -58,7 +63,7 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= 0.03125 ** (G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)  # tunable penalty factor
+            weights[nbr] *= (1.03125 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
 
     return used
 
