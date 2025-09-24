@@ -5,6 +5,21 @@ import os
 from numba import njit, prange
 
 
+@njit
+def get_cut(solution, nodes):
+    bit_string = ""
+    l, r = [], []
+    for i in range(len(solution)):
+        if solution[i]:
+            bit_string += "1"
+            r.append(nodes[i])
+        else:
+            bit_string += "0"
+            l.append(nodes[i])
+
+    return bit_string, l, r
+
+
 @njit(parallel=True)
 def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float32)

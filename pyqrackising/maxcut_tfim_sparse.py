@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -184,17 +184,10 @@ def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
 
     best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff)
 
-    bit_string = ""
-    l, r = [], []
-    for i in range(len(best_solution)):
-        if best_solution[i]:
-            bit_string += "1"
-            r.append(nodes[i])
-        else:
-            bit_string += "0"
-            l.append(nodes[i])
+    bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
+
 
 @njit
 def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, J_eff, hamming_prob, nodes):
@@ -207,15 +200,7 @@ def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, J_eff, hamming_prob, nod
 
     best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff)
 
-    bit_string = ""
-    l, r = [], []
-    for i in range(len(best_solution)):
-        if best_solution[i]:
-            bit_string += "1"
-            r.append(nodes[i])
-        else:
-            bit_string += "0"
-            l.append(nodes[i])
+    bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
 

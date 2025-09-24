@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -78,7 +78,8 @@ def compute_energy(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_solution(G_m, shots, thresholds, degrees_sum, J_eff, n):
+def sample_for_solution(G_m, shots, thresholds, J_eff):
+    n = len(G_m)
     max_weight = G_m.max()
     weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
@@ -128,6 +129,36 @@ def init_J_and_z(G_m):
     return J_eff, degrees
 
 
+@njit
+def cpu_footer(shots, quality, n_qubits, G_m, nodes):
+    J_eff, degrees = init_J_and_z(G_m)
+    hamming_prob = init_thresholds(n_qubits)
+
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
+
+    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff)
+
+    bit_string, l, r = get_cut(best_solution, nodes)
+
+    return bit_string, best_value, (l, r)
+
+
+@njit
+def gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes):
+    hamming_prob /= hamming_prob.sum()
+    tot_prob = 0.0
+    for i in range(n_qubits - 1):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 2.0
+
+    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff)
+
+    bit_string, l, r = get_cut(best_solution, nodes)
+
+    return bit_string, best_value, (l, r)
+
+
 def maxcut_tfim(
     G,
     quality=None,
@@ -158,61 +189,42 @@ def maxcut_tfim(
     n_steps = 1 << quality
     grid_size = n_steps * n_qubits
 
+    if not (IS_OPENCL_AVAILABLE and grid_size >= 128):
+        return cpu_footer(shots, quality, n_qubits, G_m, nodes)
+
     J_eff, degrees = init_J_and_z(G_m)
     hamming_prob = init_thresholds(n_qubits)
 
-    if IS_OPENCL_AVAILABLE and grid_size >= 128:
-        delta_t = 1.0 / n_steps
-        tot_t = 2.0 * n_steps * delta_t
-        h_mult = 2.0 / tot_t
-        theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
-        args = np.empty(3, dtype=np.float32)
-        args[0] = delta_t
-        args[1] = tot_t
-        args[2] = h_mult
+    delta_t = 1.0 / n_steps
+    tot_t = 2.0 * n_steps * delta_t
+    h_mult = 2.0 / tot_t
+    theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
+    args = np.empty(3, dtype=np.float32)
+    args[0] = delta_t
+    args[1] = tot_t
+    args[2] = h_mult
 
-        # Warp size is 32:
-        group_size = n_qubits - 1
-        if group_size > 256:
-            group_size = 256
-        grid_dim = n_steps * n_qubits * group_size
+    # Warp size is 32:
+    group_size = n_qubits - 1
+    if group_size > 256:
+        group_size = 256
+    grid_dim = n_steps * n_qubits * group_size
 
-        # Move to GPU
-        mf = cl.mem_flags
-        args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
-        J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
-        deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-        theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
-        ham_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
+    # Move to GPU
+    mf = cl.mem_flags
+    args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
+    J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
+    deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
+    ham_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
 
-        # Kernel execution
-        opencl_context.maxcut_hamming_cdf_kernel(
-            opencl_context.queue, (grid_dim,), (group_size,),
-            np.int32(n_qubits), deg_buf, args_buf, J_buf, theta_buf, ham_buf
-        )
+    # Kernel execution
+    opencl_context.maxcut_hamming_cdf_kernel(
+        opencl_context.queue, (grid_dim,), (group_size,),
+        np.int32(n_qubits), deg_buf, args_buf, J_buf, theta_buf, ham_buf
+    )
 
-        # Fetch results
-        cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
+    # Fetch results
+    cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
 
-        hamming_prob /= hamming_prob.sum()
-        tot_prob = 0.0
-        for i in range(n_qubits - 1):
-            tot_prob += hamming_prob[i]
-            hamming_prob[i] = tot_prob
-        hamming_prob[-1] = 2.0
-    else:
-        maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
-
-    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
-
-    bit_string = ""
-    l, r = [], []
-    for i in range(len(best_solution)):
-        if best_solution[i]:
-            bit_string += "1"
-            r.append(nodes[i])
-        else:
-            bit_string += "0"
-            l.append(nodes[i])
-
-    return bit_string, best_value, (l, r)
+    return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
