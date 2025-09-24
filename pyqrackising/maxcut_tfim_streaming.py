@@ -190,7 +190,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 2
+        quality = 3
 
     if shots is None:
         # Number of measurement shots

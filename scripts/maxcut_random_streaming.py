@@ -20,7 +20,7 @@ def G_func(node_pair, args_tuple):
 
 if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
-    quality = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    quality = int(sys.argv[2]) if len(sys.argv) > 2 else 3
     seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
 
     print(f"Random seed: {seed}")
