@@ -28,7 +28,7 @@ def compute_energy(sample, G_data, G_rows, G_cols):
     for u in range(n_qubits):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            energy += G_data[col] * (1 if sample[u] == sample[v] else -1)
+            energy += (G_data[col] if sample[u] == sample[v] else -G_data[col])
 
     return energy
 
