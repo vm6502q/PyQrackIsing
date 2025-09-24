@@ -186,7 +186,7 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 1 << quality
+    n_steps = 1 << (quality + 1)
     grid_size = n_steps * n_qubits
 
     if not (IS_OPENCL_AVAILABLE and grid_size >= 128):
