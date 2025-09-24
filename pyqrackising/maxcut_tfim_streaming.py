@@ -63,7 +63,7 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= max(0.03125, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+            weights[nbr] *= max(2e-7, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
 
     return used
 
@@ -80,7 +80,7 @@ def compute_energy(sample, G_func, G_func_args_tuple, nodes, n_qubits):
 
 @njit(parallel=True)
 def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thresholds, degrees_sum, J_eff, n):
-    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    weights = (1.0 / (1.0 + (2 ** -52) - J_eff)).astype(np.float64)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=np.float32)
@@ -190,7 +190,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 2
 
     if shots is None:
         # Number of measurement shots

@@ -84,7 +84,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             nbr = G_cols[j]
             if used[nbr]:
                 continue
-            weights[nbr] *= max(0.03125, 1 - G_data[j] / max_weight)
+            weights[nbr] *= max(2e-7, 1 - G_data[j] / max_weight)
 
         for nbr in range(node):
             if used[nbr]:
@@ -93,7 +93,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
             end = G_rows[nbr + 1]
             j = binary_search(G_cols[start:end], node) + start
             if j < end:
-                weights[nbr] *= max(0.03125, 1 - G_data[j] / max_weight)
+                weights[nbr] *= max(2e-7, 1 - G_data[j] / max_weight)
 
     return used
 
@@ -114,7 +114,7 @@ def compute_energy(sample, G_data, G_rows, G_cols):
 def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
     n = G_rows.shape[0] - 1
     max_weight = G_data.max()
-    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    weights = (1.0 / (1.0 + (2 ** -52) - J_eff)).astype(np.float64)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=np.float32)
@@ -251,7 +251,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 2
 
     if shots is None:
         # Number of measurement shots

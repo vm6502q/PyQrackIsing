@@ -63,7 +63,7 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m):
         for nbr in range(n):
             if used[nbr]:
                 continue
-            weights[nbr] *= max(0.0315, 1 - G_m[node, nbr] / max_weight)
+            weights[nbr] *= max(2e-7, 1 - G_m[node, nbr] / max_weight)
 
     return used
 
@@ -82,7 +82,7 @@ def compute_energy(sample, G_m, n_qubits):
 def sample_for_solution(G_m, shots, thresholds, J_eff):
     n = len(G_m)
     max_weight = G_m.max()
-    weights = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    weights = (1.0 / (1.0 + (2 ** -52) - J_eff)).astype(np.float64)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=np.float32)
@@ -192,7 +192,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 2
 
     if shots is None:
         # Number of measurement shots
