@@ -117,12 +117,10 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
             if n_qubits < k:
                 break
 
-            theta = best_theta.copy()
-
             combos = list(
                 item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
             )
-            energies = bootstrap(theta, G_m.data, G_m.indptr, G_m.indices, k, combos)
+            energies = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, k, combos)
 
             energy = energies.min()
             if energy < min_energy:

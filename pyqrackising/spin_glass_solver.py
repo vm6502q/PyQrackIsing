@@ -102,12 +102,10 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
             if n_qubits < k:
                 break
 
-            theta = best_theta.copy()
-
             combos = list(
                 item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
             )
-            energies = bootstrap(theta, G_m, k, combos)
+            energies = bootstrap(best_theta, G_m, k, combos)
 
             energy = energies.min()
             if energy < min_energy:
