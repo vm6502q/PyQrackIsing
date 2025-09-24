@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, low_width, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -171,7 +171,18 @@ def maxcut_tfim_streaming(
     n_qubits = len(nodes)
 
     if n_qubits < 3:
-        return low_width(G_m, nodes, n_qubits)
+        if n_qubits == 0:
+            return "", 0, ([], [])
+
+        if n_qubits == 1:
+            return "0", 0, (nodes, [])
+
+        if n_qubits == 2:
+            weight = G_func((nodes[0], nodes[1]), G_func_args_tuple)
+            if weight < 0.0:
+                return "00", 0, (nodes, [])
+
+            return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
         quality = 8

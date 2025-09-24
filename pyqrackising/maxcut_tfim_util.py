@@ -61,22 +61,6 @@ def init_thresholds(n_qubits):
     return thresholds
 
 
-@njit
-def low_width(G_m, nodes, n_qubits):
-    if n_qubits == 0:
-        return "", 0, ([], [])
-
-    if n_qubits == 1:
-        return "0", 0, (nodes, [])
-
-    if n_qubits == 2:
-        weight = G_m[0, 1]
-        if weight < 0.0:
-            return "00", 0, (nodes, [])
-
-        return "01", weight, ([nodes[0]], [nodes[1]])
-
-
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
     if n_qubits < 2:
