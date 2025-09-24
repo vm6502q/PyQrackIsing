@@ -142,7 +142,7 @@ __kernel void bootstrap(
     }
 }
 
-float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, __global ulong* G_rows, __global ulong* G_cols, __constant int* indices, const int k, const int n) {
+float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, __global unsigned* G_rows, __global unsigned* G_cols, __constant unsigned* indices, const int k, const int n) {
     double energy = 0.0;
     for (int u = 0; u < n; ++u) {
         bool u_bit = theta[u];
@@ -152,9 +152,9 @@ float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, _
                 break;
             }
         }
-        const size_t mCol = G_rows[u + 1];
-        for (int col = G_rows[u]; col < mCol; ++col) {
-            const int v = G_cols[col];
+        const unsigned mCol = G_rows[u + 1];
+        for (unsigned col = G_rows[u]; col < mCol; ++col) {
+            const unsigned v = G_cols[col];
             const double val = G_data[col];
             bool v_bit = theta[v];
             for (int x = 0; x < k; ++x) {
@@ -172,8 +172,8 @@ float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, _
 
 __kernel void bootstrap_sparse(
     __global double* G_data,
-    __global ulong* G_rows,
-    __global ulong* G_cols,
+    __global unsigned* G_rows,
+    __global unsigned* G_cols,
     __constant char* best_theta,
     __constant int* indices_array,
     __constant int* args,               // args[0] = n, args[1] = k
