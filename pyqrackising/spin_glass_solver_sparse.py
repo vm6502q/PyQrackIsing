@@ -70,7 +70,7 @@ def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy):
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_data_np, G_rows_np, G_cols_np, indices_array_np, k, min_energy):
+def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_sparse_kernel
@@ -86,9 +86,6 @@ def run_bootstrap_opencl(best_theta, G_data_np, G_rows_np, G_cols_np, indices_ar
     # Buffers
     mf = cl.mem_flags
     best_theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=best_theta_np)
-    G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_data_np)
-    G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_rows_np.astype(np.uint64))
-    G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_cols_np.astype(np.uint64))
     indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
@@ -196,6 +193,13 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
         bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
+    if IS_OPENCL_AVAILABLE:
+        mf = cl.mem_flags
+        ctx = opencl_context.ctx
+        G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
+        G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr.astype(np.uint64))
+        G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices.astype(np.uint64))
+
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
     correction_quality = 1
@@ -217,7 +221,7 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
                 combos = combos_list[k - 1]
 
             if IS_OPENCL_AVAILABLE:
-                energy = run_bootstrap_opencl(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)
+                energy = run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, min_energy)
             else:
                 energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)
 

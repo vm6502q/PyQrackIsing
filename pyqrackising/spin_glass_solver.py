@@ -67,7 +67,7 @@ def bootstrap(best_theta, G_m, indices_array, k, min_energy):
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_m_np, indices_array_np, k, min_energy):
+def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_kernel
@@ -83,7 +83,6 @@ def run_bootstrap_opencl(best_theta, G_m_np, indices_array_np, k, min_energy):
     # Buffers
     mf = cl.mem_flags
     best_theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=best_theta_np)
-    G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_np)
     indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
@@ -177,6 +176,11 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
         bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
+    if IS_OPENCL_AVAILABLE:
+        mf = cl.mem_flags
+        ctx = opencl_context.ctx
+        G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
+
     min_energy = compute_energy(best_theta, G_m)
     improved = True
     correction_quality = 1
@@ -198,7 +202,7 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
                 combos = combos_list[k - 1]
 
             if IS_OPENCL_AVAILABLE:
-                energy = run_bootstrap_opencl(best_theta, G_m, combos, k, min_energy)
+                energy = run_bootstrap_opencl(best_theta, G_m_buf, combos, k, min_energy)
             else:
                 energy = bootstrap(best_theta, G_m, combos, k, min_energy)
 
