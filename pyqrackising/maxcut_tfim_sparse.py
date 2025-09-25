@@ -45,9 +45,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
     """
 
     weights = weights.copy()
-    chosen = np.zeros(m, dtype=np.int32)   # store chosen indices
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
-    chosen_count = 0
 
     for _ in range(m):
         # Count available
@@ -75,8 +73,6 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
                 node += 1
 
         # Select node
-        chosen[chosen_count] = node
-        chosen_count += 1
         used[node] = True
 
         # Repulsion: penalize neighbors
