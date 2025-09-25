@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -126,6 +126,77 @@ def init_J_and_z(G_m):
     return J_eff, degrees
 
 
+def run_sampling_opencl(G_m_np, thresholds_buf, shots, n):
+    ctx = opencl_context.ctx
+    queue = opencl_context.queue
+    kernel = opencl_context.sample_for_solution_best_bitset_kernel
+
+    max_local_size = 64  # tune
+    max_global_size = 65536
+    global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
+    local_size = max_local_size
+    num_groups = global_size // local_size
+
+    # Bit-packing params
+    words = (n + 31) // 32
+
+    # Random seeds (host)
+    rng_seeds_np = np.random.randint(1, 2**31-1, size=global_size, dtype=np.uint32)
+
+    # Device buffers
+    mf = cl.mem_flags
+    G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_np)
+    rng_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=rng_seeds_np)
+
+    # Solutions buffer: each work-item writes a candidate bitset
+    solutions_buf = cl.Buffer(ctx, mf.READ_WRITE, size=num_groups * words * np.uint32().nbytes)
+
+    # Best energies and solutions (per group)
+    # We'll reuse solutions_buf to hold them after reduction (kernel copies winners into group slices)
+    best_energies_np = np.empty(num_groups, dtype=np.float32)
+    best_energies_buf = cl.Buffer(ctx, mf.WRITE_ONLY, best_energies_np.nbytes)
+
+    # Local memory buffers
+    local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
+    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
+
+    # Set kernel args
+    kernel.set_args(
+        G_m_buf,
+        thresholds_buf,
+        np.int32(n),
+        np.int32(shots),
+        rng_buf,
+        solutions_buf,
+        best_energies_buf,
+        local_energy_buf,
+        local_index_buf
+    )
+
+    # Launch
+    cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
+
+    # Copy back
+    cl.enqueue_copy(queue, best_energies_np, best_energies_buf)
+    solutions_np = np.empty(num_groups * words, dtype=np.uint32)
+    cl.enqueue_copy(queue, solutions_np, solutions_buf)  # all candidates, includes per-group winners
+    queue.finish()
+
+    # Host reduction
+    best_group = np.argmax(best_energies_np)  # max cut
+    best_energy = float(best_energies_np[best_group])
+    best_solution_bits = solutions_np[best_group * words : (best_group + 1) * words]
+
+    # Unpack bitset into boolean vector
+    best_solution = np.zeros(n, dtype=np.bool_)
+    for u in range(n):
+        w = u >> 5
+        b = u & 31
+        best_solution[u] = (best_solution_bits[w] >> b) & 1
+
+    return best_solution, best_energy
+
+
 @njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes):
     J_eff, degrees = init_J_and_z(G_m)
@@ -142,12 +213,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes):
 
 @njit
 def gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes):
-    hamming_prob /= hamming_prob.sum()
-    tot_prob = 0.0
-    for i in range(n_qubits - 1):
-        tot_prob += hamming_prob[i]
-        hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 2.0
+    fix_cdf(hamming_prob)
 
     best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff)
 
@@ -160,6 +226,7 @@ def maxcut_tfim(
     G,
     quality=None,
     shots=None,
+    is_alt_gpu_sampling = False
 ):
     nodes = None
     n_qubits = 0
@@ -192,7 +259,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits << quality
+        shots = ((n_qubits * n_qubits) if is_alt_gpu_sampling and IS_OPENCL_AVAILABLE else n_qubits) << quality
 
     n_steps = 2 << quality
     grid_size = n_steps * n_qubits
@@ -216,7 +283,7 @@ def maxcut_tfim(
     args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
     J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
     deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 4))
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 8))
 
     # Warp size is 32:
     group_size = min(n_qubits, 64)
@@ -246,5 +313,13 @@ def maxcut_tfim(
 
     # Fetch results
     cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
+    opencl_context.queue.finish()
 
-    return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
+    if not is_alt_gpu_sampling:
+        return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
+
+    fix_cdf(hamming_prob)
+    best_solution, best_value = run_sampling_opencl(G_m, ham_buf, shots, n_qubits)
+    bit_string, l, r = get_cut(best_solution, nodes)
+
+    return bit_string, best_value, (l, r)

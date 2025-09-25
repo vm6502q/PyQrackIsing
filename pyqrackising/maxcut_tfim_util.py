@@ -102,6 +102,16 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
 
 
 @njit
+def fix_cdf(hamming_prob):
+    hamming_prob /= hamming_prob.sum()
+    tot_prob = 0.0
+    for i in range(len(hamming_prob)):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 2.0
+
+
+@njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
     bias = np.empty(n_qubits - 1, dtype=np.float32)
 
@@ -133,7 +143,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 class OpenCLContext:
-    def __init__(self, a, c, q, i, m, b, s):
+    def __init__(self, a, c, q, i, m, b, s, k):
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
         self.queue = q
@@ -141,6 +151,7 @@ class OpenCLContext:
         self.maxcut_hamming_cdf_kernel = m
         self.bootstrap_kernel = b
         self.bootstrap_sparse_kernel = s
+        self.sample_for_solution_best_bitset_kernel = k
 
 IS_OPENCL_AVAILABLE = True
 ctx = None
@@ -149,6 +160,7 @@ init_theta_kernel = None
 maxcut_hamming_cdf_kernel = None
 bootstrap_kernel = None
 bootstrap_sparse_kernel = None
+sample_for_solution_best_bitset_kernel = None
 try:
     import pyopencl as cl
     
@@ -163,8 +175,9 @@ try:
     maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
     bootstrap_kernel = program.bootstrap
     bootstrap_sparse_kernel = program.bootstrap_sparse
+    sample_for_solution_best_bitset_kernel = program.sample_for_solution_best_bitset
 except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel)
+opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, sample_for_solution_best_bitset_kernel)

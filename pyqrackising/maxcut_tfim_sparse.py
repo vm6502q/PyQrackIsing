@@ -305,5 +305,7 @@ def maxcut_tfim_sparse(
 
     # Fetch results
     cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
+    opencl_context.queue.finish()
+
 
     return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes)

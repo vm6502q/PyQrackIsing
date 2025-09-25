@@ -244,5 +244,6 @@ def maxcut_tfim_streaming(
 
     # Fetch results
     cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
+    opencl_context.queue.finish()
 
     return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob)
