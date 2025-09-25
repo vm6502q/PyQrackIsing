@@ -5,8 +5,12 @@ __kernel void init_theta(
     __constant float* degrees,
     __global float* theta
 ) {
-    const float h_mult = fabs(fargs[2]);
     const int q = get_global_id(0);
+    if (q >= n_qubits) {
+        return;
+    }
+
+    const float h_mult = fabs(fargs[2]);
 
     const float J = J_eff[q];
     const float z = degrees[q];
