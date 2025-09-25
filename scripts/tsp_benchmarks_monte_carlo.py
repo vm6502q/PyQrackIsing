@@ -107,6 +107,18 @@ def tsp_simulated_annealing(G, temp=1000, cooling=0.995, max_iter=5000):
     return best, best_length
 
 
+def tsp_qrack(args):
+    shm_name, shape, dtype = args
+    # Reattach to existing shared memory by name
+    existing_shm = shared_memory.SharedMemory(name=shm_name)
+    G = np.ndarray(shape, dtype=dtype, buffer=existing_shm.buf)
+    path, length = tsp_symmetric(G, monte_carlo=True)
+    existing_shm.close()
+
+    return path, length
+    
+
+
 # Validation: check if path is a Hamiltonian cycle
 def validate_tsp_solution(G, path):
     return len(path) == len(G.nodes) + 1 and set(path[:-1]) == set(G.nodes)
@@ -155,11 +167,25 @@ def benchmark_tsp_realistic(n_nodes=64):
     if not validate_tsp_solution(G, path_s + [path_s[0]]):
         warnings.warn("Invalid simulated annealing solution!")
 
+    # allocate shared memory
+    _G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+    shm = shared_memory.SharedMemory(create=True, size=_G_m.nbytes)
+    G_m = np.ndarray(_G_m.shape, dtype=_G_m.dtype, buffer=shm.buf)
+    G_m[:] = _G_m[:]  # copy initial data
+    args = [(shm.name, G_m.shape, G_m.dtype)] * multi_start
+
     start = time.time()
-    path_q, length_q = tsp_symmetric(G, monte_carlo=False)
+    with multiprocessing.Pool(processes=multi_start) as pool:
+        mp_results = pool.map(tsp_qrack, args)
+    mp_results.sort(key=lambda r: r[1])
+    path_q, length_q = mp_results[0]
     results["PyQrackIsing"].append((time.time() - start, length_q))
     if not validate_tsp_solution(G, path_q):
         warnings.warn("Invalid PyQrackIsing solution!")
+
+    G_m = None
+    shm.close()
+    shm.unlink()
 
     return results
 
