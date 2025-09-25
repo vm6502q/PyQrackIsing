@@ -21,7 +21,7 @@ def get_cut(solution, nodes):
 
 
 @njit(parallel=True)
-def init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees):
+def init_theta(h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float32)
     h_mult = abs(h_mult)
     for q in prange(n_qubits):
@@ -133,10 +133,11 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 class OpenCLContext:
-    def __init__(self, a, c, q, m, b, s):
+    def __init__(self, a, c, q, i, m, b, s):
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
         self.queue = q
+        self.init_theta_kernel = i
         self.maxcut_hamming_cdf_kernel = m
         self.bootstrap_kernel = b
         self.bootstrap_sparse_kernel = s
@@ -144,6 +145,7 @@ class OpenCLContext:
 IS_OPENCL_AVAILABLE = True
 ctx = None
 queue = None
+init_theta_kernel = None
 maxcut_hamming_cdf_kernel = None
 bootstrap_kernel = None
 bootstrap_sparse_kernel = None
@@ -157,6 +159,7 @@ try:
     # Load and build OpenCL kernels
     kernel_src = open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
+    init_theta_kernel = program.init_theta
     maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
     bootstrap_kernel = program.bootstrap
     bootstrap_sparse_kernel = program.bootstrap_sparse
@@ -164,4 +167,4 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel)
+opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel)

@@ -5,7 +5,7 @@ import os
 from numba import njit, prange
 from scipy.sparse import lil_matrix, csr_matrix
 
-from .maxcut_tfim_util import get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -114,7 +114,7 @@ def compute_energy(sample, G_data, G_rows, G_cols):
 def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
     n = G_rows.shape[0] - 1
     max_weight = G_data.max()
-    weights = (1.0 / (1.0 + (2 ** -52) - J_eff)).astype(np.float64)
+    weights = (1.0 / (1.0 + (2e-52) - J_eff)).astype(np.float64)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=np.float32)
@@ -264,16 +264,33 @@ def maxcut_tfim_sparse(
         return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes)
 
     J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices)
-    hamming_prob = init_thresholds(n_qubits)
 
     delta_t = 1.0 / n_steps
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
-    theta = init_theta(delta_t, tot_t, h_mult, n_qubits, J_eff, degrees)
+
     args = np.empty(3, dtype=np.float32)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult
+
+    # Move to GPU
+    mf = cl.mem_flags
+    args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
+    J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
+    deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 4))
+
+    # Warp size is 32:
+    group_size = min(n_qubits, 64)
+    global_size = ((n_qubits + group_size - 1) // group_size) * group_size
+
+    opencl_context.init_theta_kernel(
+        opencl_context.queue, (global_size,), (group_size,),
+        args_buf, np.int32(n_qubits), J_buf, deg_buf, theta_buf
+    )
+
+    hamming_prob = init_thresholds(n_qubits)
 
     # Warp size is 32:
     group_size = n_qubits - 1
@@ -282,11 +299,6 @@ def maxcut_tfim_sparse(
     grid_dim = n_steps * n_qubits * group_size
 
     # Move to GPU
-    mf = cl.mem_flags
-    args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
-    J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
-    deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
     ham_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
 
     # Kernel execution

@@ -1,3 +1,27 @@
+__kernel void init_theta(
+    __constant float* fargs,
+    const int n_qubits,
+    __constant float* J_eff,
+    __constant float* degrees,
+    __global float* theta
+) {
+    const float h_mult = fabs(fargs[2]);
+    const int q = get_global_id(0);
+
+    const float J = J_eff[q];
+    const float z = degrees[q];
+    const float abs_zJ = fabs(z * J);
+
+    float val;
+    if (abs_zJ < 2e-40f) {
+        val = (J > 0.0f) ? M_PI_F : -M_PI_F;
+    } else {
+        val = asin(fmax(-1.0f, fmin(1.0f, h_mult / (z * J))));
+    }
+
+    theta[q] = val;
+}
+
 // By Google Search AI
 inline void AtomicAdd_g_f(volatile __global float *source, const float operand) {
     union {
