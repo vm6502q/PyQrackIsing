@@ -226,8 +226,7 @@ def gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes):
 def maxcut_tfim(
     G,
     quality=None,
-    shots=None,
-    is_alt_gpu_sampling = False
+    shots=None
 ):
     nodes = None
     n_qubits = 0
@@ -260,7 +259,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = ((n_qubits * n_qubits) if is_alt_gpu_sampling and IS_OPENCL_AVAILABLE else n_qubits) << quality
+        shots = n_qubits << quality
 
     n_steps = 2 << quality
     grid_size = n_steps * n_qubits
@@ -316,16 +315,9 @@ def maxcut_tfim(
     cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
     opencl_context.queue.finish()
 
-    if not is_alt_gpu_sampling:
-        return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
-
     args_buf = None
     J_buf = None
     deg_buf = None
     theta_buf = None
 
-    fix_cdf(hamming_prob)
-    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits)
-    bit_string, l, r = get_cut(best_solution, nodes)
-
-    return bit_string, best_value, (l, r)
+    return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
