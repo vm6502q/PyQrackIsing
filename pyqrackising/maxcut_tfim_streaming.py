@@ -13,6 +13,18 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
 
 
+@njit
+def update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, node):
+    # Select node
+    used[node] = True
+
+    # Repulsion: penalize neighbors
+    for nbr in range(n):
+        if used[nbr]:
+            continue
+        weights[nbr] *= max(2e-7, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+
+
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
 def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, m):
@@ -27,7 +39,10 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
     weights = weights.copy()
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
-    for _ in range(m):
+    # Update answer and weights
+    update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, np.random.randint(0, n - 1))
+
+    for _ in range(1, m):
         # Count available
         total_w = 0.0
         for i in range(n):
@@ -55,11 +70,8 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         # Select node
         used[node] = True
 
-        # Repulsion: penalize neighbors
-        for nbr in range(n):
-            if used[nbr]:
-                continue
-            weights[nbr] *= max(2e-7, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+        # Update answer and weights
+        update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, node)
 
     return used
 
