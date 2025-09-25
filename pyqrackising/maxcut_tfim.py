@@ -315,6 +315,11 @@ def maxcut_tfim(
     cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
     opencl_context.queue.finish()
 
+    args_buf.release()
+    J_buf.release()
+    deg_buf.release()
+    theta_buf.release()
+
     args_buf = None
     J_buf = None
     deg_buf = None
