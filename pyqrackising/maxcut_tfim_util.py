@@ -144,7 +144,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 class OpenCLContext:
     def __init__(self, p, a, c, q, i, m, b, s, k):
-        self.MAX_GPU_PROC_ELEM = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(p)))
+        self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
         self.queue = q
@@ -170,7 +170,7 @@ try:
     # Pick a device (GPU if available)
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
-    compute_units = ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS)
+    compute_units = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS))))
 
     # Load and build OpenCL kernels
     kernel_src = f"#define MAX_PROC_ELEM {compute_units}\n"
