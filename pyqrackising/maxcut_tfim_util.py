@@ -143,7 +143,8 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 class OpenCLContext:
-    def __init__(self, a, c, q, i, m, b, s, k):
+    def __init__(self, p, a, c, q, i, m, b, s, k):
+        self.MAX_GPU_PROC_ELEM = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(p)))
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
         self.queue = q
@@ -157,6 +158,7 @@ class OpenCLContext:
 IS_OPENCL_AVAILABLE = True
 ctx = None
 queue = None
+compute_units = None
 init_theta_kernel = None
 maxcut_hamming_cdf_kernel = None
 bootstrap_kernel = None
@@ -168,9 +170,11 @@ try:
     # Pick a device (GPU if available)
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
+    compute_units = ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS)
 
     # Load and build OpenCL kernels
-    kernel_src = open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
+    kernel_src = f"#define MAX_PROC_ELEM {compute_units}\n"
+    kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
     init_theta_kernel = program.init_theta
     maxcut_hamming_cdf_kernel = program.maxcut_hamming_cdf
@@ -181,4 +185,4 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, sample_for_solution_best_bitset_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, sample_for_solution_best_bitset_kernel)

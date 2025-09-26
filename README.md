@@ -50,10 +50,10 @@ from pyqrackising import maxcut_tfim
 import networkx as nx
 
 G = nx.petersen_graph()
-best_solution_bit_string, best_cut_value, best_node_groups = maxcut_tfim(G, quality=2)
+best_solution_bit_string, best_cut_value, best_node_groups = maxcut_tfim(G, quality=2, is_alt_gpu_sampling=True)
 ```
 
-We also provide `maxcut_tfim_sparse(G)`, for `scipy` CSR sparse arrays (or `networkx` graphs). The (integer) `quality` setting is optional, with a default value of `3`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
+We also provide `maxcut_tfim_sparse(G)`, for `scipy` CSR sparse arrays (or `networkx` graphs). The (integer) `quality` setting is optional, with a default value of `3`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) `is_alt_gpu_sampling` is `True` by default and will dispatch almost the entire algorithm on GPU, instead of just the TFIM-heuristic component (although this isn't always optimal). If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
 
 Based on a combination of the TFIM-inspired MAXCUT solver and another technique for finding ground-state energy in quantum chemistry that we call the _"binary Clifford eigensolver,"_ we also provide an (approximate) spin glass ground-state solver:
 ```py
@@ -73,7 +73,7 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
 
 
 G = generate_spin_glass_graph(n_nodes=64, seed=42)
-solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=2, best_guess=None)
+solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=2, best_guess=None, is_alt_gpu_sampling=True)
 # solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=6)[0])
 ```
 We also provide `spin_glass_solver_sparse(G)`, for `scipy` **upper-triangular** CSR sparse arrays (or `networkx` graphs). The (integer) default `quality` setting is `3`. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
@@ -138,6 +138,10 @@ args_tuple = (n_qubits,)
 solution_bit_string, cut_value, node_groups, energy = spin_glass_solver_streaming(G_func, nodes, G_func_args_tuple=args_tuple, quality=6, best_guess=None)
 # solution_bit_string, cut_value, node_groups = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=args_tuple)
 ```
+
+## Environment Variables
+
+We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for when `is_alt_gpu_sampling=True`. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
 
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.

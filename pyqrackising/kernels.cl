@@ -279,7 +279,6 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
     return cut_val;
 }
 
-#define MAX_PROC_ELEM 65536
 #define MAX_WORDS 4096
 #define MAX_WORDS_MASK 4095
 
