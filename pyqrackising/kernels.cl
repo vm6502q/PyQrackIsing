@@ -427,17 +427,17 @@ int binary_search(__global const unsigned* l, const unsigned t, const unsigned l
     int right = len - 1;
 
     while (left <= right) {
-      int mid = (left + right) >> 1;
+        int mid = (left + right) >> 1;
 
-      if (l[mid] == t) {
-          return mid;
-      }
+        if (l[mid] == t) {
+            return mid;
+        }
 
-      if (l[mid] < t) {
-          left = mid + 1;
-      } else {
-          right = mid - 1;
-      }
+        if (l[mid] < t) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
     }
 
     return len;
