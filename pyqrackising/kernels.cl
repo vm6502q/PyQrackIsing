@@ -279,6 +279,10 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
     return cut_val;
 }
 
+#define MAX_PROC_ELEM 32768
+#define MAX_WORDS 1024
+#define MAX_WORDS_MASK 1023
+
 __kernel void sample_for_solution_best_bitset(
     __global const double* G_m,
     __global const float* thresholds,
@@ -291,6 +295,7 @@ __kernel void sample_for_solution_best_bitset(
     __local float* loc_energy,
     __local int* loc_index
 ) {
+
     const int gid_orig = get_global_id(0);
     const int lid = get_local_id(0);
     const int group = get_group_id(0);
@@ -300,12 +305,12 @@ __kernel void sample_for_solution_best_bitset(
 
     uint state = rng_seeds[gid_orig];
 
-    uint sol_bits[2048];
+    uint sol_bits[MAX_WORDS];
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
-    uint temp_sol[2048];
+    uint temp_sol[MAX_WORDS];
 
     double cut_val = -INFINITY;
-    for (int gid = gid_orig; gid < shots; gid += 65536) {
+    for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
         float mag_prob = rand_uniform(&state);
@@ -315,7 +320,7 @@ __kernel void sample_for_solution_best_bitset(
 
         // --- 2. Build solution bitset
         for (int w = 0; w < words; w++) temp_sol[w] = 0;
-        temp_sol[(gid >> 5) & 2047] |= 1U << (gid & 31);
+        temp_sol[(gid >> 5) & MAX_WORDS_MASK] |= 1U << (gid & 31);
 
         for (int count = 1; count < m; ++count) {
             double highest_weight = -INFINITY;

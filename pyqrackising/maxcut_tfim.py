@@ -141,7 +141,7 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
     kernel = opencl_context.sample_for_solution_best_bitset_kernel
 
     max_local_size = 64  # tune
-    max_global_size = 65536
+    max_global_size = 32768  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
     local_size = max_local_size
     num_groups = global_size // local_size
