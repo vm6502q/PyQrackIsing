@@ -27,7 +27,7 @@ def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_m, max_weight, weights, n, m):
+def local_repulsion_choice(G_m, max_weight, weights, n, m, shot):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -40,7 +40,7 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m):
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
     # Update answer and weights
-    update_repulsion_choice(G_m, max_weight, weights, n, used, np.random.randint(0, n - 1))
+    update_repulsion_choice(G_m, max_weight, weights, n, used, shot % n)
 
     for _ in range(1, m):
         # Count available
@@ -101,7 +101,7 @@ def sample_for_solution(G_m, shots, thresholds, J_eff):
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_m, max_weight, weights, n, m)
+        sample = local_repulsion_choice(G_m, max_weight, weights, n, m, s)
 
         solutions[s] = sample
         energies[s] = compute_energy(sample, G_m, n)
@@ -176,7 +176,7 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n):
         thresholds_buf,
         np.int32(n),
         np.int32(shots),
-        np.float32(G_m_np.max()),
+        np.float64(G_m_np.max()),
         rng_buf,
         solutions_buf,
         best_energies_buf,
@@ -270,7 +270,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = ((n_qubits * n_qubits) if is_alt_gpu_sampling and IS_OPENCL_AVAILABLE else n_qubits) << quality
+        shots = n_qubits << quality
 
     n_steps = 2 << quality
     grid_size = n_steps * n_qubits

@@ -57,7 +57,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
+def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m, shot):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -70,7 +70,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m):
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
     # Update answer and weights
-    update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used, np.random.randint(0, n - 1))
+    update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used, shot % n)
 
     for _ in range(1, m):
         # Count available
@@ -133,7 +133,7 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, J_eff):
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m)
+        sample = local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m, s)
         solutions[s] = sample
         energies[s] = compute_energy(sample, G_data, G_rows, G_cols)
 

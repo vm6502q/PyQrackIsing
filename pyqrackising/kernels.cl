@@ -168,7 +168,7 @@ __kernel void bootstrap(
     }
 }
 
-float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, __global ulong* G_rows, __global ulong* G_cols, __constant int* indices, const int k, const int n) {
+float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, __global unsigned* G_rows, __global unsigned* G_cols, __constant int* indices, const int k, const int n) {
     double energy = 0.0;
     for (int u = 0; u < n; ++u) {
         bool u_bit = theta[u];
@@ -198,8 +198,8 @@ float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, _
 
 __kernel void bootstrap_sparse(
     __global double* G_data,
-    __global ulong* G_rows,
-    __global ulong* G_cols,
+    __global unsigned* G_rows,
+    __global unsigned* G_cols,
     __constant char* best_theta,
     __constant int* indices_array,
     __constant int* args,               // args[0] = n, args[1] = k
@@ -284,7 +284,7 @@ __kernel void sample_for_solution_best_bitset(
     __global const float* thresholds,
     const int n,
     const int shots,
-    const float max_weight,
+    const double max_weight,
     __global float* rng_seeds,
     __global uint* best_solutions,   // [num_groups × ceil(n/32)]
     __global float* best_energies,   // [num_groups]
@@ -315,10 +315,7 @@ __kernel void sample_for_solution_best_bitset(
 
         // --- 2. Build solution bitset
         for (int w = 0; w < words; w++) temp_sol[w] = 0;
-        const int idx = (int)(rand_uniform(&state) * n);
-        const int w = idx >> 5;
-        const int b = idx & 31;
-        temp_sol[w] |= 1U << b;
+        temp_sol[(gid >> 5) & 2047] |= 1U << (gid & 31);
 
         for (int count = 1; count < m; ++count) {
             double highest_weight = -INFINITY;

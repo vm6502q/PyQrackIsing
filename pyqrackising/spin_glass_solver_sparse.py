@@ -197,8 +197,8 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
         mf = cl.mem_flags
         ctx = opencl_context.ctx
         G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
-        G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr.astype(np.uint64))
-        G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices.astype(np.uint64))
+        G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
+        G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
 
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
