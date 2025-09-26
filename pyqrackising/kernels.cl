@@ -282,7 +282,6 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
 
 #define MAX_WORDS 4096
 #define MAX_WORDS_MASK 4095
-#define TOP_N 16
 
 __kernel void sample_for_solution_best_bitset(
     __global const double* G_m,
@@ -357,13 +356,15 @@ __kernel void sample_for_solution_best_bitset(
 
                     int lowest_option = 0;
                     double lowest_weight = highest_weights[0];
-                    for (int x = 0; x < TOP_N; ++x) {
-                        double val = highest_weights[x];
-                        if (val < lowest_weight) {
-                            lowest_option = x;
-                            lowest_weight = highest_weights[x];
-                            if (val == -INFINITY) {
-                                break;
+                    if (lowest_weight != -INFINITY) {
+                        for (int x = 0; x < TOP_N; ++x) {
+                            double val = highest_weights[x];
+                            if (val < lowest_weight) {
+                                lowest_option = x;
+                                lowest_weight = highest_weights[x];
+                                if (val == -INFINITY) {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -570,13 +571,15 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     int lowest_option = 0;
                     double lowest_weight = highest_weights[0];
-                    for (int x = 0; x < TOP_N; ++x) {
-                        double val = highest_weights[x];
-                        if (val < lowest_weight) {
-                            lowest_option = x;
-                            lowest_weight = highest_weights[x];
-                            if (val == -INFINITY) {
-                                break;
+                    if (lowest_weight != -INFINITY) {
+                        for (int x = 0; x < TOP_N; ++x) {
+                            double val = highest_weights[x];
+                            if (val < lowest_weight) {
+                                lowest_option = x;
+                                lowest_weight = highest_weights[x];
+                                if (val == -INFINITY) {
+                                    break;
+                                }
                             }
                         }
                     }

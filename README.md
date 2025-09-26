@@ -143,6 +143,8 @@ solution_bit_string, cut_value, node_groups, energy = spin_glass_solver_streamin
 
 We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for when `is_alt_gpu_sampling=True`. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
 
+Similarly, for `is_alt_gpu_sampling=True`, define the "top-`n`" count of highest-weight direct neighbors to retain during sampling with environment variable "`PYQRACKISING_GPU_TOP_N`". The default is `32`. Increasing this might increase solution quality, but it will also increase time-to-solution and private memory usage.
+
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
 

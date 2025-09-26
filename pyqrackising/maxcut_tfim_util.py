@@ -179,6 +179,7 @@ try:
 
     # Load and build OpenCL kernels
     kernel_src = f"#define MAX_PROC_ELEM {compute_units}\n"
+    kernel_src += f"#define TOP_N {os.getenv('PYQRACKISING_GPU_TOP_N', '32')}\n"
     kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
     init_theta_kernel = program.init_theta
