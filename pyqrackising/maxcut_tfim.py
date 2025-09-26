@@ -176,6 +176,7 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n):
         thresholds_buf,
         np.int32(n),
         np.int32(shots),
+        np.float32(G_m_np.max()),
         rng_buf,
         solutions_buf,
         best_energies_buf,
@@ -235,7 +236,8 @@ def gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes):
 def maxcut_tfim(
     G,
     quality=None,
-    shots=None
+    shots=None,
+    is_alt_gpu_sampling = False
 ):
     nodes = None
     n_qubits = 0
@@ -268,7 +270,7 @@ def maxcut_tfim(
 
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits << quality
+        shots = ((n_qubits * n_qubits) if is_alt_gpu_sampling and IS_OPENCL_AVAILABLE else n_qubits) << quality
 
     n_steps = 2 << quality
     grid_size = n_steps * n_qubits
@@ -292,7 +294,7 @@ def maxcut_tfim(
     args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
     J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
     deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 8))
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * np.float32().nbytes))
 
     # Warp size is 32:
     group_size = min(n_qubits, 64)
@@ -334,4 +336,11 @@ def maxcut_tfim(
     deg_buf = None
     theta_buf = None
 
-    return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
+    if not is_alt_gpu_sampling:
+        return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
+
+    fix_cdf(hamming_prob)
+    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits)
+    bit_string, l, r = get_cut(best_solution, nodes)
+
+    return bit_string, best_value, (l, r)

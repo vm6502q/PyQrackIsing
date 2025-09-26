@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -160,7 +160,12 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes):
 
 @njit
 def gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob):
-    fix_cdf(hamming_prob)
+    hamming_prob /= hamming_prob.sum()
+    tot_prob = 0.0
+    for i in range(n_qubits - 1):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 2.0
 
     best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
 

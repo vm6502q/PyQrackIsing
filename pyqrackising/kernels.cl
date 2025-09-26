@@ -244,3 +244,156 @@ __kernel void bootstrap_sparse(
     }
 }
 
+/// ------ Alternative random sampling rejection kernel by Elara (the OpenAI custom GPT) is below ------ ///
+
+inline uint xorshift32(uint *state) {
+    uint x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
+}
+
+inline float rand_uniform(uint *state) {
+    return (float)xorshift32(state) / (float)0xFFFFFFFF;
+}
+
+// Compute cut value from bitset solution
+double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int n) {
+    double cut_val = 0.0;
+    for (int u = 0; u < n; u++) {
+        int u_word = u >> 5;      // divide by 32
+        int u_bit  = u & 31;
+        int u_val  = (sol_bits[u_word] >> u_bit) & 1;
+
+        for (int v = u + 1; v < n; v++) {
+            int v_word = v >> 5;
+            int v_bit  = v & 31;
+            int v_val  = (sol_bits[v_word] >> v_bit) & 1;
+
+            double w = G_m[u * n + v];
+            if (u_val != v_val) cut_val += w;
+        }
+    }
+    return cut_val;
+}
+
+__kernel void sample_for_solution_best_bitset(
+    __global const double* G_m,
+    __global const float* thresholds,
+    const int n,
+    const int shots,
+    const float max_weight,
+    __global float* rng_seeds,
+    __global uint* best_solutions,   // [num_groups × ceil(n/32)]
+    __global float* best_energies,   // [num_groups]
+    __local float* loc_energy,
+    __local int* loc_index
+) {
+    const int gid_orig = get_global_id(0);
+    const int lid = get_local_id(0);
+    const int group = get_group_id(0);
+    const int lsize = get_local_size(0);
+
+    const int words = (n + 31) / 32; // how many uint32s per solution
+
+    uint state = rng_seeds[gid_orig];
+
+    uint sol_bits[2048];
+    for (int w = 0; w < words; w++) sol_bits[w] = 0;
+    uint temp_sol[2048];
+
+    double cut_val = -INFINITY;
+    for (int gid = gid_orig; gid < shots; gid += 65536) {
+ 
+        // --- 1. Choose Hamming weight
+        float mag_prob = rand_uniform(&state);
+        int m = 0;
+        while (m < n && thresholds[m] < mag_prob) m++;
+        m++;
+
+        // --- 2. Build solution bitset
+        for (int w = 0; w < words; w++) temp_sol[w] = 0;
+        const int idx = (int)(rand_uniform(&state) * n);
+        const int w = idx >> 5;
+        const int b = idx & 31;
+        temp_sol[w] |= 1U << b;
+
+        for (int count = 1; count < m; ++count) {
+            double highest_weight = -INFINITY;
+            int best_bit = -1;
+
+            for (int i = 0; i < n; i += 32) {
+                for (int j = 0; j < 32; ++j) {
+                    const int u = i + j;
+                    if (u >= n) {
+                        break;
+                    }
+                    if ((temp_sol[i >> 5] >> j) & 1) {
+                        continue;
+                    }
+                    const int u_offset = u * n;
+
+                    double weight = 1.0;
+                    for (int k = 0; k < n; k += 32) {
+                        for (int l = 0; l < 32; ++l) {
+                            const int v = k + l;
+                            if (v >= n) {
+                                break;
+                            }
+                            if ((temp_sol[k >> 5] >> l) & 1) {
+                                weight *= max(2e-7, 1.0 - G_m[u_offset + v] / max_weight);
+                            }
+                        }
+                    }
+                    if (weight > highest_weight) {
+                        highest_weight = weight;
+                        best_bit = u;
+                    }
+                }
+            }
+
+            const int w = best_bit >> 5;
+            const int b = best_bit & 31;
+            temp_sol[w] |= 1U << b;
+        }
+
+        // --- 3. Compute cut value
+        double temp_cut = compute_cut_bitset(G_m, temp_sol, n);
+        if (temp_cut > cut_val) {
+            cut_val = temp_cut;
+            for (int i = 0; i < words; ++i) {
+                sol_bits[i] = temp_sol[i];
+            }
+        }
+    }
+
+    loc_energy[lid] = cut_val;
+    loc_index[lid] = gid_orig;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // --- 4. Reduction for best in workgroup
+    for (int offset = lsize >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lid < offset) {
+            if (loc_energy[lid + offset] > loc_energy[lid]) {
+                loc_energy[lid] = loc_energy[lid + offset];
+                loc_index[lid] = loc_index[lid + offset];
+            }
+        }
+    }
+
+    // --- 5. Write best per group
+    int winner_gid = loc_index[0];
+    if (lid == (winner_gid % get_local_size(0))) {
+        best_energies[group] = loc_energy[0];
+
+        // Copy winning bitset solution into best_solutions[group]
+        __global uint* dst = best_solutions + group * words;
+        for (int w = 0; w < words; w++) {
+            dst[w] = sol_bits[w];
+        }
+    }
+}
+
