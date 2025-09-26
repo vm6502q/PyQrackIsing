@@ -143,7 +143,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
 class OpenCLContext:
-    def __init__(self, p, a, c, q, i, m, b, s, k):
+    def __init__(self, p, a, c, q, i, m, b, s, k, l):
         self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.ctx = c
@@ -153,7 +153,11 @@ class OpenCLContext:
         self.bootstrap_kernel = b
         self.bootstrap_sparse_kernel = s
         self.sample_for_solution_best_bitset_kernel = k
+        self.sample_for_solution_best_bitset_sparse_kernel = l
         self.G_m_buf = None
+        self.G_data_buf = None
+        self.G_rows_buf = None
+        self.G_cols_buf = None
 
 IS_OPENCL_AVAILABLE = True
 ctx = None
@@ -164,6 +168,7 @@ maxcut_hamming_cdf_kernel = None
 bootstrap_kernel = None
 bootstrap_sparse_kernel = None
 sample_for_solution_best_bitset_kernel = None
+sample_for_solution_best_bitset_sparse_kernel = None
 try:
     import pyopencl as cl
     
@@ -181,8 +186,9 @@ try:
     bootstrap_kernel = program.bootstrap
     bootstrap_sparse_kernel = program.bootstrap_sparse
     sample_for_solution_best_bitset_kernel = program.sample_for_solution_best_bitset
+    sample_for_solution_best_bitset_sparse_kernel = program.sample_for_solution_best_bitset_sparse
 except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, sample_for_solution_best_bitset_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, sample_for_solution_best_bitset_kernel, sample_for_solution_best_bitset_sparse_kernel)

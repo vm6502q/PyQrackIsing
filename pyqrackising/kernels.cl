@@ -272,8 +272,9 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
             int v_bit  = v & 31;
             int v_val  = (sol_bits[v_word] >> v_bit) & 1;
 
-            double w = G_m[u * n + v];
-            if (u_val != v_val) cut_val += w;
+            if (u_val != v_val) {
+                cut_val += G_m[u * n + v];
+            }
         }
     }
     return cut_val;
@@ -398,3 +399,174 @@ __kernel void sample_for_solution_best_bitset(
     }
 }
 
+// Compute cut value from bitset solution
+double compute_cut_bitset_sparse(__global const double* G_data, __global const unsigned* G_rows, __global const unsigned* G_cols, const uint* sol_bits, int n) {
+    double cut_val = 0.0;
+    for (unsigned u = 0; u < n; u++) {
+        int u_word = u >> 5;      // divide by 32
+        int u_bit  = u & 31;
+        int u_val  = (sol_bits[u_word] >> u_bit) & 1;
+
+        unsigned max_col = G_rows[u + 1];
+        for (unsigned col = G_rows[u]; col < max_col; ++col) {
+            const int v = G_cols[col];
+            int v_word = v >> 5;
+            int v_bit  = v & 31;
+            int v_val  = (sol_bits[v_word] >> v_bit) & 1;
+
+            if (u_val != v_val) {
+                cut_val += G_data[col];
+            }
+        }
+    }
+    return cut_val;
+}
+
+int binary_search(__global const unsigned* l, const unsigned t, const unsigned len) {
+    int left = 0;
+    int right = len - 1;
+
+    while (left <= right) {
+      int mid = (left + right) >> 1;
+
+      if (l[mid] == t) {
+          return mid;
+      }
+
+      if (l[mid] < t) {
+          left = mid + 1;
+      } else {
+          right = mid - 1;
+      }
+    }
+
+    return len;
+}
+
+__kernel void sample_for_solution_best_bitset_sparse(
+    __global const double* G_data,
+    __global const unsigned* G_rows,
+    __global const unsigned* G_cols,
+    __global const float* thresholds,
+    const int n,
+    const int shots,
+    const double max_weight,
+    __global float* rng_seeds,
+    __global uint* best_solutions,   // [num_groups × ceil(n/32)]
+    __global float* best_energies,   // [num_groups]
+    __local float* loc_energy,
+    __local int* loc_index
+) {
+
+    const int gid_orig = get_global_id(0);
+    const int lid = get_local_id(0);
+    const int group = get_group_id(0);
+    const int lsize = get_local_size(0);
+
+    const int words = (n + 31) / 32; // how many uint32s per solution
+
+    uint state = rng_seeds[gid_orig];
+
+    uint sol_bits[MAX_WORDS];
+    for (int w = 0; w < words; w++) sol_bits[w] = 0;
+    uint temp_sol[MAX_WORDS];
+
+    double cut_val = -INFINITY;
+    for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
+ 
+        // --- 1. Choose Hamming weight
+        float mag_prob = rand_uniform(&state);
+        int m = 0;
+        while (m < n && thresholds[m] < mag_prob) m++;
+        m++;
+
+        // --- 2. Build solution bitset
+        for (int w = 0; w < words; w++) temp_sol[w] = 0;
+        temp_sol[(gid >> 5) & MAX_WORDS_MASK] |= 1U << (gid & 31);
+
+        for (int count = 1; count < m; ++count) {
+            double highest_weight = -INFINITY;
+            int best_bit = -1;
+
+            for (int i = 0; i < n; i += 32) {
+                for (int j = 0; j < 32; ++j) {
+                    const int u = i + j;
+                    if (u >= n) {
+                        break;
+                    }
+                    if ((temp_sol[i >> 5] >> j) & 1) {
+                        continue;
+                    }
+
+                    double weight = 1.0;
+
+                    unsigned max_col = G_rows[u + 1];
+                    for (int col = G_rows[u]; col < max_col; ++col) {
+                        const int v = G_cols[col];
+
+                        if ((temp_sol[v >> 5] >> (v & 31)) & 1) {
+                            weight *= max(2e-7, 1.0 - G_data[col] / max_weight);
+                        }
+                    }
+
+                    for (int v = 0; v < u; ++v) {
+                        if (!((temp_sol[v >> 5] >> (v & 31)) & 1)) {
+                            continue;
+                        }
+                        int start = G_rows[v];
+                        int end = G_rows[v + 1];
+                        int j = binary_search(&(G_cols[start]), u, end - start) + start;
+                        if (j < end) {
+                            weight *= max(2e-7, 1.0 - G_data[j] / max_weight);
+                        }
+                    }
+
+                    if (weight > highest_weight) {
+                        highest_weight = weight;
+                        best_bit = u;
+                    }
+                }
+            }
+
+            const int w = best_bit >> 5;
+            const int b = best_bit & 31;
+            temp_sol[w] |= 1U << b;
+        }
+
+        // --- 3. Compute cut value
+        double temp_cut = compute_cut_bitset_sparse(G_data, G_rows, G_cols, temp_sol, n);
+        if (temp_cut > cut_val) {
+            cut_val = temp_cut;
+            for (int i = 0; i < words; ++i) {
+                sol_bits[i] = temp_sol[i];
+            }
+        }
+    }
+
+    loc_energy[lid] = cut_val;
+    loc_index[lid] = gid_orig;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // --- 4. Reduction for best in workgroup
+    for (int offset = lsize >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lid < offset) {
+            if (loc_energy[lid + offset] > loc_energy[lid]) {
+                loc_energy[lid] = loc_energy[lid + offset];
+                loc_index[lid] = loc_index[lid + offset];
+            }
+        }
+    }
+
+    // --- 5. Write best per group
+    int winner_gid = loc_index[0];
+    if (lid == (winner_gid % get_local_size(0))) {
+        best_energies[group] = loc_energy[0];
+
+        // Copy winning bitset solution into best_solutions[group]
+        __global uint* dst = best_solutions + group * words;
+        for (int w = 0; w < words; w++) {
+            dst[w] = sol_bits[w];
+        }
+    }
+}

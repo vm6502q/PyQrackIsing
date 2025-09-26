@@ -240,7 +240,7 @@ def maxcut_tfim(
     G,
     quality=None,
     shots=None,
-    is_alt_gpu_sampling = True,
+    is_alt_gpu_sampling = False,
     is_g_buf_reused = False
 ):
     nodes = None

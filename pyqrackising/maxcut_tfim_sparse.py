@@ -16,21 +16,21 @@ except ImportError:
 
 @njit
 def binary_search(l, t):
-  left = 0
-  right = len(l) - 1
+    left = 0
+    right = len(l) - 1
 
-  while left <= right:
-    mid = (left + right) >> 1
+    while left <= right:
+        mid = (left + right) >> 1
 
-    if l[mid] == t:
-      return mid
+        if l[mid] == t:
+            return mid
 
-    if l[mid] < t:
-      left = mid + 1
-    else:
-      right = mid - 1
+        if l[mid] < t:
+            left = mid + 1
+        else:
+            right = mid - 1
 
-  return len(l)
+    return len(l)
 
 
 @njit
@@ -182,6 +182,88 @@ def init_J_and_z(G_data, G_rows, G_cols):
     return J_eff, degrees
 
 
+def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
+    ctx = opencl_context.ctx
+    queue = opencl_context.queue
+    kernel = opencl_context.sample_for_solution_best_bitset_sparse_kernel
+
+    max_local_size = 64  # tune
+    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + max_local_size - 1) // max_local_size) * max_local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
+    global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
+    local_size = max_local_size
+    num_groups = global_size // local_size
+
+    # Bit-packing params
+    words = (n + 31) // 32
+
+    # Random seeds (host)
+    rng_seeds_np = np.random.randint(1, 2**31-1, size=global_size, dtype=np.uint32)
+
+    # Device buffers
+    mf = cl.mem_flags
+    G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.data)
+    G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.indptr)
+    G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.indices)
+    thresholds_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=thresholds_np)
+    rng_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=rng_seeds_np)
+
+    # Solutions buffer: each work-item writes a candidate bitset
+    solutions_buf = cl.Buffer(ctx, mf.READ_WRITE, size=num_groups * words * np.uint32().nbytes)
+
+    # Best energies and solutions (per group)
+    # We'll reuse solutions_buf to hold them after reduction (kernel copies winners into group slices)
+    best_energies_np = np.empty(num_groups, dtype=np.float32)
+    best_energies_buf = cl.Buffer(ctx, mf.WRITE_ONLY, best_energies_np.nbytes)
+
+    # Local memory buffers
+    local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
+    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
+
+    # Set kernel args
+    kernel.set_args(
+        G_data_buf,
+        G_rows_buf,
+        G_cols_buf,
+        thresholds_buf,
+        np.int32(n),
+        np.int32(shots),
+        np.float64(G_m_csr.data.max()),
+        rng_buf,
+        solutions_buf,
+        best_energies_buf,
+        local_energy_buf,
+        local_index_buf
+    )
+
+    # Launch
+    cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
+
+    # Copy back
+    cl.enqueue_copy(queue, best_energies_np, best_energies_buf)
+    solutions_np = np.empty(num_groups * words, dtype=np.uint32)
+    cl.enqueue_copy(queue, solutions_np, solutions_buf)  # all candidates, includes per-group winners
+    queue.finish()
+
+    # Host reduction
+    best_group = np.argmax(best_energies_np)  # max cut
+    best_energy = float(best_energies_np[best_group])
+    best_solution_bits = solutions_np[best_group * words : (best_group + 1) * words]
+
+    # Unpack bitset into boolean vector
+    best_solution = np.zeros(n, dtype=np.bool_)
+    for u in range(n):
+        w = u >> 5
+        b = u & 31
+        best_solution[u] = (best_solution_bits[w] >> b) & 1
+
+    if is_g_buf_reused:
+        opencl_context.G_data_buf = G_data_buf
+        opencl_context.G_rows_buf = G_rows_buf
+        opencl_context.G_cols_buf = G_cols_buf
+
+    return best_solution, best_energy
+
+
 @njit
 def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
     J_eff, degrees = init_J_and_z(G_data, G_rows, G_cols)
@@ -223,6 +305,8 @@ def maxcut_tfim_sparse(
     G,
     quality=None,
     shots=None,
+    is_alt_gpu_sampling = False,
+    is_g_buf_reused = False
 ):
     nodes = None
     n_qubits = 0
@@ -321,4 +405,11 @@ def maxcut_tfim_sparse(
     deg_buf = None
     theta_buf = None
 
-    return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes)
+    if not is_alt_gpu_sampling:
+        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes)
+
+    fix_cdf(hamming_prob)
+    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)
+    bit_string, l, r = get_cut(best_solution, nodes)
+
+    return bit_string, best_value, (l, r)

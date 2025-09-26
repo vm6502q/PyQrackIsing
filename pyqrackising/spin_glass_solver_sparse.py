@@ -152,7 +152,13 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
     return lil.tocsr()
 
 
-def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
+def spin_glass_solver_sparse(
+    G,
+    quality=None,
+    shots=None,
+    best_guess=None,
+    is_alt_gpu_sampling=False
+):
     nodes = None
     n_qubits = 0
     G_m = None
@@ -190,15 +196,20 @@ def spin_glass_solver_sparse(G, quality=None, shots=None, best_guess=None):
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots)
+        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if IS_OPENCL_AVAILABLE:
-        mf = cl.mem_flags
-        ctx = opencl_context.ctx
-        G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
-        G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
-        G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
+        if not (opencl_context.G_data_buf is None):
+            G_data_buf = opencl_context.G_data_buf
+            G_rows_buf = opencl_context.G_rows_buf
+            G_cols_buf = opencl_context.G_cols_buf
+        else:
+            mf = cl.mem_flags
+            ctx = opencl_context.ctx
+            G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
+            G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
+            G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
 
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
