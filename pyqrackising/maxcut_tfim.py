@@ -135,7 +135,7 @@ def init_J_and_z(G_m):
     return J_eff, degrees
 
 
-def run_sampling_opencl(G_m_np, thresholds_np, shots, n):
+def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     kernel = opencl_context.sample_for_solution_best_bitset_kernel
@@ -205,6 +205,9 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n):
         b = u & 31
         best_solution[u] = (best_solution_bits[w] >> b) & 1
 
+    if is_g_buf_reused:
+        opencl_context.G_m_buf = G_m_buf
+
     return best_solution, best_energy
 
 
@@ -237,7 +240,8 @@ def maxcut_tfim(
     G,
     quality=None,
     shots=None,
-    is_alt_gpu_sampling = True
+    is_alt_gpu_sampling = True,
+    is_g_buf_reused = False
 ):
     nodes = None
     n_qubits = 0
@@ -340,7 +344,7 @@ def maxcut_tfim(
         return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes)
 
     fix_cdf(hamming_prob)
-    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits)
+    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)

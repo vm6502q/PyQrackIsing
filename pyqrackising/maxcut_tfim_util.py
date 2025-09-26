@@ -152,6 +152,7 @@ class OpenCLContext:
         self.bootstrap_kernel = b
         self.bootstrap_sparse_kernel = s
         self.sample_for_solution_best_bitset_kernel = k
+        self.G_m_buf = None
 
 IS_OPENCL_AVAILABLE = True
 ctx = None

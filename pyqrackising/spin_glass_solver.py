@@ -135,7 +135,13 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
     return energy
 
 
-def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
+def spin_glass_solver(
+    G,
+    quality=None,
+    shots=None,
+    best_guess=None,
+    is_alt_gpu_sampling = True
+):
     nodes = None
     n_qubits = 0
     G_m = None
@@ -173,13 +179,16 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots)
+        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if IS_OPENCL_AVAILABLE:
-        mf = cl.mem_flags
-        ctx = opencl_context.ctx
-        G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
+        if not (opencl_context.G_m_buf is None):
+            G_m_buf = opencl_context.G_m_buf
+        else:
+            mf = cl.mem_flags
+            ctx = opencl_context.ctx
+            G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
 
     min_energy = compute_energy(best_theta, G_m)
     improved = True
@@ -217,5 +226,6 @@ def spin_glass_solver(G, quality=None, shots=None, best_guess=None):
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     cut_value = evaluate_cut_edges(best_theta, G_m)
+    opencl_context.G_m_buf = None
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
