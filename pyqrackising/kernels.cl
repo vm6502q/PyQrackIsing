@@ -282,6 +282,7 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
 
 #define MAX_WORDS 4096
 #define MAX_WORDS_MASK 4095
+#define TOP_N 16
 
 __kernel void sample_for_solution_best_bitset(
     __global const double* G_m,
@@ -323,8 +324,12 @@ __kernel void sample_for_solution_best_bitset(
         temp_sol[(gid >> 5) & MAX_WORDS_MASK] |= 1U << (gid & 31);
 
         for (int count = 1; count < m; ++count) {
-            double highest_weight = -INFINITY;
-            int best_bit = -1;
+            double highest_weights[TOP_N];
+            int best_bits[TOP_N];
+            for (int x = 0; x < TOP_N; ++x) {
+                highest_weights[x] = -INFINITY;
+                best_bits[x] = -1;
+            }
 
             for (int i = 0; i < n; i += 32) {
                 for (int j = 0; j < 32; ++j) {
@@ -349,10 +354,48 @@ __kernel void sample_for_solution_best_bitset(
                             }
                         }
                     }
-                    if (weight > highest_weight) {
-                        highest_weight = weight;
-                        best_bit = u;
+
+                    int lowest_option = 0;
+                    double lowest_weight = highest_weights[0];
+                    for (int x = 0; x < TOP_N; ++x) {
+                        double val = highest_weights[x];
+                        if (val < lowest_weight) {
+                            lowest_option = x;
+                            lowest_weight = highest_weights[x];
+                            if (val == -INFINITY) {
+                                break;
+                            }
+                        }
                     }
+
+                    if (weight > lowest_weight) {
+                        highest_weights[lowest_option] = weight;
+                        best_bits[lowest_option] = u;
+                    }
+                }
+            }
+
+            double total_weight = 0.0;
+            for (int x = 0; x < TOP_N; ++x) {
+                const double val = highest_weights[x];
+                if (val == -INFINITY) {
+                    continue;
+                }
+                total_weight += val;
+            }
+
+            const float bit_prob = rand_uniform(&state);
+            double tot_prob = 0.0;
+            int best_bit = 0;
+            for (int x = 0; x < TOP_N; ++x) {
+                const double val = highest_weights[x];
+                if (val == -INFINITY) {
+                    continue;
+                }
+                tot_prob += val;
+                if ((total_weight * bit_prob) < tot_prob) {
+                    best_bit = best_bits[x];
+                    break;
                 }
             }
 
@@ -475,7 +518,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
-        float mag_prob = rand_uniform(&state);
+        const float mag_prob = rand_uniform(&state);
         int m = 0;
         while (m < n && thresholds[m] < mag_prob) m++;
         m++;
@@ -485,8 +528,12 @@ __kernel void sample_for_solution_best_bitset_sparse(
         temp_sol[(gid >> 5) & MAX_WORDS_MASK] |= 1U << (gid & 31);
 
         for (int count = 1; count < m; ++count) {
-            double highest_weight = -INFINITY;
-            int best_bit = -1;
+            double highest_weights[TOP_N];
+            int best_bits[TOP_N];
+            for (int x = 0; x < TOP_N; ++x) {
+                highest_weights[x] = -INFINITY;
+                best_bits[x] = -1;
+            }
 
             for (int i = 0; i < n; i += 32) {
                 for (int j = 0; j < 32; ++j) {
@@ -521,10 +568,47 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         }
                     }
 
-                    if (weight > highest_weight) {
-                        highest_weight = weight;
-                        best_bit = u;
+                    int lowest_option = 0;
+                    double lowest_weight = highest_weights[0];
+                    for (int x = 0; x < TOP_N; ++x) {
+                        double val = highest_weights[x];
+                        if (val < lowest_weight) {
+                            lowest_option = x;
+                            lowest_weight = highest_weights[x];
+                            if (val == -INFINITY) {
+                                break;
+                            }
+                        }
                     }
+
+                    if (weight > lowest_weight) {
+                        highest_weights[lowest_option] = weight;
+                        best_bits[lowest_option] = u;
+                    }
+                }
+            }
+
+            double total_weight = 0.0;
+            for (int x = 0; x < TOP_N; ++x) {
+                const double val = highest_weights[x];
+                if (val == -INFINITY) {
+                    continue;
+                }
+                total_weight += val;
+            }
+
+            const float bit_prob = rand_uniform(&state);
+            double tot_prob = 0.0;
+            int best_bit = 0;
+            for (int x = 0; x < TOP_N; ++x) {
+                const double val = highest_weights[x];
+                if (val == -INFINITY) {
+                    continue;
+                }
+                tot_prob += val;
+                if ((total_weight * bit_prob) < tot_prob) {
+                    best_bit = best_bits[x];
+                    break;
                 }
             }
 

@@ -157,7 +157,7 @@ def spin_glass_solver_sparse(
     quality=None,
     shots=None,
     best_guess=None,
-    is_alt_gpu_sampling=False
+    is_alt_gpu_sampling=True
 ):
     nodes = None
     n_qubits = 0
