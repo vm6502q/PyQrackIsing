@@ -19,8 +19,8 @@ def build_program_graph(halts=True, size=7):
         G.add_edge(nodes[i], nodes[i + 1], weight=1)
     if halts:
         # add terminal sink node
-        G.add_node("HALT")
-        G.add_edge(nodes[-1], "HALT", weight=2)
+        G.add_node(-1)
+        G.add_edge(nodes[-1], -1, weight=2)
     else:
         # close cycle to simulate infinite loop
         G.add_edge(nodes[-1], nodes[0], weight=2)
@@ -29,7 +29,7 @@ def build_program_graph(halts=True, size=7):
 def halting_entropy(G, trials=10):
     cuts = []
     for i in range(trials):
-        _, _, cut, _ = spin_glass_solver(G, quality=3, correction_quality=3)
+        _, _, cut, _ = spin_glass_solver(G, quality=6)
         cut = (frozenset(cut[0]), frozenset(cut[1])) if 0 in cut[0] else (frozenset(cut[1]), frozenset(cut[0]))
         cuts.append(cut)
 

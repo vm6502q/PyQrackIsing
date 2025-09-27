@@ -22,7 +22,7 @@ def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(2e-7, 1 - G_m[node, nbr] / max_weight)
+        weights[nbr] *= max(2e-8, 1 - G_m[node, nbr] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -270,7 +270,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 3
+        quality = 2
 
     if shots is None:
         # Number of measurement shots

@@ -28,7 +28,7 @@ def generate_adjacency(n_nodes=64, seed=None):
 
 if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
-    quality = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+    quality = int(sys.argv[2]) if len(sys.argv) > 2 else None
     seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
 
     start = time.perf_counter()

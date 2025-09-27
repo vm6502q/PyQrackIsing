@@ -52,7 +52,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= max(2e-7, 1 - G_data[j] / max_weight)
+            weights[nbr] *= max(2e-8, 1 - G_data[j] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -335,7 +335,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 3
+        quality = 2
 
     if shots is None:
         # Number of measurement shots

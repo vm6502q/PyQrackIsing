@@ -22,7 +22,7 @@ def update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weight
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(2e-7, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+        weights[nbr] *= max(2e-8, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -193,7 +193,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 3
+        quality = 2
 
     if shots is None:
         # Number of measurement shots
