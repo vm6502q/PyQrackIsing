@@ -131,6 +131,8 @@ float bootstrap_worker(__constant char* theta, __global double* G_m, __constant 
     return (float)energy;
 }
 
+#define ENERGY_EPSILON 2e-23
+
 __kernel void bootstrap(
     uint prng_seed,
     __global double* G_m,
@@ -174,7 +176,7 @@ __kernel void bootstrap(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= ENERGY_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -259,7 +261,7 @@ __kernel void bootstrap_sparse(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= ENERGY_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }

@@ -124,7 +124,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
     if min_energy < energy:
         return min_energy
 
-    choices = np.where(min_energy_host == energy)[0]
+    choices = np.where(np.isclose(min_energy_host, energy))[0]
     best_i = np.random.choice(choices) if len(choices) else np.argmin(min_energy_host)
 
     flip_index_start = best_i * k
