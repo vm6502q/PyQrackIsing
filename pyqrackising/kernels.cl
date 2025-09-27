@@ -175,7 +175,7 @@ __kernel void bootstrap(
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
-                loc_index[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
     }
@@ -260,7 +260,7 @@ __kernel void bootstrap_sparse(
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
-                loc_index[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
     }
