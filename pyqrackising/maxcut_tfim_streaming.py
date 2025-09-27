@@ -87,9 +87,7 @@ def compute_energy(sample, G_func, G_func_args_tuple, nodes, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thresholds, degrees_sum, J_eff, n):
-    weights = (1.0 / (1.0 + (2e-52) - J_eff)).astype(np.float64)
-
+def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thresholds, degrees_sum, weights, n):
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=np.float32)
 
@@ -151,7 +149,13 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes):
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
+    max_weight = degrees.sum()
+    degrees = None
+    J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+    weights = J_eff.astype(np.float64)
+    J_eff = None
+
+    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -159,10 +163,10 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes):
 
 
 @njit
-def gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob):
+def gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, weights, degrees, hamming_prob, max_weight):
     fix_cdf(hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, degrees.sum(), J_eff, n_qubits)
+    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -264,4 +268,10 @@ def maxcut_tfim_streaming(
     deg_buf = None
     theta_buf = None
 
-    return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob)
+    max_weight = degrees.sum()
+    degrees = None
+    J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+    weights = J_eff.astype(np.float64)
+    J_eff = None
+
+    return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, weights, degrees, hamming_prob, max_weight)
