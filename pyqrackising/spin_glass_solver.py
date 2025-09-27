@@ -101,6 +101,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
 
     # Set kernel args
     bootstrap_kernel.set_args(
+        np.random.randint(1<<32, dtype='uint32'),
         G_m_buf,
         best_theta_buf,
         indices_buf,

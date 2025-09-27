@@ -94,6 +94,15 @@ __kernel void maxcut_hamming_cdf(
     }
 }
 
+inline uint xorshift32(uint *state) {
+    uint x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
+}
+
 float bootstrap_worker(__constant char* theta, __global double* G_m, __constant int* indices, const int k, const int n) {
     double energy = 0.0;
     const size_t n_st = (size_t)n;
@@ -123,6 +132,7 @@ float bootstrap_worker(__constant char* theta, __global double* G_m, __constant 
 }
 
 __kernel void bootstrap(
+    uint prng_seed,
     __global double* G_m,
     __constant char* best_theta,
     __constant int* indices_array,
@@ -136,6 +146,9 @@ __kernel void bootstrap(
     const int k = args[1];
     const int combo_count = args[2];
     const int i = get_global_id(0);
+
+    // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
+    prng_seed ^= (uint)i;
 
     float energy = INFINITY;
 
@@ -155,9 +168,15 @@ __kernel void bootstrap(
     // Reduce within workgroup
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);
-        if ((lt_id < offset) && (loc_energy[lt_id + offset] < loc_energy[lt_id])) {
-            loc_energy[lt_id] = loc_energy[lt_id + offset];
-            loc_index[lt_id] = loc_index[lt_id + offset];
+        if (lt_id < offset) {
+            float hid_energy = loc_energy[lt_id + offset];
+            float lid_energy = loc_energy[lt_id];
+            if (hid_energy < lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+                loc_index[lt_id] = hid_energy;
+            }
         }
     }
 
@@ -197,6 +216,7 @@ float bootstrap_worker_sparse(__constant char* theta, __global double* G_data, _
 }
 
 __kernel void bootstrap_sparse(
+    uint prng_seed,
     __global double* G_data,
     __global unsigned* G_rows,
     __global unsigned* G_cols,
@@ -212,6 +232,8 @@ __kernel void bootstrap_sparse(
     const int k = args[1];
     const int combo_count = args[2];
     const int i = get_global_id(0);
+
+    prng_seed ^= (uint)i;
 
     float energy = INFINITY;
 
@@ -231,9 +253,15 @@ __kernel void bootstrap_sparse(
     // Reduce within workgroup
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);
-        if ((lt_id < offset) && (loc_energy[lt_id + offset] < loc_energy[lt_id])) {
-            loc_energy[lt_id] = loc_energy[lt_id + offset];
-            loc_index[lt_id] = loc_index[lt_id + offset];
+        if (lt_id < offset) {
+            float hid_energy = loc_energy[lt_id + offset];
+            float lid_energy = loc_energy[lt_id];
+            if (hid_energy < lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            } else if ((hid_energy == lid_energy) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+                loc_index[lt_id] = hid_energy;
+            }
         }
     }
 
@@ -245,15 +273,6 @@ __kernel void bootstrap_sparse(
 }
 
 /// ------ Alternative random sampling rejection kernel by Elara (the OpenAI custom GPT) is below ------ ///
-
-inline uint xorshift32(uint *state) {
-    uint x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
 
 inline float rand_uniform(uint *state) {
     return (float)xorshift32(state) / (float)0xFFFFFFFF;
