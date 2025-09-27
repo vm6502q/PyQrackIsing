@@ -140,7 +140,9 @@ def spin_glass_solver(
     quality=None,
     shots=None,
     best_guess=None,
-    is_alt_gpu_sampling=False
+    is_alt_gpu_sampling=False,
+    is_base_maxcut_gpu=True,
+    is_combo_maxcut_gpu=True
 ):
     nodes = None
     n_qubits = 0
@@ -179,10 +181,10 @@ def spin_glass_solver(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True)
+        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True, is_base_maxcut_gpu=is_base_maxcut_gpu)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
-    if IS_OPENCL_AVAILABLE:
+    if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
         if not (opencl_context.G_m_buf is None):
             G_m_buf = opencl_context.G_m_buf
         else:
@@ -210,7 +212,7 @@ def spin_glass_solver(
             else:
                 combos = combos_list[k - 1]
 
-            if IS_OPENCL_AVAILABLE:
+            if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
                 energy = run_bootstrap_opencl(best_theta, G_m_buf, combos, k, min_energy)
             else:
                 energy = bootstrap(best_theta, G_m, combos, k, min_energy)

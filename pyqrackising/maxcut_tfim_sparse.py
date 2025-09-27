@@ -305,8 +305,9 @@ def maxcut_tfim_sparse(
     G,
     quality=None,
     shots=None,
-    is_alt_gpu_sampling = False,
-    is_g_buf_reused = False
+    is_alt_gpu_sampling=False,
+    is_g_buf_reused=False,
+    is_base_maxcut_gpu=True
 ):
     nodes = None
     n_qubits = 0
@@ -344,7 +345,7 @@ def maxcut_tfim_sparse(
     n_steps = 2 << quality
     grid_size = n_steps * n_qubits
 
-    if not (IS_OPENCL_AVAILABLE and grid_size >= 128):
+    if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
         return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes)
 
     J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices)

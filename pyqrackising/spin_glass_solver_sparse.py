@@ -157,7 +157,9 @@ def spin_glass_solver_sparse(
     quality=None,
     shots=None,
     best_guess=None,
-    is_alt_gpu_sampling=False
+    is_alt_gpu_sampling=False,
+    is_base_maxcut_gpu=True,
+    is_combo_maxcut_gpu=True
 ):
     nodes = None
     n_qubits = 0
@@ -196,10 +198,10 @@ def spin_glass_solver_sparse(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True)
+        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True, is_base_maxcut_gpu=is_base_maxcut_gpu)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
-    if IS_OPENCL_AVAILABLE:
+    if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
         if not (opencl_context.G_data_buf is None):
             G_data_buf = opencl_context.G_data_buf
             G_rows_buf = opencl_context.G_rows_buf
@@ -231,7 +233,7 @@ def spin_glass_solver_sparse(
             else:
                 combos = combos_list[k - 1]
 
-            if IS_OPENCL_AVAILABLE:
+            if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
                 energy = run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, min_energy)
             else:
                 energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)

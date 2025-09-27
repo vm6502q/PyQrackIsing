@@ -66,7 +66,8 @@ def spin_glass_solver_streaming(
     G_func_args_tuple=None,
     quality=None,
     shots=None,
-    best_guess=None
+    best_guess=None,
+    is_base_maxcut_gpu=True
 ):
     n_qubits = len(nodes)
 
@@ -95,7 +96,7 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=G_func_args_tuple, quality=quality, shots=shots)
+        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=G_func_args_tuple, quality=quality, shots=shots, is_base_maxcut_gpu=is_base_maxcut_gpu)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     min_energy = compute_energy(best_theta, G_func, G_func_args_tuple, nodes)
