@@ -30,8 +30,8 @@ __kernel void init_theta(
 
 // By Google Search AI
 inline void atomic_add_double(__global double *address, double val) {
-    long long old_val_ll;
-    long long new_val_ll;
+    long old_val_ll;
+    long new_val_ll;
     double old_val_d;
 
     do {
