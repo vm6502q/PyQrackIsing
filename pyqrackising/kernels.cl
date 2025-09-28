@@ -1,94 +1,103 @@
 __kernel void init_theta(
-    __constant float* fargs,
+    __constant double* fargs,
     const int n_qubits,
-    __constant float* J_eff,
-    __constant float* degrees,
-    __global float* theta
+    __constant double* J_eff,
+    __constant unsigned* degrees,
+    __global double* theta
 ) {
     const int q = get_global_id(0);
     if (q >= n_qubits) {
         return;
     }
 
-    const float h_mult = fabs(fargs[2]);
+    const double h_mult = fabs(fargs[2]);
 
-    const float J = J_eff[q];
-    const float z = degrees[q];
-    const float abs_zJ = fabs(z * J);
+    const double J = J_eff[q];
+    const unsigned z = degrees[q];
+    const double abs_zJ = fabs(z * J);
 
     float val;
-    if (abs_zJ < 2e-40f) {
-        val = (J > 0.0f) ? M_PI_F : -M_PI_F;
+    if (abs_zJ < 2e-52) {
+        val = (J > 0.0) ? M_PI_F : -M_PI_F;
     } else {
-        val = asin(fmax(-1.0f, fmin(1.0f, h_mult / (z * J))));
+        val = asin(fmax(-1.0, fmin(1.0, h_mult / (z * J))));
     }
 
     theta[q] = val;
 }
 
 // By Google Search AI
-inline void AtomicAdd_g_f(volatile __global float *source, const float operand) {
+inline void AtomicAdd_g_f(volatile __global double *source, const double operand) {
     union {
-        unsigned int intVal;
-        float floatVal;
+        ulong intVal;
+        double floatVal;
     } oldVal, newVal;
 
     do {
         oldVal.floatVal = *source;
         newVal.floatVal = oldVal.floatVal + operand;
         // Use atomic_cmpxchg to atomically update the value
-    } while (atomic_cmpxchg((volatile __global unsigned int*)source, oldVal.intVal, newVal.intVal) != oldVal.intVal);
+    } while (atomic_cmpxchg((volatile __global ulong*)source, oldVal.intVal, newVal.intVal) != oldVal.intVal);
 }
 
 // By Elara (custom OpenAI GPT)
-inline float probability_by_hamming_weight(
-    int q, float J, float h, float z, float theta, float t, int n_qubits
+inline double probability_by_hamming_weight(
+    int q, double J, double h, unsigned z, double theta, double t, int n_qubits
 ) {
-    float ratio = fabs(h) / (z * J);
-    if (ratio > 1.0f) ratio = 1.0f;
-    float theta_c = asin(ratio);
+    double ratio = fabs(h) / (z * J);
+    if (ratio > 1.0) {
+        ratio = 1.0;
+    }
+    double theta_c = asin(ratio);
 
-    float p = pow(2.0f, fabs(J / h) - 1.0f)
-        * (1.0f + sin(theta - theta_c) * cos(1.5f * M_PI_F * J * t + theta) / (1.0f + sqrt(t)))
-        - 0.5f;
+    double p = pow(2.0, fabs(J / h) - 1.0)
+        * (1.0 + sin(theta - theta_c) * cos(1.5 * M_PI_F * J * t + theta) / (1.0 + sqrt(t)))
+        - 0.5;
 
-    if ((p * (n_qubits + 2.0f)) >= 1024.0f) return 0.0f;
+    if ((p * (n_qubits + 2.0)) >= 1024.0) {
+        return 0.0;
+    }
 
-    float numerator = pow(2.0f, (n_qubits + 2.0f) * p) - 1.0f;
-    float denominator = pow(2.0f, p) - 1.0f;
-    float result = numerator * pow(2.0f, -((n_qubits + 1.0f) * p) - p * q) / denominator;
+    double numerator = pow(2.0, (n_qubits + 2.0) * p) - 1.0;
+    double denominator = pow(2.0, p) - 1.0;
+    double result = numerator * pow(2.0, -((n_qubits + 1.0) * p) - p * q) / denominator;
 
-    if (isnan(result) || isinf(result)) return 0.0f;
+    if (isnan(result) || isinf(result)) {
+        return 0.0;
+    }
+
     return result;
 }
 
 __kernel void maxcut_hamming_cdf(
     int n_qubits,
-    __constant int* degrees,
-    __constant float* args,
-    __constant float* J_func,
-    __constant float* theta,
-    __global float* hamming_prob
+    __constant unsigned* degrees,
+    __constant double* args,
+    __constant double* J_func,
+    __constant double* theta,
+    __global double* hamming_prob
 ) {
-    const float delta_t = args[0U];
-    const float tot_t = args[1U];
-    const float h_mult = args[2U];
+    const double delta_t = args[0U];
+    const double tot_t = args[1U];
+    const double h_mult = args[2U];
     const int step = get_group_id(0) / n_qubits;
     const int qi = get_group_id(0) % n_qubits;
-    const float J_eff = J_func[qi];
-    const float z = degrees[qi];
-    if (fabs(z * J_eff) <= (pow(2.0f, -52))) return;
+    const double J_eff = J_func[qi];
+    const unsigned z = degrees[qi];
+    if (fabs(z * J_eff) <= 2e-52) {
+        return;
+    }
 
-    const float theta_eff = theta[qi];
-    const float t = step * delta_t;
-    const float tm1 = (step - 1) * delta_t;
-    const float h_t = h_mult * (tot_t - t);
+    const double theta_eff = theta[qi];
+    const double t = step * delta_t;
+    const double tm1 = (step - 1) * delta_t;
+    const double h_t = h_mult * (tot_t - t);
 
     const int n_threads = get_local_size(0);
 
     for (int qo = get_local_id(0); qo < n_qubits; qo += n_threads) {
-        int _qo = (J_eff > 0.0f) ? (n_qubits - (1 + qo)) : qo;
-        float diff = probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits);
+        int _qo = (J_eff > 0.0) ? (n_qubits - (1 + qo)) : qo;
+        double diff = probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits);
         diff -= probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, tm1, n_qubits);
         AtomicAdd_g_f(&(hamming_prob[_qo]), diff);
     }
@@ -370,7 +379,7 @@ __kernel void sample_for_solution_best_bitset(
                                 break;
                             }
                             if ((temp_sol[k >> 5] >> l) & 1) {
-                                weight *= max(2e-7, 1.0 - G_m[u_offset + v] / max_weight);
+                                weight *= max(1e-7, 1.0 - G_m[u_offset + v] / max_weight);
                             }
                         }
                     }
@@ -574,7 +583,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         const int v = G_cols[col];
 
                         if ((temp_sol[v >> 5] >> (v & 31)) & 1) {
-                            weight *= max(2e-7, 1.0 - G_data[col] / max_weight);
+                            weight *= max(1e-7, 1.0 - G_data[col] / max_weight);
                         }
                     }
 
@@ -586,7 +595,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         int end = G_rows[v + 1];
                         int j = binary_search(&(G_cols[start]), u, end - start) + start;
                         if (j < end) {
-                            weight *= max(2e-7, 1.0 - G_data[j] / max_weight);
+                            weight *= max(1e-7, 1.0 - G_data[j] / max_weight);
                         }
                     }
 

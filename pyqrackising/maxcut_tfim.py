@@ -22,7 +22,7 @@ def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(2e-8, 1 - G_m[node, nbr] / max_weight)
+        weights[nbr] *= max(1e-7, 1 - G_m[node, nbr] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -120,7 +120,7 @@ def sample_for_solution(G_m, shots, thresholds, weights):
 def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float32)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
     J_max = -float("inf")
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
@@ -218,7 +218,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes):
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+    J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
     weights = J_eff.astype(np.float64)
     J_eff = None
 
@@ -275,13 +275,13 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 2
+        quality = 3
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 2 << quality
+    n_steps = 1 << quality
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
@@ -293,7 +293,7 @@ def maxcut_tfim(
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
 
-    args = np.empty(3, dtype=np.float32)
+    args = np.empty(3, dtype=np.float64)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult
@@ -303,7 +303,7 @@ def maxcut_tfim(
     args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
     J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
     deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * np.float32().nbytes))
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * np.float64().nbytes))
 
     # Warp size is 32:
     group_size = min(n_qubits, 64)
@@ -347,7 +347,7 @@ def maxcut_tfim(
 
     if not is_alt_gpu_sampling:
         degrees = None
-        J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+        J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
         weights = J_eff.astype(np.float64)
         J_eff = None
 

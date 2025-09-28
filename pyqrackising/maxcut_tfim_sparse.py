@@ -43,7 +43,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
         nbr = G_cols[j]
         if used[nbr]:
             continue
-        weights[nbr] *= max(2e-7, 1 - G_data[j] / max_weight)
+        weights[nbr] *= max(1e-7, 1 - G_data[j] / max_weight)
 
     for nbr in range(node):
         if used[nbr]:
@@ -52,7 +52,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= max(2e-8, 1 - G_data[j] / max_weight)
+            weights[nbr] *= max(1e-7, 1 - G_data[j] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -152,7 +152,7 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights):
 def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float32)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
@@ -271,7 +271,7 @@ def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+    J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
     weights = J_eff.astype(np.float64)
     J_eff = None
 
@@ -294,7 +294,7 @@ def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, n
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):
@@ -340,13 +340,13 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 2
+        quality = 3
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 2 << quality
+    n_steps = 1 << quality
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
@@ -358,7 +358,7 @@ def maxcut_tfim_sparse(
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
 
-    args = np.empty(3, dtype=np.float32)
+    args = np.empty(3, dtype=np.float64)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult
@@ -412,7 +412,7 @@ def maxcut_tfim_sparse(
 
     if not is_alt_gpu_sampling:
         degrees = None
-        J_eff = 1.0 / (1.0 + (2e-52) - J_eff)
+        J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
         weights = J_eff.astype(np.float64)
         J_eff = None
 
