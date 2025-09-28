@@ -1,4 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
+from .maxcut_tfim_util import opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -42,9 +43,9 @@ def bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices):
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, min_energy):
+def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, min_energy, dtype):
     n = len(indices_array) // k
-    energies = np.empty(n, dtype=np.float32)
+    energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
         energies[i] = bootstrap_worker(best_theta, G_func, G_func_args_tuple, nodes, indices_array[j : j + k])
@@ -69,6 +70,7 @@ def spin_glass_solver_streaming(
     best_guess=None,
     is_base_maxcut_gpu=True
 ):
+    dtype = opencl_context.dtype
     n_qubits = len(nodes)
 
     if n_qubits < 3:
@@ -119,7 +121,7 @@ def spin_glass_solver_streaming(
             else:
                 combos = combos_list[k - 1]
 
-            energy = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, combos, k, min_energy)
+            energy = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, combos, k, min_energy, dtype)
 
             if energy < min_energy:
                 min_energy = energy

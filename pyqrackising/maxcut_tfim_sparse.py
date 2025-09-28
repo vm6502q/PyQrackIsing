@@ -5,7 +5,7 @@ import os
 from numba import njit, prange
 from scipy.sparse import lil_matrix, csr_matrix
 
-from .maxcut_tfim_util import fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -116,12 +116,12 @@ def compute_energy(sample, G_data, G_rows, G_cols):
 
 
 @njit(parallel=True)
-def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights):
+def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
     n = G_rows.shape[0] - 1
     max_weight = G_data.max()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=np.float32)
+    energies = np.empty(shots, dtype=dtype)
 
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -149,10 +149,10 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights):
 
 
 @njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols):
+def init_J_and_z(G_data, G_rows, G_cols, dtype):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float32)
+    J_eff = np.empty(n_qubits, dtype=dtype)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
@@ -185,6 +185,7 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     kernel = opencl_context.sample_for_solution_best_bitset_sparse_kernel
+    dtype = opencl_context.dtype
 
     max_local_size = 64  # tune
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + max_local_size - 1) // max_local_size) * max_local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
@@ -211,11 +212,11 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
 
     # Best energies and solutions (per group)
     # We'll reuse solutions_buf to hold them after reduction (kernel copies winners into group slices)
-    best_energies_np = np.empty(num_groups, dtype=np.float32)
+    best_energies_np = np.empty(num_groups, dtype=dtype)
     best_energies_buf = cl.Buffer(ctx, mf.WRITE_ONLY, best_energies_np.nbytes)
 
     # Local memory buffers
-    local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
+    local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
     # Set kernel args
@@ -226,7 +227,7 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
         thresholds_buf,
         np.int32(n),
         np.int32(shots),
-        np.float32(G_m_csr.data.max()),
+        dtype(G_m_csr.data.max()),
         rng_buf,
         solutions_buf,
         best_energies_buf,
@@ -264,16 +265,16 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_cols)
-    hamming_prob = init_thresholds(n_qubits)
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, dtype):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_cols, dtype)
+    hamming_prob = init_thresholds(n_qubits, dtype)
 
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
-    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff)
+    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -281,18 +282,18 @@ def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
 
 
 @njit
-def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, nodes):
+def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, nodes, dtype):
     fix_cdf(hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, weights)
+    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, weights, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
 
 
-def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=opencl_context.dtype)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):
@@ -311,13 +312,14 @@ def maxcut_tfim_sparse(
     is_g_buf_reused=False,
     is_base_maxcut_gpu=True
 ):
+    dtype = opencl_context.dtype
     nodes = None
     n_qubits = 0
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits)
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits, dtype)
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
@@ -348,15 +350,15 @@ def maxcut_tfim_sparse(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
-        return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes)
+        return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype)
 
-    J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices)
+    J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices, dtype)
 
     delta_t = 1.0 / n_steps
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
 
-    args = np.empty(3, dtype=np.float32)
+    args = np.empty(3, dtype=dtype)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult
@@ -377,7 +379,7 @@ def maxcut_tfim_sparse(
         args_buf, np.int32(n_qubits), J_buf, deg_buf, theta_buf
     )
 
-    hamming_prob = init_thresholds(n_qubits)
+    hamming_prob = init_thresholds(n_qubits, dtype)
 
     # Warp size is 32:
     group_size = n_qubits - 1
@@ -412,10 +414,10 @@ def maxcut_tfim_sparse(
         degrees = None
         J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
-        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes)
+        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes, dtype)
 
     fix_cdf(hamming_prob)
-    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)
+    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused, dtype)
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)

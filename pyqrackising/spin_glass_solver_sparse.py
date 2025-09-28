@@ -52,9 +52,9 @@ def bootstrap_worker(theta, G_data, G_rows, G_cols, indices):
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy):
+def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, dtype):
     n = len(indices_array) // k
-    energies = np.empty(n, dtype=np.float32)
+    energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
         energies[i] = bootstrap_worker(best_theta, G_data, G_rows, G_cols, indices_array[j : j + k])
@@ -74,6 +74,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_sparse_kernel
+    dtype = opencl_context.dtype
 
     n = best_theta.shape[0]
     combo_count = len(indices_array_np) // k
@@ -90,7 +91,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Allocate min_energy and min_index result buffers per workgroup
-    min_energy_host = np.empty(combo_count, dtype=np.float32)
+    min_energy_host = np.empty(combo_count, dtype=dtype)
     min_index_host = np.empty(combo_count, dtype=np.int32)
 
     min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_energy_host.nbytes)
@@ -99,7 +100,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     # Local memory allocation (1 float per work item)
     local_size = min(64, n)
     global_size = ((combo_count + local_size - 1) // local_size) * local_size
-    local_energy_buf = cl.LocalMemory(np.dtype(np.float32).itemsize * local_size)
+    local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
     # Set kernel args
@@ -141,8 +142,8 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     return energy
 
 
-def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=dtype)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):
@@ -237,7 +238,7 @@ def spin_glass_solver_sparse(
             if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
                 energy = run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, min_energy)
             else:
-                energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy)
+                energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy, dtype)
 
             if energy < min_energy:
                 min_energy = energy
