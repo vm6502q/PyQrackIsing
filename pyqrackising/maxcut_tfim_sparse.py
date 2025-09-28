@@ -63,7 +63,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m, sh
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
     adjacency_data, adjacency_rows: CSR-format sparse adjacency data
-    weights: float64 array of shape (n,)
+    weights: float32 array of shape (n,)
     """
 
     weights = weights.copy()
@@ -152,7 +152,7 @@ def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights):
 def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_eff = np.empty(n_qubits, dtype=np.float32)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
@@ -226,7 +226,7 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
         thresholds_buf,
         np.int32(n),
         np.int32(shots),
-        np.float64(G_m_csr.data.max()),
+        np.float32(G_m_csr.data.max()),
         rng_buf,
         solutions_buf,
         best_energies_buf,
@@ -292,7 +292,7 @@ def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, n
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):
@@ -356,7 +356,7 @@ def maxcut_tfim_sparse(
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
 
-    args = np.empty(3, dtype=np.float64)
+    args = np.empty(3, dtype=np.float32)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult

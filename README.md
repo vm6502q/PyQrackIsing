@@ -44,7 +44,7 @@ samples = generate_tfim_samples(
 
 There are two other functions, `tfim_magnetization()` and `tfim_square_magnetization()`, that follow the same function signature except without the `shots` argument.
 
-The library also provides a TFIM-inspired (approximate) MAXCUT solver:
+The library also provides a TFIM-inspired (approximate) MAXCUT solver (which accepts a `networkx` graph or a 32-bit adjacency matrix):
 ```py
 from pyqrackising import maxcut_tfim
 import networkx as nx
@@ -76,7 +76,7 @@ G = generate_spin_glass_graph(n_nodes=64, seed=42)
 solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=2, best_guess=None, is_base_maxcut_gpu=True, is_alt_gpu_sampling=True, is_combo_maxcut_gpu=True)
 # solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=6)[0])
 ```
-We also provide `spin_glass_solver_sparse(G)`, for `scipy` **upper-triangular** CSR sparse arrays (or `networkx` graphs). The (integer) default `quality` setting is `2`. `is_combo_maxcut_gpu` controls whether gradient descent optimization is done on GPU (which is the most costly GPU-based feature), while `is_base_maxcut_gpu` is passed through the underlying `maxcut_tfim(G)` solver. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
+We also provide `spin_glass_solver_sparse(G)`, for `scipy` (32-bit) **upper-triangular** CSR sparse arrays (or `networkx` graphs). The (integer) default `quality` setting is `2`. `is_combo_maxcut_gpu` controls whether gradient descent optimization is done on GPU (which is the most costly GPU-based feature), while `is_base_maxcut_gpu` is passed through the underlying `maxcut_tfim(G)` solver. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
 
 From the `spin_glass_solver()`, we provide a (recursive) Traveling Salesman Problem (TSP) solver:
 ```py

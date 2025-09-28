@@ -14,7 +14,7 @@ def generate_adjacency(n_nodes=64, seed=None):
     if not (seed is None):
         np.random.seed(seed)
 
-    G_m = np.empty((n_nodes, n_nodes), dtype=np.float64)
+    G_m = np.empty((n_nodes, n_nodes), dtype=np.float32)
 
     for u in prange(n_nodes):
         for v in range(u + 1, n_nodes):

@@ -142,7 +142,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float64)
+    lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
     for u in range(n_nodes):
         u_node = nodes[u]
         for v in range(u + 1, n_nodes):

@@ -33,7 +33,7 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m, shot):
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
     adjacency_data, adjacency_rows: CSR-format sparse adjacency data
-    weights: float64 array of shape (n,)
+    weights: float32 array of shape (n,)
     """
 
     weights = weights.copy()
@@ -120,7 +120,7 @@ def sample_for_solution(G_m, shots, thresholds, weights):
 def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=np.float64)
+    J_eff = np.empty(n_qubits, dtype=np.float32)
     J_max = -float("inf")
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
@@ -175,7 +175,7 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
         thresholds_buf,
         np.int32(n),
         np.int32(shots),
-        np.float64(G_m_np.max()),
+        np.float32(G_m_np.max()),
         rng_buf,
         solutions_buf,
         best_energies_buf,
@@ -252,7 +252,7 @@ def maxcut_tfim(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=np.float32)
     else:
         n_qubits = len(G)
         nodes = list(range(n_qubits))
@@ -291,7 +291,7 @@ def maxcut_tfim(
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
 
-    args = np.empty(3, dtype=np.float64)
+    args = np.empty(3, dtype=np.float32)
     args[0] = delta_t
     args[1] = tot_t
     args[2] = h_mult
@@ -301,7 +301,7 @@ def maxcut_tfim(
     args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
     J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
     deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * np.float64().nbytes))
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * np.float32().nbytes))
 
     # Warp size is 32:
     group_size = min(n_qubits, 64)

@@ -151,7 +151,7 @@ def spin_glass_solver(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=np.float32)
     else:
         n_qubits = len(G)
         nodes = list(range(n_qubits))
