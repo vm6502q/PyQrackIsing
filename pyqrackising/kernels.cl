@@ -1,5 +1,3 @@
-#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
-
 __kernel void init_theta(
     __constant double* fargs,
     const int n_qubits,
@@ -13,19 +11,11 @@ __kernel void init_theta(
     }
 
     const double h_mult = fabs(fargs[2]);
-
     const double J = J_eff[q];
     const unsigned z = degrees[q];
     const double abs_zJ = fabs(z * J);
 
-    float val;
-    if (abs_zJ < 2e-52) {
-        val = (J > 0.0) ? M_PI_F : -M_PI_F;
-    } else {
-        val = asin(fmax(-1.0, fmin(1.0, h_mult / (z * J))));
-    }
-
-    theta[q] = val;
+    theta[q] = (abs_zJ <= DBL_EPSILON) ? ((J > 0.0) ? M_PI_F : -M_PI_F) : (asin(fmax(-1.0, fmin(1.0, h_mult / (z * J)))));
 }
 
 // By Google Search AI
@@ -142,8 +132,6 @@ float bootstrap_worker(__constant char* theta, __global double* G_m, __constant 
     return (float)energy;
 }
 
-#define EPSILON 1.1920928955078125e-7
-
 __kernel void bootstrap(
     uint prng_seed,
     __global double* G_m,
@@ -163,7 +151,7 @@ __kernel void bootstrap(
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
     prng_seed ^= (uint)i;
 
-    float energy = DBL_MAX;
+    float energy = INFINITY;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -187,7 +175,7 @@ __kernel void bootstrap(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= FLT_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -248,7 +236,7 @@ __kernel void bootstrap_sparse(
 
     prng_seed ^= (uint)i;
 
-    float energy = DBL_MAX;
+    float energy = INFINITY;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -272,7 +260,7 @@ __kernel void bootstrap_sparse(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= FLT_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -312,6 +300,7 @@ double compute_cut_bitset(__global const double* G_m, const uint* sol_bits, int 
     return cut_val;
 }
 
+#define EPSILON 1.1920928955078125e-7
 #define MAX_WORDS 4096
 #define MAX_WORDS_MASK 4095
 
@@ -341,7 +330,7 @@ __kernel void sample_for_solution_best_bitset(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    double cut_val = DBL_MIN;
+    double cut_val = -INFINITY;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -358,7 +347,7 @@ __kernel void sample_for_solution_best_bitset(
             double highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = DBL_MIN;
+                highest_weights[x] = -INFINITY;
                 best_bits[x] = -1;
             }
 
@@ -388,13 +377,13 @@ __kernel void sample_for_solution_best_bitset(
 
                     int lowest_option = 0;
                     double lowest_weight = highest_weights[0];
-                    if (lowest_weight != DBL_MIN) {
+                    if (lowest_weight != -INFINITY) {
                         for (int x = 0; x < TOP_N; ++x) {
                             double val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == DBL_MIN) {
+                                if (val == -INFINITY) {
                                     break;
                                 }
                             }
@@ -411,7 +400,7 @@ __kernel void sample_for_solution_best_bitset(
             double total_weight = 0.0;
             for (int x = 0; x < TOP_N; ++x) {
                 const double val = highest_weights[x];
-                if (val == DBL_MIN) {
+                if (val == -INFINITY) {
                     continue;
                 }
                 total_weight += val;
@@ -422,7 +411,7 @@ __kernel void sample_for_solution_best_bitset(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const double val = highest_weights[x];
-                if (val == DBL_MIN) {
+                if (val == -INFINITY) {
                     continue;
                 }
                 tot_prob += val;
@@ -547,7 +536,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    double cut_val = DBL_MIN;
+    double cut_val = -INFINITY;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -564,7 +553,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             double highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = DBL_MIN;
+                highest_weights[x] = -INFINITY;
                 best_bits[x] = -1;
             }
 
@@ -603,13 +592,13 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     int lowest_option = 0;
                     double lowest_weight = highest_weights[0];
-                    if (lowest_weight != DBL_MIN) {
+                    if (lowest_weight != -INFINITY) {
                         for (int x = 0; x < TOP_N; ++x) {
                             double val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == DBL_MIN) {
+                                if (val == -INFINITY) {
                                     break;
                                 }
                             }
@@ -626,7 +615,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             double total_weight = 0.0;
             for (int x = 0; x < TOP_N; ++x) {
                 const double val = highest_weights[x];
-                if (val == DBL_MIN) {
+                if (val == -INFINITY) {
                     continue;
                 }
                 total_weight += val;
@@ -637,7 +626,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const double val = highest_weights[x];
-                if (val == DBL_MIN) {
+                if (val == -INFINITY) {
                     continue;
                 }
                 tot_prob += val;
