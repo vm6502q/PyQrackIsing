@@ -272,10 +272,8 @@ def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes):
 
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
-    weights = J_eff.astype(np.float64)
-    J_eff = None
 
-    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, weights)
+    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -413,10 +411,8 @@ def maxcut_tfim_sparse(
     if not is_alt_gpu_sampling:
         degrees = None
         J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
-        weights = J_eff.astype(np.float64)
-        J_eff = None
 
-        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, weights, hamming_prob, nodes)
+        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes)
 
     fix_cdf(hamming_prob)
     best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)

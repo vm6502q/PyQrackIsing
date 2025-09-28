@@ -152,10 +152,8 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes):
     max_weight = degrees.sum()
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
-    weights = J_eff.astype(np.float64)
-    J_eff = None
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits)
+    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, J_eff, n_qubits)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -271,7 +269,5 @@ def maxcut_tfim_streaming(
     max_weight = degrees.sum()
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
-    weights = J_eff.astype(np.float64)
-    J_eff = None
 
-    return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, weights, degrees, hamming_prob, max_weight)
+    return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob, max_weight)
