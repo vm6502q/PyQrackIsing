@@ -1,3 +1,5 @@
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+
 __kernel void init_theta(
     __constant double* fargs,
     const int n_qubits,
@@ -27,17 +29,17 @@ __kernel void init_theta(
 }
 
 // By Google Search AI
-inline void AtomicAdd_g_f(volatile __global double *source, const double operand) {
-    union {
-        ulong intVal;
-        double floatVal;
-    } oldVal, newVal;
+inline void atomic_add_double(__global double *address, double val) {
+    long long old_val_ll;
+    long long new_val_ll;
+    double old_val_d;
 
     do {
-        oldVal.floatVal = *source;
-        newVal.floatVal = oldVal.floatVal + operand;
-        // Use atomic_cmpxchg to atomically update the value
-    } while (atomic_cmpxchg((volatile __global ulong*)source, oldVal.intVal, newVal.intVal) != oldVal.intVal);
+        old_val_d = *address;
+        old_val_ll = as_long(old_val_d); // Reinterpret double as long long
+        new_val_ll = as_long(old_val_d + val); // Perform addition, then reinterpret
+
+    } while (atom_cmpxchg((__global long*)address, old_val_ll, new_val_ll) != old_val_ll);
 }
 
 // By Elara (custom OpenAI GPT)
@@ -99,7 +101,7 @@ __kernel void maxcut_hamming_cdf(
         int _qo = (J_eff > 0.0) ? (n_qubits - (1 + qo)) : qo;
         double diff = probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, t, n_qubits);
         diff -= probability_by_hamming_weight(_qo, J_eff, h_t, z, theta_eff, tm1, n_qubits);
-        AtomicAdd_g_f(&(hamming_prob[_qo]), diff);
+        atomic_add_double(&(hamming_prob[_qo]), diff);
     }
 }
 
