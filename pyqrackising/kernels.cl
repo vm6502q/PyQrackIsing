@@ -140,7 +140,7 @@ float bootstrap_worker(__constant char* theta, __global double* G_m, __constant 
     return (float)energy;
 }
 
-#define ENERGY_EPSILON 2e-23
+#define EPSILON 1.1920928955078125e-7
 
 __kernel void bootstrap(
     uint prng_seed,
@@ -185,7 +185,7 @@ __kernel void bootstrap(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= ENERGY_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -270,7 +270,7 @@ __kernel void bootstrap_sparse(
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= ENERGY_EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -379,7 +379,7 @@ __kernel void sample_for_solution_best_bitset(
                                 break;
                             }
                             if ((temp_sol[k >> 5] >> l) & 1) {
-                                weight *= max(1e-7, 1.0 - G_m[u_offset + v] / max_weight);
+                                weight *= max(EPSILON, 1.0 - G_m[u_offset + v] / max_weight);
                             }
                         }
                     }
@@ -583,7 +583,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         const int v = G_cols[col];
 
                         if ((temp_sol[v >> 5] >> (v & 31)) & 1) {
-                            weight *= max(1e-7, 1.0 - G_data[col] / max_weight);
+                            weight *= max(EPSILON, 1.0 - G_data[col] / max_weight);
                         }
                     }
 
@@ -595,7 +595,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         int end = G_rows[v + 1];
                         int j = binary_search(&(G_cols[start]), u, end - start) + start;
                         if (j < end) {
-                            weight *= max(1e-7, 1.0 - G_data[j] / max_weight);
+                            weight *= max(EPSILON, 1.0 - G_data[j] / max_weight);
                         }
                     }
 

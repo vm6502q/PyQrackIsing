@@ -43,7 +43,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
         nbr = G_cols[j]
         if used[nbr]:
             continue
-        weights[nbr] *= max(1e-7, 1 - G_data[j] / max_weight)
+        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_data[j] / max_weight)
 
     for nbr in range(node):
         if used[nbr]:
@@ -52,7 +52,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, used
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= max(1e-7, 1 - G_data[j] / max_weight)
+            weights[nbr] *= max(1.1920928955078125e-7, 1 - G_data[j] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano

@@ -22,7 +22,7 @@ def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(1e-7, 1 - G_m[node, nbr] / max_weight)
+        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_m[node, nbr] / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
