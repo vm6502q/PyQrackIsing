@@ -173,7 +173,7 @@ def spin_glass_solver(
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
     if quality is None:
-        quality = 2
+        quality = 3
 
     bitstring = ""
     if isinstance(best_guess, str):

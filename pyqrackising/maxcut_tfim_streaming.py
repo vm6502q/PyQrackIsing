@@ -202,7 +202,7 @@ def maxcut_tfim_streaming(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = 1 << quality
+    n_steps = n_qubits << quality
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
