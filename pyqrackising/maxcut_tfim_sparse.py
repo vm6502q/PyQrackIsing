@@ -187,7 +187,7 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
     kernel = opencl_context.sample_for_solution_best_bitset_sparse_kernel
     dtype = opencl_context.dtype
 
-    max_local_size = 32  # tune
+    max_local_size = 128  # tune
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + max_local_size - 1) // max_local_size) * max_local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
     local_size = max_local_size
@@ -371,7 +371,7 @@ def maxcut_tfim_sparse(
     theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 4))
 
     # Warp size is 32:
-    group_size = min(32, n_qubits)
+    group_size = min(128, n_qubits)
     global_size = ((n_qubits + group_size - 1) // group_size) * group_size
 
     opencl_context.init_theta_kernel(
@@ -382,9 +382,7 @@ def maxcut_tfim_sparse(
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     # Warp size is 32:
-    group_size = n_qubits - 1
-    if group_size > 128:
-        group_size = 128
+    group_size = min(128, n_qubits - 1)
     grid_dim = n_steps * n_qubits * group_size
 
     # Move to GPU

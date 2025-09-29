@@ -95,7 +95,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
     min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
 
     # Local memory allocation (1 float per work item)
-    local_size = min(32, n)
+    local_size = min(128, n)
     global_size = ((combo_count + local_size - 1) // local_size) * local_size
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
