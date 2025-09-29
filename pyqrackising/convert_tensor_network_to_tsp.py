@@ -3,6 +3,7 @@ from collections import defaultdict
 import itertools
 import numpy as np
 
+
 def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
     """
     Converts a tensor network to a symmetric TSP distance matrix based on pairwise contraction costs.
@@ -56,7 +57,7 @@ def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
     tensor_ids = [t["id"] for t in tensors]
     id_to_node = {tid: i for i, tid in enumerate(tensor_ids)}
     n = len(tensor_ids)
-    dist_matrix = np.full((n, n), 1e8, dtype=dtype)
+    dist_matrix = np.full((n, n), np.sqrt(np.finfo(dtype).max), dtype=dtype)
 
     for (t1, t2), cost in edge_costs.items():
         if cost == float("inf"):
