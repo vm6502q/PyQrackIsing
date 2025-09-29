@@ -15,7 +15,7 @@ def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
 
     Returns:
         A tuple containing:
-        - A 2D numpy array representing the symmetric TSP distance matrix.
+        - A normalized 2D numpy array representing the symmetric TSP distance matrix.
         - A list of tensor IDs corresponding to the node order in the distance matrix.
     """
     # Step 1: Build inverse map: index -> tensors using it
@@ -39,6 +39,7 @@ def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
         all_indices = t1["indices"] | t2["indices"]
         return sum(index_dims.get(i, 1) for i in all_indices)
 
+    max_cost = float("-inf")
     edge_costs = {}
     for t1, neighbors in graph.items():
         for t2 in neighbors:
@@ -46,17 +47,22 @@ def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
             if key not in edge_costs:
                 t1_data = next(t for t in tensors if t["id"] == t1)
                 t2_data = next(t for t in tensors if t["id"] == t2)
-                edge_costs[key] = estimate_cost(t1_data, t2_data)
+                cost = estimate_cost(t1_data, t2_data)
+                edge_costs[key] = cost
+                if (cost < float("inf")) and (cost > max_cost):
+                    max_cost = cost
 
     # Step 4: Build distance matrix
     tensor_ids = [t["id"] for t in tensors]
     id_to_node = {tid: i for i, tid in enumerate(tensor_ids)}
     n = len(tensor_ids)
-    dist_matrix = np.zeros((n, n), dtype=dtype)
+    dist_matrix = np.full((n, n), 1e8, dtype=dtype)
 
     for (t1, t2), cost in edge_costs.items():
+        if cost == float("inf"):
+            continue
         i, j = id_to_node[t1], id_to_node[t2]
-        dist_matrix[i, j] = dist_matrix[j, i] = cost
+        dist_matrix[i, j] = dist_matrix[j, i] = cost / max_cost
 
     return dist_matrix, tensor_ids
 
@@ -70,7 +76,7 @@ def convert_quimb_tree_to_tsp(tn, dtype=np.float32):
         tn: A quimb.tensor.TensorNetwork instance.
 
     Returns:
-        - Symmetric distance matrix (2D numpy array of floats)
+        - Normalized symmetric distance matrix (2D numpy array of floats)
         - List of tensor IDs (tags) corresponding to the matrix order
     """
     tensors = []
