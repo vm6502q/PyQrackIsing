@@ -413,13 +413,13 @@ __kernel void sample_for_solution_best_bitset(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (lowest_weight != -INFINITY_R1) {
+                    if (-lowest_weight != INFINITY_R1) {
                         for (int x = 1; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == -INFINITY_R1) {
+                                if (-val == INFINITY_R1) {
                                     break;
                                 }
                             }
@@ -436,7 +436,7 @@ __kernel void sample_for_solution_best_bitset(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY_R1) {
+                if (-val == INFINITY_R1) {
                     continue;
                 }
                 total_weight += val;
@@ -447,7 +447,7 @@ __kernel void sample_for_solution_best_bitset(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY_R1) {
+                if (-val == INFINITY_R1) {
                     continue;
                 }
                 tot_prob += val;
@@ -629,13 +629,13 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (lowest_weight != -INFINITY_R1) {
+                    if (-lowest_weight != INFINITY_R1) {
                         for (int x = 0; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == -INFINITY_R1) {
+                                if (-val == INFINITY_R1) {
                                     break;
                                 }
                             }
@@ -652,7 +652,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY_R1) {
+                if (-val == INFINITY_R1) {
                     continue;
                 }
                 total_weight += val;
@@ -663,7 +663,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY_R1) {
+                if (-val == INFINITY_R1) {
                     continue;
                 }
                 tot_prob += val;
