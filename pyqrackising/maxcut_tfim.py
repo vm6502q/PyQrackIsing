@@ -139,8 +139,9 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
     queue = opencl_context.queue
     kernel = opencl_context.sample_for_solution_best_bitset_kernel
     dtype = opencl_context.dtype
+    wgs = opencl_context.work_group_size
 
-    max_local_size = 32  # tune
+    max_local_size = wgs  # tune
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + max_local_size - 1) // max_local_size) * max_local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
     local_size = max_local_size
@@ -248,6 +249,7 @@ def maxcut_tfim(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
+    wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
     G_m = None
@@ -306,7 +308,7 @@ def maxcut_tfim(
     theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * dtype().nbytes))
 
     # Warp size is 32:
-    group_size = min(32, n_qubits)
+    group_size = min(wgs, n_qubits)
     global_size = ((n_qubits + group_size - 1) // group_size) * group_size
 
     opencl_context.init_theta_kernel(
@@ -317,7 +319,7 @@ def maxcut_tfim(
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     # Warp size is 32:
-    group_size = min(32, n_qubits - 1)
+    group_size = min(wgs, n_qubits - 1)
     grid_dim = n_steps * n_qubits * group_size
 
     # Move to GPU
