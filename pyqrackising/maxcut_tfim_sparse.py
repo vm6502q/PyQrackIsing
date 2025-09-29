@@ -417,7 +417,7 @@ def maxcut_tfim_sparse(
         return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes, dtype)
 
     fix_cdf(hamming_prob)
-    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused, dtype)
+    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
