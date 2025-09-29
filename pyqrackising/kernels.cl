@@ -4,13 +4,15 @@
 #else
 #define fwrapper(f, a) f(a)
 #define fwrapper2(f, a, b) f(a, b)
+#define INFINITY_R1 INFINITY
 #endif
+#define INFINITY_R1 ((real1)INFINITY)
 
 __kernel void init_theta(
     __constant real1* fargs,
     const int n_qubits,
     __constant real1* J_eff,
-    __constant unsigned* degrees,
+    __constant uint* degrees,
     __global real1* theta
 ) {
     const int q = get_global_id(0);
@@ -20,10 +22,14 @@ __kernel void init_theta(
 
     const real1 h_mult = fwrapper(fabs, fargs[2]);
     const real1 J = J_eff[q];
-    const unsigned z = degrees[q];
+    const uint z = degrees[q];
     const real1 abs_zJ = fwrapper(fabs, z * J);
 
-    theta[q] = (abs_zJ <= EPSILON) ? ((J > ZERO_R1) ? M_PI_F : -M_PI_F) : fwrapper(asin, fwrapper2(fmax, -ONE_R1, fwrapper2(fmin, ONE_R1, h_mult / (z * J))));
+#if FP16
+    theta[q] = (abs_zJ <= EPSILON) ? ((J > ZERO_R1) ? M_PI_F : -M_PI_F) : (real1)asin(fmax(-1.0f, fmin(1.0f, (float)(h_mult / (z * J)))));
+#else
+    theta[q] = (abs_zJ <= EPSILON) ? ((J > ZERO_R1) ? M_PI_F : -M_PI_F) : asin(fmax(-ONE_R1, fmin(ONE_R1, h_mult / (z * J))));
+#endif
 }
 
 // By Google Search AI
@@ -63,7 +69,7 @@ inline void atomic_add_real1(__global real1* address, real1 val) {
 
 // By Elara (custom OpenAI GPT)
 inline real1 probability_by_hamming_weight(
-    int q, real1 J, real1 h, unsigned z, real1 theta, real1 t, int n_qubits
+    int q, real1 J, real1 h, uint z, real1 theta, real1 t, int n_qubits
 ) {
     real1 ratio = fwrapper(fabs, h) / (z * J);
     if (ratio > ONE_R1) {
@@ -88,7 +94,7 @@ inline real1 probability_by_hamming_weight(
 
 __kernel void maxcut_hamming_cdf(
     int n_qubits,
-    __constant unsigned* degrees,
+    __constant uint* degrees,
     __constant real1* args,
     __constant real1* J_func,
     __constant real1* theta,
@@ -100,7 +106,7 @@ __kernel void maxcut_hamming_cdf(
     const int step = get_group_id(0) / n_qubits;
     const int qi = get_group_id(0) % n_qubits;
     const real1 J_eff = J_func[qi];
-    const unsigned z = degrees[qi];
+    const uint z = degrees[qi];
     if (fwrapper(fabs, z * J_eff) <= EPSILON) {
         return;
     }
@@ -133,7 +139,7 @@ inline uint xorshift32(uint *state) {
     return x;
 }
 
-real1 bootstrap_worker(__constant char* theta, __global real1* G_m, __constant int* indices, const int k, const int n) {
+real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
     for (int u = 0; u < n; ++u) {
@@ -163,7 +169,7 @@ real1 bootstrap_worker(__constant char* theta, __global real1* G_m, __constant i
 
 __kernel void bootstrap(
     uint prng_seed,
-    __global real1* G_m,
+    __global const real1* G_m,
     __constant char* best_theta,
     __constant int* indices_array,
     __constant int* args,               // args[0] = n, args[1] = k
@@ -180,7 +186,7 @@ __kernel void bootstrap(
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 energy = INFINITY_R1;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -217,7 +223,7 @@ __kernel void bootstrap(
     }
 }
 
-real1 bootstrap_worker_sparse(__constant char* theta, __global real1* G_data, __global unsigned* G_rows, __global unsigned* G_cols, __constant int* indices, const int k, const int n) {
+real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __constant int* indices, const int k, const int n) {
     real1 energy = ZERO_R1;
     for (int u = 0; u < n; ++u) {
         bool u_bit = theta[u];
@@ -247,9 +253,9 @@ real1 bootstrap_worker_sparse(__constant char* theta, __global real1* G_data, __
 
 __kernel void bootstrap_sparse(
     uint prng_seed,
-    __global real1* G_data,
-    __global unsigned* G_rows,
-    __global unsigned* G_cols,
+    __global const real1* G_data,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
     __constant char* best_theta,
     __constant int* indices_array,
     __constant int* args,               // args[0] = n, args[1] = k
@@ -265,7 +271,7 @@ __kernel void bootstrap_sparse(
 
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 energy = INFINITY_R1;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -305,7 +311,7 @@ __kernel void bootstrap_sparse(
 /// ------ Alternative random sampling rejection kernel by Elara (the OpenAI custom GPT) is below ------ ///
 
 inline real1 rand_uniform(uint *state) {
-    return (real1)xorshift32(state) / (real1)0xFFFFFFFF;
+    return (real1)((double)xorshift32(state) / (double)0xFFFFFFFF);
 }
 
 // Compute cut value from bitset solution
@@ -336,7 +342,7 @@ real1 compute_cut_bitset(__global const real1* G_m, const uint* sol_bits, int n)
 
 __kernel void sample_for_solution_best_bitset(
     __global const real1* G_m,
-    __global const real1* thresholds,
+    __constant real1* thresholds,
     const int n,
     const int shots,
     const real1 max_weight,
@@ -360,7 +366,7 @@ __kernel void sample_for_solution_best_bitset(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    real1 cut_val = -INFINITY;
+    real1 cut_val = -INFINITY_R1;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -377,7 +383,7 @@ __kernel void sample_for_solution_best_bitset(
             real1 highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = -INFINITY;
+                highest_weights[x] = -INFINITY_R1;
                 best_bits[x] = -1;
             }
 
@@ -407,13 +413,13 @@ __kernel void sample_for_solution_best_bitset(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (lowest_weight != -INFINITY) {
-                        for (int x = 0; x < TOP_N; ++x) {
+                    if (lowest_weight != -INFINITY_R1) {
+                        for (int x = 1; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == -INFINITY) {
+                                if (val == -INFINITY_R1) {
                                     break;
                                 }
                             }
@@ -430,7 +436,7 @@ __kernel void sample_for_solution_best_bitset(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY) {
+                if (val == -INFINITY_R1) {
                     continue;
                 }
                 total_weight += val;
@@ -441,7 +447,7 @@ __kernel void sample_for_solution_best_bitset(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY) {
+                if (val == -INFINITY_R1) {
                     continue;
                 }
                 tot_prob += val;
@@ -495,15 +501,15 @@ __kernel void sample_for_solution_best_bitset(
 }
 
 // Compute cut value from bitset solution
-real1 compute_cut_bitset_sparse(__global const real1* G_data, __global const unsigned* G_rows, __global const unsigned* G_cols, const uint* sol_bits, int n) {
+real1 compute_cut_bitset_sparse(__global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const uint* sol_bits, int n) {
     real1 cut_val = ZERO_R1;
-    for (unsigned u = 0; u < n; u++) {
+    for (uint u = 0; u < n; u++) {
         int u_word = u >> 5;      // divide by 32
         int u_bit  = u & 31;
         int u_val  = (sol_bits[u_word] >> u_bit) & 1;
 
-        unsigned max_col = G_rows[u + 1];
-        for (unsigned col = G_rows[u]; col < max_col; ++col) {
+        uint max_col = G_rows[u + 1];
+        for (uint col = G_rows[u]; col < max_col; ++col) {
             const int v = G_cols[col];
             int v_word = v >> 5;
             int v_bit  = v & 31;
@@ -518,7 +524,7 @@ real1 compute_cut_bitset_sparse(__global const real1* G_data, __global const uns
     return cut_val;
 }
 
-int binary_search(__global const unsigned* l, const unsigned t, const unsigned len) {
+int binary_search(__global const uint* l, const uint t, const uint len) {
     int left = 0;
     int right = len - 1;
 
@@ -541,9 +547,9 @@ int binary_search(__global const unsigned* l, const unsigned t, const unsigned l
 
 __kernel void sample_for_solution_best_bitset_sparse(
     __global const real1* G_data,
-    __global const unsigned* G_rows,
-    __global const unsigned* G_cols,
-    __global const real1* thresholds,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    __constant real1* thresholds,
     const int n,
     const int shots,
     const real1 max_weight,
@@ -567,7 +573,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    real1 cut_val = -INFINITY;
+    real1 cut_val = -INFINITY_R1;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -584,7 +590,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             real1 highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = -INFINITY;
+                highest_weights[x] = -INFINITY_R1;
                 best_bits[x] = -1;
             }
 
@@ -600,7 +606,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     real1 weight = ONE_R1;
 
-                    unsigned max_col = G_rows[u + 1];
+                    uint max_col = G_rows[u + 1];
                     for (int col = G_rows[u]; col < max_col; ++col) {
                         const int v = G_cols[col];
 
@@ -623,13 +629,13 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (lowest_weight != -INFINITY) {
+                    if (lowest_weight != -INFINITY_R1) {
                         for (int x = 0; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (val == -INFINITY) {
+                                if (val == -INFINITY_R1) {
                                     break;
                                 }
                             }
@@ -646,7 +652,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY) {
+                if (val == -INFINITY_R1) {
                     continue;
                 }
                 total_weight += val;
@@ -657,7 +663,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (val == -INFINITY) {
+                if (val == -INFINITY_R1) {
                     continue;
                 }
                 tot_prob += val;
