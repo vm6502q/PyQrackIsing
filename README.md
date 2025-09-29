@@ -145,6 +145,8 @@ We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for when 
 
 Similarly, for `is_alt_gpu_sampling=True`, define the "top-`n`" count of highest-weight direct neighbors to retain during sampling with environment variable "`PYQRACKISING_GPU_TOP_N`". The default is `32`. Increasing this might increase solution quality, but it will also increase time-to-solution and private memory usage.
 
+By default, PyQrackIsing expects all `numpy` floating-point array inputs to be 32-bit. If you'd like to use 64-bit, you can set environment variable `PYQRACKISING_FPPOW=6` (meaning, 2^6=64, for the "floating-point (precision) power"). The default is `5`, for 32-bit. 16-bit is stubbed out and almost compiles for OpenCL, but the bigger hurdle is that `numpy` on `x86_64` doesn't provide a 16-bit floating point implementation. (As author of Qrack, I could suggest to the `numpy` maintainers that open-source, IEEE-compliant software-based implementations exist for `x86_64` and other architectures, but I'm sure they're aware and likely waiting for in-compiler support.) If you're on an ARM-based architecture that isn't using `pyopencl`, there's a good chance 16-bit floating-point will work, if `numpy` uses the native hardware support.
+
 ## About
 Transverse field Ising model (TFIM) is the basis of most claimed algorithmic "quantum advantage," circa 2025, with the notable exception of Shor's integer factoring algorithm.
 

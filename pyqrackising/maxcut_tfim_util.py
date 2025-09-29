@@ -174,6 +174,37 @@ bootstrap_kernel = None
 bootstrap_sparse_kernel = None
 sample_for_solution_best_bitset_kernel = None
 sample_for_solution_best_bitset_sparse_kernel = None
+
+dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
+kernel_src = ''
+if dtype_bits <= 4:
+    dtype = np.float16
+    kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n"
+    kernel_src += "#define FP16 1\n"
+    kernel_src += "#define real1 half\n"
+    kernel_src += "#define qint short\n"
+    kernel_src += "#define EPSILON ((half)0.00097656f)\n"
+    kernel_src += "#define ZERO_R1 ((half)0.0f)\n"
+    kernel_src += "#define ONE_R1 ((half)1.0f)\n"
+    kernel_src += "#define TWO_R1 ((half)2.0f)\n"
+elif dtype_bits >= 6:
+    dtype = np.float64
+    kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n"
+    kernel_src += "#define real1 double\n"
+    kernel_src += "#define qint long\n"
+    kernel_src += "#define EPSILON DBL_EPSILON\n"
+    kernel_src += "#define ZERO_R1 0.0\n"
+    kernel_src += "#define ONE_R1 1.0\n"
+    kernel_src += "#define TWO_R1 2.0\n"
+else:
+    dtype = np.float32
+    kernel_src += "#define real1 float\n"
+    kernel_src += "#define qint int\n"
+    kernel_src += "#define EPSILON FLT_EPSILON\n"
+    kernel_src += "#define ZERO_R1 0.0f\n"
+    kernel_src += "#define ONE_R1 1.0f\n"
+    kernel_src += "#define TWO_R1 2.0f\n"
+
 try:
     import pyopencl as cl
     
@@ -181,36 +212,6 @@ try:
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
     compute_units = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS))))
-    dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
-
-    kernel_src = ''
-    if dtype_bits <= 4:
-        dtype = np.float16
-        kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n"
-        kernel_src += "#define FP16 1\n"
-        kernel_src += "#define real1 half\n"
-        kernel_src += "#define qint short\n"
-        kernel_src += "#define EPSILON ((half)0.00097656f)\n"
-        kernel_src += "#define ZERO_R1 ((half)0.0f)\n"
-        kernel_src += "#define ONE_R1 ((half)1.0f)\n"
-        kernel_src += "#define TWO_R1 ((half)2.0f)\n"
-    elif dtype_bits >= 6:
-        dtype = np.float64
-        kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n"
-        kernel_src += "#define real1 double\n"
-        kernel_src += "#define qint long\n"
-        kernel_src += "#define EPSILON DBL_EPSILON\n"
-        kernel_src += "#define ZERO_R1 0.0\n"
-        kernel_src += "#define ONE_R1 1.0\n"
-        kernel_src += "#define TWO_R1 2.0\n"
-    else:
-        dtype = np.float32
-        kernel_src += "#define real1 float\n"
-        kernel_src += "#define qint int\n"
-        kernel_src += "#define EPSILON FLT_EPSILON\n"
-        kernel_src += "#define ZERO_R1 0.0f\n"
-        kernel_src += "#define ONE_R1 1.0f\n"
-        kernel_src += "#define TWO_R1 2.0f\n"
 
     # Load and build OpenCL kernels
     kernel_src += f"#define MAX_PROC_ELEM {compute_units}\n"
