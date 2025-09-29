@@ -163,6 +163,7 @@ def spin_glass_solver_sparse(
     is_base_maxcut_gpu=True,
     is_combo_maxcut_gpu=True
 ):
+    dtype = opencl_context.dtype
     nodes = None
     n_qubits = 0
     G_m = None

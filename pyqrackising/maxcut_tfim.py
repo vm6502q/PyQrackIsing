@@ -285,7 +285,7 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
-        return cpu_footer(shots, quality, n_qubits, G_m, nodes)
+        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
 
     J_eff, degrees = init_J_and_z(G_m, dtype)
 

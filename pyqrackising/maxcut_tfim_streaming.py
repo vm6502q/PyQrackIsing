@@ -147,7 +147,7 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype
     J_eff, degrees, G_max = init_J_and_z(G_func, G_func_args_tuple, nodes, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
     max_weight = degrees.sum()
     degrees = None

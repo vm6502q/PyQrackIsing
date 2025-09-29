@@ -73,7 +73,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob, dtype):
     h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
 
-    theta = init_theta(h_mult, n_qubits, J_func, degrees)
+    theta = init_theta(h_mult, n_qubits, J_func, degrees, dtype)
 
     for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
