@@ -1,4 +1,5 @@
 from .spin_glass_solver import spin_glass_solver
+from .maxcut_tfim_util import opencl_context
 import itertools
 import networkx as nx
 from numba import njit
@@ -512,13 +513,14 @@ def tsp_symmetric(
     multi_start=1,
     is_top_level=True
 ):
+    dtype = opencl_context.dtype
     nodes = None
     n_nodes = 0
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_nodes = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
     else:
         n_nodes = len(G)
         nodes = list(range(n_nodes))
@@ -696,13 +698,14 @@ def tsp_asymmetric(
     multi_start=1,
     is_top_level=True
 ):
+    dtype = opencl_context.dtype
     nodes = None
     n_nodes = 0
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_nodes = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0)
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
     else:
         n_nodes = len(G)
         nodes = list(range(n_nodes))
