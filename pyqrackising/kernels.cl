@@ -4,9 +4,7 @@
 #else
 #define fwrapper(f, a) f(a)
 #define fwrapper2(f, a, b) f(a, b)
-#define INFINITY_R1 INFINITY
 #endif
-#define INFINITY_R1 ((real1)INFINITY)
 
 __kernel void init_theta(
     __constant real1* fargs,
@@ -34,7 +32,7 @@ __kernel void init_theta(
 
 // By Google Search AI
 #if FP16
-inline void atomic_add_real1(__global real1* address, real1 val, bool highWord) {
+void atomic_add_real1(__global real1* address, real1 val, bool highWord) {
     union {
         uint intVal;
         real1 floatVal[2];
@@ -53,7 +51,7 @@ inline void atomic_add_real1(__global real1* address, real1 val, bool highWord) 
     } while (atomic_cmpxchg((__global uint*)address, oldVal.intVal, newVal.intVal) != oldVal.intVal);
 }
 #else
-inline void atomic_add_real1(__global real1* address, real1 val) {
+void atomic_add_real1(__global real1* address, real1 val) {
     union {
         qint intVal;
         real1 floatVal;
@@ -68,7 +66,7 @@ inline void atomic_add_real1(__global real1* address, real1 val) {
 #endif
 
 // By Elara (custom OpenAI GPT)
-inline real1 probability_by_hamming_weight(
+real1 probability_by_hamming_weight(
     int q, real1 J, real1 h, uint z, real1 theta, real1 t, int n_qubits
 ) {
     real1 ratio = fwrapper(fabs, h) / (z * J);
@@ -186,7 +184,7 @@ __kernel void bootstrap(
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY_R1;
+    real1 energy = INFINITY;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -271,7 +269,7 @@ __kernel void bootstrap_sparse(
 
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY_R1;
+    real1 energy = INFINITY;
 
     if (i < combo_count) {
         const int j = i * k;
@@ -366,7 +364,7 @@ __kernel void sample_for_solution_best_bitset(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    real1 cut_val = -INFINITY_R1;
+    real1 cut_val = -INFINITY;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -383,7 +381,7 @@ __kernel void sample_for_solution_best_bitset(
             real1 highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = -INFINITY_R1;
+                highest_weights[x] = -INFINITY;
                 best_bits[x] = -1;
             }
 
@@ -413,13 +411,13 @@ __kernel void sample_for_solution_best_bitset(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (-lowest_weight != INFINITY_R1) {
+                    if (-lowest_weight != INFINITY) {
                         for (int x = 1; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (-val == INFINITY_R1) {
+                                if (-val == INFINITY) {
                                     break;
                                 }
                             }
@@ -436,7 +434,7 @@ __kernel void sample_for_solution_best_bitset(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (-val == INFINITY_R1) {
+                if (-val == INFINITY) {
                     continue;
                 }
                 total_weight += val;
@@ -447,7 +445,7 @@ __kernel void sample_for_solution_best_bitset(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (-val == INFINITY_R1) {
+                if (-val == INFINITY) {
                     continue;
                 }
                 tot_prob += val;
@@ -573,7 +571,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
     for (int w = 0; w < words; w++) sol_bits[w] = 0;
     uint temp_sol[MAX_WORDS];
 
-    real1 cut_val = -INFINITY_R1;
+    real1 cut_val = -INFINITY;
     for (int gid = gid_orig; gid < shots; gid += MAX_PROC_ELEM) {
  
         // --- 1. Choose Hamming weight
@@ -590,7 +588,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             real1 highest_weights[TOP_N];
             int best_bits[TOP_N];
             for (int x = 0; x < TOP_N; ++x) {
-                highest_weights[x] = -INFINITY_R1;
+                highest_weights[x] = -INFINITY;
                 best_bits[x] = -1;
             }
 
@@ -629,13 +627,13 @@ __kernel void sample_for_solution_best_bitset_sparse(
 
                     int lowest_option = 0;
                     real1 lowest_weight = highest_weights[0];
-                    if (-lowest_weight != INFINITY_R1) {
+                    if (-lowest_weight != INFINITY) {
                         for (int x = 0; x < TOP_N; ++x) {
                             real1 val = highest_weights[x];
                             if (val < lowest_weight) {
                                 lowest_option = x;
                                 lowest_weight = highest_weights[x];
-                                if (-val == INFINITY_R1) {
+                                if (-val == INFINITY) {
                                     break;
                                 }
                             }
@@ -652,7 +650,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             real1 total_weight = ZERO_R1;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (-val == INFINITY_R1) {
+                if (-val == INFINITY) {
                     continue;
                 }
                 total_weight += val;
@@ -663,7 +661,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
             int best_bit = 0;
             for (int x = 0; x < TOP_N; ++x) {
                 const real1 val = highest_weights[x];
-                if (-val == INFINITY_R1) {
+                if (-val == INFINITY) {
                     continue;
                 }
                 tot_prob += val;

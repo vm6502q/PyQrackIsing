@@ -209,6 +209,9 @@ else:
 
 try:
     import pyopencl as cl
+    import warnings
+
+    warnings.simplefilter("ignore", cl.CompilerWarning)
     
     # Pick a device (GPU if available)
     ctx = cl.create_some_context()
