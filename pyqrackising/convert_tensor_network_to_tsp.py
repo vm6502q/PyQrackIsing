@@ -85,7 +85,7 @@ def convert_quimb_tree_to_tsp(tn, dtype=np.float32):
 
     for tensor in tn.tensors:
         # Use a unique tag or fallback to name
-        tensor_id = sorted(tensor.tags)[0] if tensor.tags else str(tensor.name)
+        tensor_id = frozenset(tensor.tags) if tensor.tags else str(tensor.name)
         tensors.append({
             "id": tensor_id,
             "indices": set(tensor.inds)
