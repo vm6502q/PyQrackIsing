@@ -97,7 +97,8 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
 
     # Local memory allocation (1 float per work item)
     local_size = min(wgs, n)
-    global_size = ((combo_count + local_size - 1) // local_size) * local_size
+    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
+    global_size = min(((combo_count + local_size - 1) // local_size) * local_size, max_global_size)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 

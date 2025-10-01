@@ -179,25 +179,30 @@ __kernel void bootstrap(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int i = get_global_id(0);
+    int i = get_global_id(0);
 
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 best_energy = INFINITY;
+    int best_i = i;
 
-    if (i < combo_count) {
+    for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        // Compute energy for this combination
-        energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+        const real1 energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+        if (energy < best_energy) {
+            best_energy = energy;
+            best_i = i;
+        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            best_i = i;
+        }
     }
 
     const int lt_id = get_local_id(0);
     const int lt_size = get_local_size(0);
 
-    // Initialize local memory
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
+    loc_energy[lt_id] = best_energy;
+    loc_index[lt_id] = best_i;
 
     // Reduce within workgroup
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
@@ -265,24 +270,29 @@ __kernel void bootstrap_sparse(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int i = get_global_id(0);
+    int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 best_energy = INFINITY;
+    int best_i = i;
 
-    if (i < combo_count) {
+    for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        // Compute energy for this combination
-        energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n);
+        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n);
+        if (energy < best_energy) {
+            best_energy = energy;
+            best_i = i;
+        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            best_i = i;
+        }
     }
 
     const int lt_id = get_local_id(0);
     const int lt_size = get_local_size(0);
 
-    // Initialize local memory
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
+    loc_energy[lt_id] = best_energy;
+    loc_index[lt_id] = best_i;
 
     // Reduce within workgroup
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
@@ -390,22 +400,29 @@ __kernel void bootstrap_segmented(
     const int k = args[1];
     const int combo_count = args[2];
     const int segment_size = args[3];
-    const int i = get_global_id(0);
+    int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 best_energy = INFINITY;
+    int best_i = i;
 
-    if (i < combo_count) {
+    for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        energy = bootstrap_worker_segmented(best_theta, G_m0, G_m1, G_m2, G_m3, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_segmented(best_theta, G_m0, G_m1, G_m2, G_m3, indices_array + j, k, n, segment_size);
+        if (energy < best_energy) {
+            best_energy = energy;
+            best_i = i;
+        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            best_i = i;
+        }
     }
 
     const int lt_id = get_local_id(0);
     const int lt_size = get_local_size(0);
 
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
+    loc_energy[lt_id] = best_energy;
+    loc_index[lt_id] = best_i;
 
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -493,22 +510,29 @@ __kernel void bootstrap_sparse_segmented(
     const int k = args[1];
     const int combo_count = args[2];
     const int segment_size = args[3];
-    const int i = get_global_id(0);
+    int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
 
-    real1 energy = INFINITY;
+    real1 best_energy = INFINITY;
+    int best_i = i;
 
-    if (i < combo_count) {
+    for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        energy = bootstrap_worker_sparse_segmented(best_theta, G_data0, G_data1, G_data2, G_data3, G_rows, G_cols, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data0, G_data1, G_data2, G_data3, G_rows, G_cols, indices_array + j, k, n, segment_size);
+        if (energy < best_energy) {
+            best_energy = energy;
+            best_i = i;
+        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+            best_i = i;
+        }
     }
 
     const int lt_id = get_local_id(0);
     const int lt_size = get_local_size(0);
 
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
+    loc_energy[lt_id] = best_energy;
+    loc_index[lt_id] = best_i;
 
     for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
         barrier(CLK_LOCAL_MEM_FENCE);

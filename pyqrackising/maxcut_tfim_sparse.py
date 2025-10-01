@@ -188,10 +188,9 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
 
-    max_local_size = wqs  # tune
-    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + max_local_size - 1) // max_local_size) * max_local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
-    global_size = min(((shots + max_local_size - 1) // max_local_size) * max_local_size, max_global_size)
-    local_size = max_local_size
+    local_size = min(wgs, shots)  # tune
+    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
+    global_size = min(((shots + local_size - 1) // local_size) * local_size, max_global_size)
     num_groups = global_size // local_size
 
     # Bit-packing params
