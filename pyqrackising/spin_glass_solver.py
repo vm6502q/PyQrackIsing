@@ -67,10 +67,10 @@ def bootstrap(best_theta, G_m, indices_array, k, min_energy, dtype):
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
+def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, is_segmented, segment_size):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
-    bootstrap_kernel = opencl_context.bootstrap_kernel
+    bootstrap_kernel = opencl_context.bootstrap_segmented_kernel if is_segmented else opencl_context.bootstrap_kernel
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
 
@@ -79,8 +79,8 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k, combo_count]
-    args_np = np.array([n, k, combo_count], dtype=np.int32)
+    # Args: [n, k, combo_count, segment_size]
+    args_np = np.array([n, k, combo_count, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
@@ -102,17 +102,33 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy):
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
     # Set kernel args
-    bootstrap_kernel.set_args(
-        np.random.randint(1<<32, dtype='uint32'),
-        G_m_buf,
-        best_theta_buf,
-        indices_buf,
-        args_buf,
-        min_energy_buf,
-        min_index_buf,
-        local_energy_buf,
-        local_index_buf
-    )
+    if is_segmented:
+        bootstrap_kernel.set_args(
+            np.random.randint(1<<32, dtype='uint32'),
+            G_m_buf[0],
+            G_m_buf[1],
+            G_m_buf[2],
+            G_m_buf[3],
+            best_theta_buf,
+            indices_buf,
+            args_buf,
+            min_energy_buf,
+            min_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
+    else:
+        bootstrap_kernel.set_args(
+            np.random.randint(1<<32, dtype='uint32'),
+            G_m_buf,
+            best_theta_buf,
+            indices_buf,
+            args_buf,
+            min_energy_buf,
+            min_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
 
     cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
 
@@ -160,6 +176,12 @@ def spin_glass_solver(
         nodes = list(range(n_qubits))
         G_m = G
 
+    segment_size = G_m.shape[0] ** 2
+    is_segmented = (G_m.nbytes << 2) > (3 * opencl_context.max_alloc)
+    if is_segmented and is_alt_gpu_sampling:
+        print("[WARN] Using segmented solver, so disabling is_alt_gpu_sampling.")
+        is_alt_gpu_sampling = False
+
     if n_qubits < 3:
         if n_qubits == 0:
             return "", 0, ([], []), 0
@@ -194,7 +216,22 @@ def spin_glass_solver(
         else:
             mf = cl.mem_flags
             ctx = opencl_context.ctx
-            G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
+            if is_segmented:
+                o_shape = segment_size
+                segment_size = (segment_size + 3) >> 2
+                n_shape = segment_size << 2
+                _G_m = np.reshape(G_m, (o_shape,))
+                if n_shape != o_shape:
+                    np.resize(_G_m, (n_shape,))
+                _G_m_segments = np.split(_G_m, 4)
+                G_m_buf = [
+                    cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+                    for seg in _G_m_segments
+                ]
+                _G_m = None
+                _G_m_segments = None
+            else:
+                G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
 
     min_energy = compute_energy(best_theta, G_m)
     improved = True
@@ -217,7 +254,7 @@ def spin_glass_solver(
                 combos = combos_list[k - 1]
 
             if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-                energy = run_bootstrap_opencl(best_theta, G_m_buf, combos, k, min_energy)
+                energy = run_bootstrap_opencl(best_theta, G_m_buf, combos, k, min_energy, is_segmented, segment_size)
             else:
                 energy = bootstrap(best_theta, G_m, combos, k, min_energy, dtype)
 

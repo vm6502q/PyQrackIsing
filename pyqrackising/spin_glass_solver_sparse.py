@@ -70,10 +70,10 @@ def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, 
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy):
+def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy, is_segmented, segment_size):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
-    bootstrap_kernel = opencl_context.bootstrap_sparse_kernel
+    bootstrap_kernel = opencl_context.bootstrap_sparse_segmented_kernel if is_segmented else opencl_context.bootstrap_sparse_kernel
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
 
@@ -82,8 +82,8 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k, combo_count]
-    args_np = np.array([n, k, combo_count], dtype=np.int32)
+    # Args: [n, k, combo_count, segment_size]
+    args_np = np.array([n, k, combo_count, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
@@ -105,19 +105,37 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
     # Set kernel args
-    bootstrap_kernel.set_args(
-        np.random.randint(1<<32, dtype='uint32'),
-        G_data_buf,
-        G_rows_buf,
-        G_cols_buf,
-        best_theta_buf,
-        indices_buf,
-        args_buf,
-        min_energy_buf,
-        min_index_buf,
-        local_energy_buf,
-        local_index_buf
-    )
+    if is_segmented:
+        bootstrap_kernel.set_args(
+            np.random.randint(1<<32, dtype='uint32'),
+            G_data_buf[0],
+            G_data_buf[1],
+            G_data_buf[2],
+            G_data_buf[3],
+            G_rows_buf,
+            G_cols_buf,
+            best_theta_buf,
+            indices_buf,
+            args_buf,
+            min_energy_buf,
+            min_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
+    else:
+        bootstrap_kernel.set_args(
+            np.random.randint(1<<32, dtype='uint32'),
+            G_data_buf,
+            G_rows_buf,
+            G_cols_buf,
+            best_theta_buf,
+            indices_buf,
+            args_buf,
+            min_energy_buf,
+            min_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
 
     cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
 
@@ -191,6 +209,12 @@ def spin_glass_solver_sparse(
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
+    segment_size = G_m.data.shape[0]
+    is_segmented = (G_m.data.nbytes << 2) > (3 * opencl_context.max_alloc)
+    if is_segmented and is_alt_gpu_sampling:
+        print("[WARN] Using segmented solver, so disabling is_alt_gpu_sampling.")
+        is_alt_gpu_sampling = False
+
     if quality is None:
         quuality = 3
 
@@ -213,9 +237,24 @@ def spin_glass_solver_sparse(
         else:
             mf = cl.mem_flags
             ctx = opencl_context.ctx
-            G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
             G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
             G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
+            if is_segmented:
+                o_shape = segment_size
+                segment_size = (segment_size + 3) >> 2
+                n_shape = segment_size << 2
+                _G_data = np.reshape(G_m.data, (o_shape,))
+                if n_shape != o_shape:
+                    np.resize(_G_data, (n_shape,))
+                _G_data_segments = np.split(_G_data, 4)
+                G_data_buf = [
+                    cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+                    for seg in _G_data_segments
+                ]
+                _G_data = None
+                _G_data_segments = None
+            else:
+                G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
 
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
     improved = True
@@ -238,7 +277,7 @@ def spin_glass_solver_sparse(
                 combos = combos_list[k - 1]
 
             if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-                energy = run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, min_energy)
+                energy = run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, min_energy, is_segmented, segment_size)
             else:
                 energy = bootstrap(best_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, min_energy, dtype)
 

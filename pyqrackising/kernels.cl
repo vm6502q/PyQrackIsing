@@ -306,6 +306,230 @@ __kernel void bootstrap_sparse(
     }
 }
 
+// Helper to read from segmented G_m
+inline real1 get_G_m(
+    __global const real1* G_m0,
+    __global const real1* G_m1,
+    __global const real1* G_m2,
+    __global const real1* G_m3,
+    size_t flat_idx,
+    int segment_size
+) {
+    if (flat_idx < segment_size)
+        return G_m0[flat_idx];
+    flat_idx -= segment_size;
+
+    if (flat_idx < segment_size)
+        return G_m1[flat_idx];
+    flat_idx -= segment_size;
+
+    if (flat_idx < segment_size)
+        return G_m2[flat_idx];
+    flat_idx -= segment_size;
+
+    return G_m3[flat_idx];
+}
+
+real1 bootstrap_worker_segmented(
+    __constant char* theta,
+    __global const real1* G_m0,
+    __global const real1* G_m1,
+    __global const real1* G_m2,
+    __global const real1* G_m3,
+    __constant int* indices,
+    const int k,
+    const int n,
+    const int segment_size
+) {
+    real1 energy = ZERO_R1;
+    const size_t n_st = (size_t)n;
+
+    for (int u = 0; u < n; ++u) {
+        const size_t u_offset = u * n_st;
+        bool u_bit = theta[u];
+        for (int x = 0; x < k; ++x) {
+            if (indices[x] == u) {
+                u_bit = !u_bit;
+                break;
+            }
+        }
+        for (int v = u + 1; v < n; ++v) {
+            size_t flat_idx = u_offset + v;
+            real1 val = get_G_m(G_m0, G_m1, G_m2, G_m3, flat_idx, segment_size);
+
+            bool v_bit = theta[v];
+            for (int x = 0; x < k; ++x) {
+                if (indices[x] == v) {
+                    v_bit = !v_bit;
+                    break;
+                }
+            }
+            energy += (u_bit == v_bit) ? val : -val;
+        }
+    }
+
+    return energy;
+}
+
+
+__kernel void bootstrap_segmented(
+    uint prng_seed,
+    __global const real1* G_m0,
+    __global const real1* G_m1,
+    __global const real1* G_m2,
+    __global const real1* G_m3,
+    __constant char* best_theta,
+    __constant int* indices_array,
+    __constant int* args,               // args[0]=n, args[1]=k, args[2]=combo_count, args[3]=segment_size
+    __global real1* min_energy_ptr,
+    __global int* min_index_ptr,
+    __local real1* loc_energy,
+    __local int* loc_index
+) {
+    const int n = args[0];
+    const int k = args[1];
+    const int combo_count = args[2];
+    const int segment_size = args[3];
+    const int i = get_global_id(0);
+
+    prng_seed ^= (uint)i;
+
+    real1 energy = INFINITY;
+
+    if (i < combo_count) {
+        const int j = i * k;
+        energy = bootstrap_worker_segmented(best_theta, G_m0, G_m1, G_m2, G_m3, indices_array + j, k, n, segment_size);
+    }
+
+    const int lt_id = get_local_id(0);
+    const int lt_size = get_local_size(0);
+
+    loc_energy[lt_id] = energy;
+    loc_index[lt_id] = i;
+
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lt_id < offset) {
+            real1 hid_energy = loc_energy[lt_id + offset];
+            real1 lid_energy = loc_energy[lt_id];
+            if (hid_energy < lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            }
+        }
+    }
+
+    if (lt_id == 0) {
+        min_energy_ptr[get_group_id(0)] = loc_energy[0];
+        min_index_ptr[get_group_id(0)] = loc_index[0];
+    }
+}
+
+real1 bootstrap_worker_sparse_segmented(
+    __constant char* theta,
+    __global const real1* G_data0,
+    __global const real1* G_data1,
+    __global const real1* G_data2,
+    __global const real1* G_data3,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    __constant int* indices,
+    const int k,
+    const int n,
+    const int segment_size
+) {
+    real1 energy = ZERO_R1;
+
+    for (int u = 0; u < n; ++u) {
+        bool u_bit = theta[u];
+        for (int x = 0; x < k; ++x) {
+            if (indices[x] == u) {
+                u_bit = !u_bit;
+                break;
+            }
+        }
+
+        const uint row_start = G_rows[u];
+        const uint row_end = G_rows[u + 1];
+
+        for (uint col = row_start; col < row_end; ++col) {
+            const int v = G_cols[col];
+            real1 val = get_G_m(G_data0, G_data1, G_data2, G_data3, col, segment_size);
+
+            bool v_bit = theta[v];
+            for (int x = 0; x < k; ++x) {
+                if (indices[x] == v) {
+                    v_bit = !v_bit;
+                    break;
+                }
+            }
+
+            energy += (u_bit == v_bit) ? val : -val;
+        }
+    }
+
+    return energy;
+}
+
+__kernel void bootstrap_sparse_segmented(
+    uint prng_seed,
+    __global const real1* G_data0,
+    __global const real1* G_data1,
+    __global const real1* G_data2,
+    __global const real1* G_data3,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    __constant char* best_theta,
+    __constant int* indices_array,
+    __constant int* args,               // args[0] = n, args[1] = k, args[2] = combo_count, args[3] = segment_size
+    __global real1* min_energy_ptr,
+    __global int* min_index_ptr,
+    __local real1* loc_energy,
+    __local int* loc_index
+) {
+    const int n = args[0];
+    const int k = args[1];
+    const int combo_count = args[2];
+    const int segment_size = args[3];
+    const int i = get_global_id(0);
+
+    prng_seed ^= (uint)i;
+
+    real1 energy = INFINITY;
+
+    if (i < combo_count) {
+        const int j = i * k;
+        energy = bootstrap_worker_sparse_segmented(best_theta, G_data0, G_data1, G_data2, G_data3, G_rows, G_cols, indices_array + j, k, n, segment_size);
+    }
+
+    const int lt_id = get_local_id(0);
+    const int lt_size = get_local_size(0);
+
+    loc_energy[lt_id] = energy;
+    loc_index[lt_id] = i;
+
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lt_id < offset) {
+            real1 hid_energy = loc_energy[lt_id + offset];
+            real1 lid_energy = loc_energy[lt_id];
+            if (hid_energy < lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            }
+        }
+    }
+
+    if (lt_id == 0) {
+        min_energy_ptr[get_group_id(0)] = loc_energy[0];
+        min_index_ptr[get_group_id(0)] = loc_index[0];
+    }
+}
+
 /// ------ Alternative random sampling rejection kernel by Elara (the OpenAI custom GPT) is below ------ ///
 
 inline real1 rand_uniform(uint *state) {
