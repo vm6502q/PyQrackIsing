@@ -91,19 +91,19 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
-    # Allocate min_energy and min_index result buffers per workgroup
-    min_energy_host = np.empty(combo_count, dtype=dtype)
-    min_index_host = np.empty(combo_count, dtype=np.int32)
-
-    min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_energy_host.nbytes)
-    min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
-
     # Local memory allocation (1 float per work item)
     local_size = min(wgs, n)
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((combo_count + local_size - 1) // local_size) * local_size, max_global_size)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
+
+    # Allocate min_energy and min_index result buffers per workgroup
+    min_energy_host = np.empty(global_size, dtype=dtype)
+    min_index_host = np.empty(global_size, dtype=np.int32)
+
+    min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_energy_host.nbytes)
+    min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
 
     # Set kernel args
     if is_segmented:
