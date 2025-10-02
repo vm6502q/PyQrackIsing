@@ -52,7 +52,9 @@ def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, mi
 
     energy = energies.min()
     if energy < min_energy:
-        index_match = np.random.choice(np.where(energies == energy)[0])
+        atol = dtype(1.1920928955078125e-7)
+        rtol = dtype(0)
+        index_match = np.random.choice(np.where(np.isclose(energies, energy, atol=atol, rtol=rtol))[0])
         indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
         min_energy = energy
         for i in indices:

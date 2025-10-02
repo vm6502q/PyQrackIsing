@@ -81,7 +81,8 @@ def compute_energy(sample, G_func, G_func_args_tuple, nodes, n_qubits):
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            energy += G_func((nodes[u], nodes[v]), G_func_args_tuple) * (1 if sample[u] == sample[v] else -1)
+            val = G_func((nodes[u], nodes[v]), G_func_args_tuple)
+            energy += val if sample[u] == sample[v] else -val
 
     return energy
 
@@ -130,7 +131,7 @@ def init_J_and_z(G_func, G_func_args_tuple, nodes, dtype):
             val = G_func((nodes[n], nodes[m]), G_func_args_tuple)
             if val != 0.0:
                 degree += 1
-            J += val
+                J += val
             G_max = max(val, G_max)
         J = -J / degree if degree > 0 else 0
         degrees[n] = degree
@@ -180,6 +181,7 @@ def maxcut_tfim_streaming(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
+    wgs = opencl_context.work_group_size
     n_qubits = len(nodes)
 
     if n_qubits < 3:
@@ -228,7 +230,7 @@ def maxcut_tfim_streaming(
     theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 4))
 
     # Warp size is 32:
-    group_size = min(n_qubits, 64)
+    group_size = min(wgs, n_qubits)
     global_size = ((n_qubits + group_size - 1) // group_size) * group_size
 
     opencl_context.init_theta_kernel(
@@ -239,9 +241,7 @@ def maxcut_tfim_streaming(
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     # Warp size is 32:
-    group_size = n_qubits - 1
-    if group_size > 256:
-        group_size = 256
+    group_size = min(wgs, n_qubits - 1)
     grid_dim = n_steps * n_qubits * group_size
 
     # Move to GPU
