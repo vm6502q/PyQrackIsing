@@ -208,7 +208,7 @@ def maxcut_tfim_streaming(
     n_steps = n_qubits << quality
     grid_size = n_steps * n_qubits
 
-    if (not is_base_maxcut_gpu) or not (IS_OPENCL_AVAILABLE and grid_size >= 128):
+    if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
         return cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype)
 
     J_eff, degrees, G_max = init_J_and_z(G_func, G_func_args_tuple, nodes, dtype)
