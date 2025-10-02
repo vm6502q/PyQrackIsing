@@ -9,46 +9,46 @@ import os
 
 
 @njit
-def evaluate_cut_edges(theta_bits, G_func, G_func_args_tuple, nodes):
+def evaluate_cut_edges(theta_bits, G_func, nodes):
     n_qubits = len(nodes)
     cut = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
             if theta_bits[u] != theta_bits[v]:
-                cut += G_func((nodes[u], nodes[v]), G_func_args_tuple)
+                cut += G_func(nodes[u], nodes[v])
 
     return cut
 
 
 @njit
-def compute_energy(theta_bits, G_func, G_func_args_tuple, nodes):
+def compute_energy(theta_bits, G_func, nodes):
     n_qubits = len(nodes)
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            val = G_func((nodes[u], nodes[v]), G_func_args_tuple)
+            val = G_func(nodes[u], nodes[v])
             energy += (val if theta_bits[u] == theta_bits[v] else -val)
 
     return energy
 
 
 @njit
-def bootstrap_worker(theta, G_func, G_func_args_tuple, nodes, indices):
+def bootstrap_worker(theta, G_func, nodes, indices):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_func, G_func_args_tuple, nodes)
+    energy = compute_energy(local_theta, G_func, nodes)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, min_energy, dtype):
+def bootstrap(best_theta, G_func, nodes, indices_array, k, min_energy, dtype):
     n = len(indices_array) // k
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(best_theta, G_func, G_func_args_tuple, nodes, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(best_theta, G_func, nodes, indices_array[j : j + k])
 
     energy = energies.min()
     if energy < min_energy:
@@ -66,7 +66,6 @@ def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, mi
 def spin_glass_solver_streaming(
     G_func,
     nodes,
-    G_func_args_tuple=None,
     quality=None,
     shots=None,
     best_guess=None,
@@ -83,7 +82,7 @@ def spin_glass_solver_streaming(
             return "0", 0, (nodes, []), 0
 
         if n_qubits == 2:
-            weight = G_func((nodes[0], nodes[1]), G_func_args_tuple)
+            weight = G_func(nodes[0], nodes[1])
             if weight < 0.0:
                 return "00", 0, (nodes, []), weight
 
@@ -100,10 +99,10 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=G_func_args_tuple, quality=quality, shots=shots, is_base_maxcut_gpu=is_base_maxcut_gpu)
+        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, quality=quality, shots=shots, is_base_maxcut_gpu=is_base_maxcut_gpu)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
-    min_energy = compute_energy(best_theta, G_func, G_func_args_tuple, nodes)
+    min_energy = compute_energy(best_theta, G_func, nodes)
     improved = True
     correction_quality = 1
     combos_list = []
@@ -123,7 +122,7 @@ def spin_glass_solver_streaming(
             else:
                 combos = combos_list[k - 1]
 
-            energy = bootstrap(best_theta, G_func, G_func_args_tuple, nodes, combos, k, min_energy, dtype)
+            energy = bootstrap(best_theta, G_func, nodes, combos, k, min_energy, dtype)
 
             if energy < min_energy:
                 min_energy = energy
@@ -135,6 +134,6 @@ def spin_glass_solver_streaming(
             k = k + 1
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-    cut_value = evaluate_cut_edges(best_theta, G_func, G_func_args_tuple, nodes)
+    cut_value = evaluate_cut_edges(best_theta, G_func, nodes)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)

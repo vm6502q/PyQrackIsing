@@ -14,7 +14,7 @@ except ImportError:
 
 
 @njit
-def update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, node):
+def update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, node):
     # Select node
     used[node] = True
 
@@ -22,12 +22,12 @@ def update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weight
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_func((nodes[node], nodes[nbr]), G_func_args_tuple) / max_weight)
+        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_func(nodes[node], nodes[nbr]) / max_weight)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, m, shot):
+def local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, shot):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -40,7 +40,7 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
     # Update answer and weights
-    update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, shot % n)
+    update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, shot % n)
 
     for _ in range(1, m):
         # Count available
@@ -71,24 +71,24 @@ def local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights
         used[node] = True
 
         # Update answer and weights
-        update_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, used, node)
+        update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, node)
 
     return used
 
 
 @njit
-def compute_energy(sample, G_func, G_func_args_tuple, nodes, n_qubits):
+def compute_energy(sample, G_func, nodes, n_qubits):
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            val = G_func((nodes[u], nodes[v]), G_func_args_tuple)
+            val = G_func(nodes[u], nodes[v])
             energy += val if sample[u] == sample[v] else -val
 
     return energy
 
 
 @njit(parallel=True)
-def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thresholds, degrees_sum, weights, n, dtype):
+def sample_for_solution(G_func, nodes, max_weight, shots, thresholds, degrees_sum, weights, n, dtype):
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
 
@@ -101,10 +101,10 @@ def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thr
         m += 1
 
         # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_func, G_func_args_tuple, nodes, max_weight, weights, n, m, s)
+        sample = local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, s)
 
         solutions[s] = sample
-        energies[s] = compute_energy(sample, G_func, G_func_args_tuple, nodes, n)
+        energies[s] = compute_energy(sample, G_func, nodes, n)
 
     best_solution = solutions[np.argmin(energies)]
 
@@ -112,13 +112,13 @@ def sample_for_solution(G_func, G_func_args_tuple, nodes, max_weight, shots, thr
     for u in range(n):
         for v in range(u + 1, n):
             if best_solution[u] != best_solution[v]:
-                best_value += G_func((nodes[u], nodes[v]), G_func_args_tuple)
+                best_value += G_func(nodes[u], nodes[v])
 
     return best_solution, best_value
 
 
 @njit(parallel=True)
-def init_J_and_z(G_func, G_func_args_tuple, nodes, dtype):
+def init_J_and_z(G_func, nodes, dtype):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
@@ -128,7 +128,7 @@ def init_J_and_z(G_func, G_func_args_tuple, nodes, dtype):
         degree = 0
         J = 0.0
         for m in range(n_qubits):
-            val = G_func((nodes[n], nodes[m]), G_func_args_tuple)
+            val = G_func(nodes[n], nodes[m])
             if val != 0.0:
                 degree += 1
                 J += val
@@ -144,8 +144,8 @@ def init_J_and_z(G_func, G_func_args_tuple, nodes, dtype):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype):
-    J_eff, degrees, G_max = init_J_and_z(G_func, G_func_args_tuple, nodes, dtype)
+def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype):
+    J_eff, degrees, G_max = init_J_and_z(G_func, nodes, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
@@ -154,7 +154,7 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, J_eff, n_qubits, dtype)
+    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_weight, J_eff, n_qubits, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -162,10 +162,10 @@ def cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype
 
 
 @njit
-def gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, weights, degrees, hamming_prob, max_weight, dtype):
+def gpu_footer(shots, n_qubits, G_func, nodes, G_max, weights, degrees, hamming_prob, max_weight, dtype):
     fix_cdf(hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_func, G_func_args_tuple, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits, dtype)
+    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -175,7 +175,6 @@ def gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, weights
 def maxcut_tfim_streaming(
     G_func,
     nodes,
-    G_func_args_tuple=None,
     quality=None,
     shots=None,
     is_base_maxcut_gpu=True
@@ -192,7 +191,7 @@ def maxcut_tfim_streaming(
             return "0", 0, (nodes, [])
 
         if n_qubits == 2:
-            weight = G_func((nodes[0], nodes[1]), G_func_args_tuple)
+            weight = G_func(nodes[0], nodes[1])
             if weight < 0.0:
                 return "00", 0, (nodes, [])
 
@@ -209,9 +208,9 @@ def maxcut_tfim_streaming(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_func, G_func_args_tuple, nodes, dtype)
+        return cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype)
 
-    J_eff, degrees, G_max = init_J_and_z(G_func, G_func_args_tuple, nodes, dtype)
+    J_eff, degrees, G_max = init_J_and_z(G_func, nodes, dtype)
 
     delta_t = 1.0 / n_steps
     tot_t = 2.0 * n_steps * delta_t
@@ -271,4 +270,4 @@ def maxcut_tfim_streaming(
     degrees = None
     J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
 
-    return gpu_footer(shots, n_qubits, G_func, G_func_args_tuple, nodes, G_max, J_eff, degrees, hamming_prob, max_weight, dtype)
+    return gpu_footer(shots, n_qubits, G_func, nodes, G_max, J_eff, degrees, hamming_prob, max_weight, dtype)
