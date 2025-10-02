@@ -4,6 +4,7 @@
 from pyqrackising import spin_glass_solver_sparse
 import numpy as np
 from scipy.sparse import lil_matrix, csr_matrix
+import random
 import sys
 import time
 
@@ -15,10 +16,11 @@ def generate_adjacency(n_nodes=64, seed=None):
 
     lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
 
+    to_fill = random.sample([(u, v) for u in range(n_nodes) for v in range(u + 1, n_nodes)], n_nodes * n_nodes // 4)
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
-            if np.random.random() < 0.25:
-                lil[u, v] = np.random.random()
+            if (u, v) in to_fill:
+                lil[u, v] = random.random()
 
     return lil.tocsr()
 
@@ -43,5 +45,5 @@ if __name__ == "__main__":
     print(f"Bipartite cut bit string: {bitstring}")
     print(f"Cut weight: {cut_value}")
     print(
-        "(The sparsity is 75% on average, and the randomized and symmetric average nonzero weight is about 0.5, from the range 0.0 to 1.0.)"
+        "(The sparsity is 75%, and the randomized and symmetric average nonzero weight is about 0.5, from the range 0.0 to 1.0.)"
     )
