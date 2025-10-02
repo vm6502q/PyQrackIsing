@@ -56,7 +56,7 @@ def bootstrap(best_theta, G_func, G_func_args_tuple, nodes, indices_array, k, mi
         rtol = dtype(0)
         index_match = np.random.choice(np.where(np.isclose(energies, energy, atol=atol, rtol=rtol))[0])
         indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
-        min_energy = energy
+        min_energy = energies[index_match]
         for i in indices:
             best_theta[i] = not best_theta[i]
 
