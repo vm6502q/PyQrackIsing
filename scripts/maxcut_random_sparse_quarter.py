@@ -16,11 +16,8 @@ def generate_adjacency(n_nodes=64, seed=None):
 
     lil = lil_matrix((n_nodes, n_nodes), dtype=np.float32)
 
-    to_fill = random.sample([(u, v) for u in range(n_nodes) for v in range(u + 1, n_nodes)], n_nodes * n_nodes // 4)
-    for u in range(n_nodes):
-        for v in range(u + 1, n_nodes):
-            if (u, v) in to_fill:
-                lil[u, v] = random.random()
+    for edge in random.sample([(u, v) for u in range(n_nodes) for v in range(u + 1, n_nodes)], n_nodes * n_nodes // 4):
+        lil[edge[0], edge[1]] = random.random()
 
     return lil.tocsr()
 
