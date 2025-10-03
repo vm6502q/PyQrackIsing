@@ -318,34 +318,16 @@ __kernel void bootstrap_sparse(
 
 // Helper to read from segmented G_m
 inline real1 get_G_m(
-    __global const real1* G_m0,
-    __global const real1* G_m1,
-    __global const real1* G_m2,
-    __global const real1* G_m3,
+    __global const real1** G_m,
     size_t flat_idx,
     int segment_size
 ) {
-    if (flat_idx < segment_size)
-        return G_m0[flat_idx];
-    flat_idx -= segment_size;
-
-    if (flat_idx < segment_size)
-        return G_m1[flat_idx];
-    flat_idx -= segment_size;
-
-    if (flat_idx < segment_size)
-        return G_m2[flat_idx];
-    flat_idx -= segment_size;
-
-    return G_m3[flat_idx];
+    return G_m[flat_idx / segment_size][flat_idx % segment_size];
 }
 
 real1 bootstrap_worker_segmented(
     __constant char* theta,
-    __global const real1* G_m0,
-    __global const real1* G_m1,
-    __global const real1* G_m2,
-    __global const real1* G_m3,
+    __global const real1** G_m,
     __constant int* indices,
     const int k,
     const int n,
@@ -365,7 +347,7 @@ real1 bootstrap_worker_segmented(
         }
         for (int v = u + 1; v < n; ++v) {
             size_t flat_idx = u_offset + v;
-            real1 val = get_G_m(G_m0, G_m1, G_m2, G_m3, flat_idx, segment_size);
+            real1 val = get_G_m(G_m, flat_idx, segment_size);
 
             bool v_bit = theta[v];
             for (int x = 0; x < k; ++x) {
@@ -396,6 +378,8 @@ __kernel void bootstrap_segmented(
     __local real1* loc_energy,
     __local int* loc_index
 ) {
+    __global const real1* G_m[4] = { G_m0, G_m1, G_m2, G_m3 };
+
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
@@ -409,7 +393,7 @@ __kernel void bootstrap_segmented(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_segmented(best_theta, G_m0, G_m1, G_m2, G_m3, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices_array + j, k, n, segment_size);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
@@ -446,10 +430,7 @@ __kernel void bootstrap_segmented(
 
 real1 bootstrap_worker_sparse_segmented(
     __constant char* theta,
-    __global const real1* G_data0,
-    __global const real1* G_data1,
-    __global const real1* G_data2,
-    __global const real1* G_data3,
+    __global const real1** G_data,
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant int* indices,
@@ -473,7 +454,7 @@ real1 bootstrap_worker_sparse_segmented(
 
         for (uint col = row_start; col < row_end; ++col) {
             const int v = G_cols[col];
-            real1 val = get_G_m(G_data0, G_data1, G_data2, G_data3, col, segment_size);
+            real1 val = get_G_m(G_data, col, segment_size);
 
             bool v_bit = theta[v];
             for (int x = 0; x < k; ++x) {
@@ -506,6 +487,8 @@ __kernel void bootstrap_sparse_segmented(
     __local real1* loc_energy,
     __local int* loc_index
 ) {
+    __global const real1* G_data[4] = { G_data0, G_data1, G_data2, G_data3 };
+
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
@@ -519,7 +502,7 @@ __kernel void bootstrap_sparse_segmented(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data0, G_data1, G_data2, G_data3, G_rows, G_cols, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, segment_size);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
