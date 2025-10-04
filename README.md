@@ -146,10 +146,10 @@ from pyqrackising import tsp_maxcut_sparse
 import networkx as nx
 
 G = nx.petersen_graph()
-best_partition, best_cut_value = tsp_maxcut_sparse(G, k_neighbors=20)
+best_partition, best_cut_value = tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False)
 ```
 
-This solver is entirely serial and can be parallelized over CPU processing elements by user code, easily.
+When `is_optimized=True`, the `spin_glass_solver(G)` is used as a final optimization pass. When `is_optimized=False`, this solver becomes entirely serial and can be parallelized over CPU processing elements by user code, easily.
 
 ## Environment Variables
 
