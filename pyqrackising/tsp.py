@@ -811,7 +811,7 @@ def get_G_m(G_data, G_rows, G_cols, low, high):
 
 
 @njit
-def path_length(path, G_data, G_rows, G_cols):
+def path_length_sparse(path, G_data, G_rows, G_cols):
     tot_len = 0.0
     for i in range(len(path) - 1):
         tot_len += get_G_m(G_data, G_rows, G_cols, path[i], path[i + 1])
@@ -823,7 +823,7 @@ def path_length(path, G_data, G_rows, G_cols):
 def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
     improved = True
     best_path = path
-    best_dist = path_length(best_path, G_data, G_rows, G_cols)
+    best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
     path_len = len(path)
 
     while improved:
@@ -832,7 +832,7 @@ def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
             for j in range(i + 2, path_len):
                 new_path = best_path[:]
                 new_path[i:j] = best_path[j-1:i-1:-1]
-                new_dist = path_length(new_path, G_data, G_rows, G_cols)
+                new_dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
                     improved = True
@@ -845,7 +845,7 @@ def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
 def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
-    best_dist = path_length(best_path, G_data, G_rows, G_cols)
+    best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
     improved = True
 
     while improved:
@@ -865,43 +865,43 @@ def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_ne
 
                     # 7 unique cases (same as brute force, but restricted)
                     new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
 
                     new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
-                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
                         break
@@ -1100,7 +1100,7 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
         # so correct segments of 4 to 7.
         restitch_sparse(G_data, G_rows, G_cols, best_path)
 
-    best_weight = path_length(best_path, G_data, G_rows, G_cols)
+    best_weight = path_length_sparse(best_path, G_data, G_rows, G_cols)
 
     return [nodes[x] for x in best_path], best_weight
 
@@ -1147,3 +1147,307 @@ def tsp_symmetric_sparse(
     )
 
     return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b)
+
+
+@njit
+def path_length_streaming(path, G_func):
+    tot_len = 0.0
+    for i in range(len(path) - 1):
+        tot_len += G_func(path[i], path[i + 1])
+
+    return tot_len
+
+
+@njit
+def one_way_two_opt_streaming(path, G_func):
+    improved = True
+    best_path = path
+    best_dist = path_length_streaming(best_path, G_func)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length_streaming(new_path, G_func)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+
+    return best_path, best_dist
+
+
+@njit
+def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length_streaming(best_path, G_func)
+    improved = True
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for _j in range(k_neighbors):
+                j = neighbor_lists[path[i], _j]
+                if j <= i or j >= n-3:
+                    continue
+                for _k in range(k_neighbors):
+                    k = neighbor_lists[path[j], _k]
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # Extract indices
+                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length_streaming(new_path, G_func)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit
+def stich_singlet_streaming(G_func, singlet, bulk):
+    best_path = bulk.copy()
+    best_weight = G_func(singlet, bulk[0])
+    weight = G_func(singlet, bulk[-1])
+    if weight < best_weight:
+        best_weight = weight
+        best_path += [singlet]
+    else:
+        best_path = [singlet] + best_path
+
+    for i in range(1, len(bulk)):
+        weight = (
+            G_func(singlet, bulk[i - 1]) +
+            G_func(singlet, bulk[i]) -
+            G_func(bulk[i - 1], bulk[i])
+        )
+        if weight < best_weight:
+            best_weight = weight
+            best_path = bulk.copy()
+            best_path.insert(i, singlet)
+
+    return best_path
+
+
+@njit
+def stitch_streaming_symmetric(G_func, path_a, path_b):
+    if len(path_a) == 1:
+        return stich_singlet_streaming(G_func, path_a[0], path_b)
+
+    if len(path_b) == 1:
+        return stich_singlet_streaming(G_func, path_b[0], path_a)
+
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
+
+    best_connect = G_func(terminals_a[1], terminals_b[0])
+    best_path = path_b.copy()
+    weight = G_func(terminals_a[0], terminals_b[1])
+    if weight < best_connect:
+        best_connect = weight
+        best_path += path_a
+    else:
+        best_path = path_a + best_path
+
+    for _ in range(2):
+        for _ in range(2):
+            for i in range(1, len(path_b)):
+                weight = (
+                    G_func(terminals_a[0], path_b[i - 1]) +
+                    G_func(terminals_a[1], path_b[i]) -
+                    G_func(path_b[i - 1], path_b[i])
+                )
+                if weight < best_connect:
+                    best_connect = weight
+                    best_path = path_b.copy()
+                    best_path[i:i] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
+
+    return best_path
+
+
+@njit
+def restitch_streaming(G_func, path):
+    l = len(path)
+    mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
+
+    if mid < 4:
+        return path
+
+    path_a = restitch_streaming(G_func, path[:mid])
+    path_b = restitch_streaming(G_func, path[mid:])
+
+    return stitch_streaming_symmetric(G_func, path_a, path_b)
+
+
+@njit
+def tsp_streaming_brute_force_driver(G_func, n_nodes, nodes):
+    if n_nodes == 3:
+        w_012 = G_func(0, 1) + G_func(1, 2)
+        w_021 = G_func(0, 1) + G_func(0, 2)
+        w_120 = G_func(0, 2) + G_func(1, 2)
+
+        if w_012 >= w_021 and w_012 >= w_120:
+            return (nodes, w_012)
+
+        if w_021 >= w_012 and w_021 >= w_120:
+            return ([nodes[1], nodes[0], nodes[2]], w_021)
+
+        return ([nodes[0], nodes[2], nodes[1]], w_120)
+
+    if n_nodes == 2:
+        return (nodes, G_func(0, 1))
+
+    return (nodes, 0)
+
+
+@njit
+def tsp_streaming_bruteforce(G_func, perms, n):
+    best_weight = float('inf')
+    best_path = None
+
+    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
+
+    max_i = len(perms[0]) - 1
+
+    for path in perms:
+        weight = 0.0
+        for i in range(max_i):
+            weight += G_func(path[i], path[i+1])
+
+        if weight < best_weight:
+            best_weight = weight
+            best_path = path
+
+    best_path = list(best_path)
+
+    return best_path, best_weight
+
+
+def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b):
+    restitch_streaming(G_func, path_a)
+    restitch_streaming(G_func, path_b)
+
+    best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
+
+    if is_top_level:
+        best_path, _ = one_way_two_opt_streaming(best_path, G_func)
+
+        if k_neighbors > 0:
+            # Precompute nearest neighbors for each node
+            n_rows = len(nodes)
+
+            neighbor_lists = [
+                ([(float("inf"), 0)] * k_neighbors) for i in range(n_rows)
+            ]
+
+            for i in nodes:
+                for j in nodes:
+                    val = G_func(i, j)
+                    if val < neighbor_lists[i][-1][0]:
+                        neighbor_lists[i][-1] = (val, j)
+                        neighbor_lists[i].sort(key=lambda x: x[0])
+
+            for i in range(len(neighbor_lists)):
+                neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+            best_path, _ = targeted_three_opt_streaming(best_path, G_func, np.array(neighbor_lists), k_neighbors)
+
+        # We just corrected segments of 2 and 3,
+        # and this is top level,
+        # so correct segments of 4 to 7.
+        restitch_streaming(G_func, best_path)
+
+    best_weight = path_length_streaming(best_path, G_func)
+
+    return [nodes[x] for x in best_path], best_weight
+
+
+def tsp_symmetric_streaming(
+    G_func,
+    nodes,
+    k_neighbors=20,
+    is_top_level=True
+):
+    dtype = opencl_context.dtype
+    n_nodes = len(nodes)
+
+    if n_nodes < 7:
+        if n_nodes > 3:
+            best_path, best_weight = tsp_streaming_bruteforce(G_func, list(itertools.permutations(nodes)), n_nodes)
+
+            return best_path, best_weight
+
+        return tsp_streaming_brute_force_driver(G_func, n_nodes, nodes)
+
+    a, b = monte_carlo_loop(n_nodes)
+
+    sol_a = tsp_symmetric_streaming(
+        G_func,
+        a,
+        is_top_level=False,
+        k_neighbors=0
+    )
+    sol_b = tsp_symmetric_streaming(
+        G_func,
+        b,
+        is_top_level=False,
+        k_neighbors=0
+    )
+
+    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0])
