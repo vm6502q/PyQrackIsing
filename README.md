@@ -139,6 +139,18 @@ solution_bit_string, cut_value, node_groups, energy = spin_glass_solver_streamin
 # solution_bit_string, cut_value, node_groups = maxcut_tfim_streaming(G_func, nodes, G_func_args_tuple=args_tuple)
 ```
 
+Finally, combining insights from both the (Monte Carlo) TSP and MAXCUT solvers, we have `tsp_maxcut(G)`:
+
+```
+from pyqrackising import tsp_maxcut
+import networkx as nx
+
+G = nx.petersen_graph()
+best_partition, best_cut_value = tsp_maxcut(G, k_neighbors=20)
+```
+
+This solver is entirely serial and can be parallelized over CPU processing elements by user code, easily.
+
 ## Environment Variables
 
 We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for when `is_alt_gpu_sampling=True`. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
