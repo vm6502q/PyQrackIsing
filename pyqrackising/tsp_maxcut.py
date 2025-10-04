@@ -73,7 +73,7 @@ def get_bitstring(partition, nodes):
     return bitstring
 
 
-def tsp_maxcut(G, k_neighbors=20, is_optimized=False, **kwargs):
+def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
@@ -84,7 +84,7 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, **kwargs):
         nodes = list(range(n_qubits))
         G_m = G
 
-    path, length = tsp_symmetric(G, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors)
+    path, length = tsp_symmetric(G, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors, is_parallel=is_parallel)
     partition, cut_value = tsp_to_maxcut_bipartition(path, G_m)
 
     if not is_optimized:
@@ -162,7 +162,7 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
     return best_partition, best_cut_value
 
 
-def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, **kwargs):
+def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
@@ -173,7 +173,7 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, **kwargs):
         nodes = list(range(n_qubits))
         G_m = G
 
-    path, length = tsp_symmetric_sparse(G, k_neighbors=k_neighbors)
+    path, length = tsp_symmetric_sparse(G, k_neighbors=k_neighbors, is_parallel=is_parallel)
     partition, cut_value = tsp_to_maxcut_bipartition_sparse(path, G_m.data, G_m.indptr, G_m.indices)
 
     if not is_optimized:
@@ -242,9 +242,9 @@ def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
     return best_partition, best_cut_value
 
 
-def tsp_maxcut_streaming(G_func, nodes, k_neighbors=20, is_optimized=False, **kwargs):
+def tsp_maxcut_streaming(G_func, nodes, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     n_qubits = len(nodes)
-    path, length = tsp_symmetric_streaming(G_func, nodes, k_neighbors=k_neighbors)
+    path, length = tsp_symmetric_streaming(G_func, nodes, k_neighbors=k_neighbors, is_parallel=is_parallel)
     partition, cut_value = tsp_to_maxcut_bipartition_streaming(path, G_func)
 
     if not is_optimized:

@@ -1,10 +1,33 @@
 from .spin_glass_solver import spin_glass_solver
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
 import itertools
+import multiprocessing
+import multiprocessing.pool
 import networkx as nx
 from numba import njit
 import numpy as np
 from scipy.sparse import lil_matrix
+
+
+# See https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic#answer-53180921
+class NoDaemonProcess(multiprocessing.Process):
+    @property
+    def daemon(self):
+        return False
+
+    @daemon.setter
+    def daemon(self, value):
+        pass
+
+
+class NoDaemonContext(type(multiprocessing.get_context())):
+    Process = NoDaemonProcess
+
+
+class NestablePool(multiprocessing.pool.Pool):
+    def __init__(self, *args, **kwargs):
+        kwargs['context'] = NoDaemonContext()
+        super(NestablePool, self).__init__(*args, **kwargs)
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
@@ -516,7 +539,8 @@ def tsp_symmetric(
     k_neighbors=20,
     is_cyclic=True,
     multi_start=1,
-    is_top_level=True
+    is_top_level=True,
+    is_parallel=False
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -576,32 +600,40 @@ def tsp_symmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    sol_a = tsp_symmetric(
-        G_a,
-        quality=quality,
-        shots=shots,
-        is_alt_gpu_sampling=is_alt_gpu_sampling,
-        is_base_maxcut_gpu=is_base_maxcut_gpu,
-        is_combo_maxcut_gpu=is_combo_maxcut_gpu,
-        monte_carlo=monte_carlo,
-        is_cyclic=False,
-        is_top_level=False,
-        k_neighbors=0,
-        multi_start=multi_start
-    )
-    sol_b = tsp_symmetric(
-        G_b,
-        quality=quality,
-        shots=shots,
-        is_alt_gpu_sampling=is_alt_gpu_sampling,
-        is_base_maxcut_gpu=is_base_maxcut_gpu,
-        is_combo_maxcut_gpu=is_combo_maxcut_gpu,
-        monte_carlo=monte_carlo,
-        is_cyclic=False,
-        is_top_level=False,
-        k_neighbors=0,
-        multi_start=multi_start
-    )
+    if monte_carlo and is_parallel:
+        args = (
+            (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True),
+            (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
+        )
+        with NestablePool(2) as pool:
+            sol_a, sol_b = pool.starmap(tsp_symmetric, args)
+    else:
+        sol_a = tsp_symmetric(
+            G_a,
+            quality=quality,
+            shots=shots,
+            is_alt_gpu_sampling=is_alt_gpu_sampling,
+            is_base_maxcut_gpu=is_base_maxcut_gpu,
+            is_combo_maxcut_gpu=is_combo_maxcut_gpu,
+            monte_carlo=monte_carlo,
+            is_cyclic=False,
+            is_top_level=False,
+            k_neighbors=0,
+            multi_start=multi_start
+        )
+        sol_b = tsp_symmetric(
+            G_b,
+            quality=quality,
+            shots=shots,
+            is_alt_gpu_sampling=is_alt_gpu_sampling,
+            is_base_maxcut_gpu=is_base_maxcut_gpu,
+            is_combo_maxcut_gpu=is_combo_maxcut_gpu,
+            monte_carlo=monte_carlo,
+            is_cyclic=False,
+            is_top_level=False,
+            k_neighbors=0,
+            multi_start=multi_start
+        )
 
     return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
 
@@ -701,7 +733,8 @@ def tsp_asymmetric(
     k_neighbors=20,
     is_cyclic=True,
     multi_start=1,
-    is_top_level=True
+    is_top_level=True,
+    is_parallel=False
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -765,32 +798,40 @@ def tsp_asymmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    sol_a = tsp_asymmetric(
-        G_a,
-        quality=quality,
-        shots=shots,
-        is_alt_gpu_sampling=is_alt_gpu_sampling,
-        is_base_maxcut_gpu=is_base_maxcut_gpu,
-        is_combo_maxcut_gpu=is_combo_maxcut_gpu,
-        monte_carlo=monte_carlo,
-        is_cyclic=False,
-        is_top_level=False,
-        k_neighbors=0,
-        multi_start=multi_start
-    )
-    sol_b = tsp_asymmetric(
-        G_b,
-        quality=quality,
-        shots=shots,
-        is_alt_gpu_sampling=is_alt_gpu_sampling,
-        is_base_maxcut_gpu=is_base_maxcut_gpu,
-        is_combo_maxcut_gpu=is_combo_maxcut_gpu,
-        monte_carlo=monte_carlo,
-        is_cyclic=False,
-        is_top_level=False,
-        k_neighbors=0,
-        multi_start=multi_start
-    )
+    if monte_carlo and is_parallel:
+        args = (
+            (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True),
+            (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
+        )
+        with NestablePool(2) as pool:
+            sol_a, sol_b = pool.starmap(tsp_asymmetric, args)
+    else:
+        sol_a = tsp_asymmetric(
+            G_a,
+            quality=quality,
+            shots=shots,
+            is_alt_gpu_sampling=is_alt_gpu_sampling,
+            is_base_maxcut_gpu=is_base_maxcut_gpu,
+            is_combo_maxcut_gpu=is_combo_maxcut_gpu,
+            monte_carlo=monte_carlo,
+            is_cyclic=False,
+            is_top_level=False,
+            k_neighbors=0,
+            multi_start=multi_start
+        )
+        sol_b = tsp_asymmetric(
+            G_b,
+            quality=quality,
+            shots=shots,
+            is_alt_gpu_sampling=is_alt_gpu_sampling,
+            is_base_maxcut_gpu=is_base_maxcut_gpu,
+            is_combo_maxcut_gpu=is_combo_maxcut_gpu,
+            monte_carlo=monte_carlo,
+            is_cyclic=False,
+            is_top_level=False,
+            k_neighbors=0,
+            multi_start=multi_start
+        )
 
     return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
 
@@ -1126,7 +1167,8 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
 def tsp_symmetric_sparse(
     G,
     k_neighbors=20,
-    is_top_level=True
+    is_top_level=True,
+    is_parallel=True
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -1153,16 +1195,24 @@ def tsp_symmetric_sparse(
 
     G_a, G_b = init_G_a_b_sparse(G_m, a, b, dtype)
 
-    sol_a = tsp_symmetric_sparse(
-        G_a,
-        is_top_level=False,
-        k_neighbors=0
-    )
-    sol_b = tsp_symmetric_sparse(
-        G_b,
-        is_top_level=False,
-        k_neighbors=0
-    )
+    if is_parallel:
+        args = (
+            (G_a, 0, False, True),
+            (G_b, 0, False, True)
+        )
+        with NestablePool(2) as pool:
+            sol_a, sol_b = pool.starmap(tsp_symmetric_sparse, args)
+    else:
+        sol_a = tsp_symmetric_sparse(
+            G_a,
+            is_top_level=False,
+            k_neighbors=0
+        )
+        sol_b = tsp_symmetric_sparse(
+            G_b,
+            is_top_level=False,
+            k_neighbors=0
+        )
 
     return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b)
 
@@ -1440,7 +1490,8 @@ def tsp_symmetric_streaming(
     G_func,
     nodes,
     k_neighbors=20,
-    is_top_level=True
+    is_top_level=True,
+    is_parallel=True
 ):
     dtype = opencl_context.dtype
     n_nodes = len(nodes)
@@ -1455,17 +1506,25 @@ def tsp_symmetric_streaming(
 
     a, b = monte_carlo_loop(n_nodes)
 
-    sol_a = tsp_symmetric_streaming(
-        G_func,
-        a,
-        is_top_level=False,
-        k_neighbors=0
-    )
-    sol_b = tsp_symmetric_streaming(
-        G_func,
-        b,
-        is_top_level=False,
-        k_neighbors=0
-    )
+    if is_parallel:
+        args = (
+            (G_func, a, 0, False, True),
+            (G_func, b, 0, False, True)
+        )
+        with NestablePool(2) as pool:
+            sol_a, sol_b = pool.starmap(tsp_symmetric_streaming, args)
+    else:
+        sol_a = tsp_symmetric_streaming(
+            G_func,
+            a,
+            is_top_level=False,
+            k_neighbors=0
+        )
+        sol_b = tsp_symmetric_streaming(
+            G_func,
+            b,
+            is_top_level=False,
+            k_neighbors=0
+        )
 
     return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0])
