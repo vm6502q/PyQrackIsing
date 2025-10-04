@@ -1,9 +1,10 @@
 from .spin_glass_solver import spin_glass_solver
-from .maxcut_tfim_util import opencl_context
+from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
 import itertools
 import networkx as nx
 from numba import njit
 import numpy as np
+from scipy.sparse import lil_matrix
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
@@ -34,6 +35,7 @@ def one_way_two_opt(path, G):
                     best_path, best_dist = new_path, new_dist
                     improved = True
         path = best_path
+
     return best_path, best_dist
 
 
@@ -55,6 +57,7 @@ def anchored_two_opt(path, G):
                     best_path, best_dist = new_path, new_dist
                     improved = True
         path = best_path
+
     return best_path, best_dist
 
 
@@ -76,6 +79,7 @@ def reversed_anchored_two_opt(path, G):
                     best_path, best_dist = new_path, new_dist
                     improved = True
         path = best_path
+
     return best_path, best_dist
 
 
@@ -97,6 +101,7 @@ def two_opt(path, G):
                     best_path, best_dist = new_path, new_dist
                     improved = True
         path = best_path
+
     return best_path, best_dist
 
 
@@ -788,3 +793,357 @@ def tsp_asymmetric(
     )
 
     return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
+
+
+@njit
+def get_G_m(G_data, G_rows, G_cols, low, high):
+    if high < low:
+        low, high = high, low
+
+    start = G_rows[low]
+    end = G_rows[low + 1]
+
+    i = binary_search(G_cols[start:end], high) + start
+    if i < end:
+        return G_data[i]
+
+    return 0.0
+
+
+@njit
+def path_length(path, G_data, G_rows, G_cols):
+    tot_len = 0.0
+    for i in range(len(path) - 1):
+        tot_len += get_G_m(G_data, G_rows, G_cols, path[i], path[i + 1])
+
+    return tot_len
+
+
+@njit
+def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
+    improved = True
+    best_path = path
+    best_dist = path_length(best_path, G_data, G_rows, G_cols)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length(new_path, G_data, G_rows, G_cols)
+                if new_dist < best_dist:
+                    best_path, best_dist = new_path, new_dist
+                    improved = True
+        path = best_path
+
+    return best_path, best_dist
+
+
+@njit
+def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors=20):
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length(best_path, G_data, G_rows, G_cols)
+    improved = True
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for _j in range(k_neighbors):
+                j = neighbor_lists[path[i], _j]
+                if j <= i or j >= n-3:
+                    continue
+                for _k in range(k_neighbors):
+                    k = neighbor_lists[path[j], _k]
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # Extract indices
+                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                    new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+                    dist = path_length(new_path, G_data, G_rows, G_cols)
+                    if dist < best_dist:
+                        best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit
+def stich_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
+    best_path = bulk.copy()
+    best_weight = get_G_m(G_data, G_rows, G_cols, singlet, bulk[0])
+    weight = get_G_m(G_data, G_rows, G_cols, singlet, bulk[-1])
+    if weight < best_weight:
+        best_weight = weight
+        best_path += [singlet]
+    else:
+        best_path = [singlet] + best_path
+
+    for i in range(1, len(bulk)):
+        weight = (
+            get_G_m(G_data, G_rows, G_cols, singlet, bulk[i - 1]) +
+            get_G_m(G_data, G_rows, G_cols, singlet, bulk[i]) -
+            get_G_m(G_data, G_rows, G_cols, bulk[i - 1], bulk[i])
+        )
+        if weight < best_weight:
+            best_weight = weight
+            best_path = bulk.copy()
+            best_path.insert(i, singlet)
+
+    return best_path
+
+
+@njit
+def stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b):
+    if len(path_a) == 1:
+        return stich_singlet_sparse(G_data, G_rows, G_cols, path_a[0], path_b)
+
+    if len(path_b) == 1:
+        return stich_singlet_sparse(G_data, G_rows, G_cols, path_b[0], path_a)
+
+    terminals_a = [path_a[0], path_a[-1]]
+    terminals_b = [path_b[0], path_b[-1]]
+
+    best_connect = get_G_m(G_data, G_rows, G_cols, terminals_a[1], terminals_b[0])
+    best_path = path_b.copy()
+    weight = get_G_m(G_data, G_rows, G_cols, terminals_a[0], terminals_b[1])
+    if weight < best_connect:
+        best_connect = weight
+        best_path += path_a
+    else:
+        best_path = path_a + best_path
+
+    for _ in range(2):
+        for _ in range(2):
+            for i in range(1, len(path_b)):
+                weight = (
+                    get_G_m(G_data, G_rows, G_cols, terminals_a[0], path_b[i - 1]) +
+                    get_G_m(G_data, G_rows, G_cols, terminals_a[1], path_b[i]) -
+                    get_G_m(G_data, G_rows, G_cols, path_b[i - 1], path_b[i])
+                )
+                if weight < best_connect:
+                    best_connect = weight
+                    best_path = path_b.copy()
+                    best_path[i:i] = path_a
+            path_a.reverse()
+            terminals_a.reverse()
+        path_a, path_b = path_b, path_a
+        terminals_a, terminals_b = terminals_b, terminals_a
+
+    return best_path
+
+
+@njit
+def restitch_sparse(G_data, G_rows, G_cols, path):
+    l = len(path)
+    mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
+
+    if mid < 4:
+        return path
+
+    path_a = restitch_sparse(G_data, G_rows, G_cols, path[:mid])
+    path_b = restitch_sparse(G_data, G_rows, G_cols, path[mid:])
+
+    return stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b)
+
+
+@njit
+def tsp_sparse_brute_force_driver(G_data, G_rows, G_cols, n_nodes, nodes):
+    if n_nodes == 3:
+        w_012 = get_G_m(G_data, G_rows, G_cols, 0, 1) + get_G_m(G_data, G_rows, G_cols, 1, 2)
+        w_021 = get_G_m(G_data, G_rows, G_cols, 0, 1) + get_G_m(G_data, G_rows, G_cols, 0, 2)
+        w_120 = get_G_m(G_data, G_rows, G_cols, 0, 2) + get_G_m(G_data, G_rows, G_cols, 1, 2)
+
+        if w_012 >= w_021 and w_012 >= w_120:
+            return (nodes, w_012)
+
+        if w_021 >= w_012 and w_021 >= w_120:
+            return ([nodes[1], nodes[0], nodes[2]], w_021)
+
+        return ([nodes[0], nodes[2], nodes[1]], w_120)
+
+    if n_nodes == 2:
+        return (nodes, get_G_m(G_data, G_rows, G_cols, 0, 1))
+
+    return (nodes, 0)
+
+
+@njit
+def tsp_sparse_bruteforce(G_data, G_rows, G_cols, perms):
+    n = len(G_rows) - 1
+    best_weight = float('inf')
+    best_path = None
+
+    # Must fix node 0 at start to remove rotational symmetry in cyclic case!
+
+    max_i = len(perms[0]) - 1
+
+    for path in perms:
+        weight = 0.0
+        for i in range(max_i):
+            weight += get_G_m(G_data, G_rows, G_cols, path[i], path[i+1])
+
+        if weight < best_weight:
+            best_weight = weight
+            best_path = path
+
+    best_path = list(best_path)
+
+    return best_path, best_weight
+
+
+def init_G_a_b_sparse(G_m, a, b, dtype):
+    n_a_nodes = len(a)
+    n_b_nodes = len(b)
+    G_a = lil_matrix((n_a_nodes, n_a_nodes), dtype=opencl_context.dtype)
+    G_b = lil_matrix((n_b_nodes, n_b_nodes), dtype=opencl_context.dtype)
+    for i in range(n_a_nodes):
+        for j in range(n_a_nodes):
+            if i == j:
+                continue
+            weight = G_m[a[i], a[j]]
+            if weight != 0.0:
+                G_a[i, j] = weight
+    for i in range(n_b_nodes):
+        for j in range(n_b_nodes):
+            if i == j:
+                continue
+            weight = G_m[b[i], b[j]]
+            if weight != 0.0:
+                G_b[i, j] = weight
+
+    return G_a.tocsr(), G_b.tocsr()
+
+def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b):
+    path_a = [a[x] for x in sol_a[0]]
+    path_b = [b[x] for x in sol_b[0]]
+
+    restitch_sparse(G_data, G_rows, G_cols, path_a)
+    restitch_sparse(G_data, G_rows, G_cols, path_b)
+
+    best_path = stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b)
+
+    if is_top_level:
+        best_path, _ = one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols)
+
+        if k_neighbors > 0:
+            # Precompute nearest neighbors for each node
+            n_rows = len(G_rows) - 1
+
+            neighbor_lists = [
+                ([(float("inf"), 0)] * k_neighbors) for i in range(n_rows)
+            ]
+
+            for i in range(n_rows):
+                for j in range(n_rows):
+                    val = get_G_m(G_data, G_rows, G_cols, i, j)
+                    if val < neighbor_lists[i][-1][0]:
+                        neighbor_lists[i][-1] = (val, j)
+                        neighbor_lists[i].sort(key=lambda x: x[0])
+
+            for i in range(len(neighbor_lists)):
+                neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+            best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, np.array(neighbor_lists), k_neighbors)
+
+        # We just corrected segments of 2 and 3,
+        # and this is top level,
+        # so correct segments of 4 to 7.
+        restitch_sparse(G_data, G_rows, G_cols, best_path)
+
+    best_weight = path_length(best_path, G_data, G_rows, G_cols)
+
+    return [nodes[x] for x in best_path], best_weight
+
+
+def tsp_symmetric_sparse(
+    G,
+    k_neighbors=20,
+    is_top_level=True
+):
+    dtype = opencl_context.dtype
+    nodes = None
+    n_nodes = 0
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        n_nodes = len(nodes)
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype)
+    else:
+        n_nodes = G.shape[0]
+        nodes = list(range(n_nodes))
+        G_m = G
+
+    if n_nodes < 7:
+        if n_nodes > 3:
+            best_path, best_weight = tsp_sparse_bruteforce(G_m.data, G_m.indptr, G_m.indices, list(itertools.permutations(list(range(n_nodes)))))
+
+            return [nodes[x] for x in best_path], best_weight
+
+        return tsp_sparse_brute_force_driver(G_m.data, G_m.indptr, G_m.indices, n_nodes, nodes)
+
+    a, b = monte_carlo_loop(n_nodes)
+
+    G_a, G_b = init_G_a_b_sparse(G_m, a, b, dtype)
+
+    sol_a = tsp_symmetric_sparse(
+        G_a,
+        is_top_level=False,
+        k_neighbors=0
+    )
+    sol_b = tsp_symmetric_sparse(
+        G_b,
+        is_top_level=False,
+        k_neighbors=0
+    )
+
+    return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b)

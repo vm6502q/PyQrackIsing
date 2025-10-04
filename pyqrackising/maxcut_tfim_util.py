@@ -3,6 +3,7 @@ import networkx as nx
 import numpy as np
 import os
 from numba import njit, prange
+from scipy.sparse import lil_matrix
 
 
 @njit
@@ -18,6 +19,37 @@ def get_cut(solution, nodes):
             l.append(nodes[i])
 
     return bit_string, l, r
+
+
+@njit
+def binary_search(l, t):
+    left = 0
+    right = len(l) - 1
+
+    while left <= right:
+        mid = (left + right) >> 1
+
+        if l[mid] == t:
+            return mid
+
+        if l[mid] < t:
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return len(l)
+
+
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=opencl_context.dtype)
+    for u in range(n_nodes):
+        u_node = nodes[u]
+        for v in range(u + 1, n_nodes):
+            v_node = nodes[v]
+            if G.has_edge(u_node, v_node):
+                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
+
+    return lil.tocsr()
 
 
 @njit(parallel=True)

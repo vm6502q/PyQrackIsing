@@ -3,34 +3,14 @@ import networkx as nx
 import numpy as np
 import os
 from numba import njit, prange
-from scipy.sparse import lil_matrix, csr_matrix
 
-from .maxcut_tfim_util import fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context
+from .maxcut_tfim_util import binary_search, fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
     import pyopencl as cl
 except ImportError:
     IS_OPENCL_AVAILABLE = False
-
-
-@njit
-def binary_search(l, t):
-    left = 0
-    right = len(l) - 1
-
-    while left <= right:
-        mid = (left + right) >> 1
-
-        if l[mid] == t:
-            return mid
-
-        if l[mid] < t:
-            left = mid + 1
-        else:
-            right = mid - 1
-
-    return len(l)
 
 
 @njit
@@ -290,18 +270,6 @@ def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, n
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
-
-
-def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=opencl_context.dtype)
-    for u in range(n_nodes):
-        u_node = nodes[u]
-        for v in range(u + 1, n_nodes):
-            v_node = nodes[v]
-            if G.has_edge(u_node, v_node):
-                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
-
-    return lil.tocsr()
 
 
 def maxcut_tfim_sparse(

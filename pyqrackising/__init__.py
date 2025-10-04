@@ -8,5 +8,5 @@ from .spin_glass_solver import spin_glass_solver
 from .spin_glass_solver_sparse import spin_glass_solver_sparse
 from .spin_glass_solver_streaming import spin_glass_solver_streaming
 from .tsp import tsp_symmetric, tsp_asymmetric
-from .tsp_maxcut import tsp_maxcut
+from .tsp_maxcut import tsp_maxcut, tsp_maxcut_sparse
 from .convert_tensor_network_to_tsp import convert_tensor_network_to_tsp, convert_quimb_tree_to_tsp
