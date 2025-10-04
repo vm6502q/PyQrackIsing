@@ -73,7 +73,6 @@ def tsp_maxcut(G, k_neighbors=20, **kwargs):
         G_m = G
 
     path, length = tsp_symmetric(G, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors)
-    return tsp_to_maxcut_bipartition(path, G)
     partition, cut_value = tsp_to_maxcut_bipartition(path, G_m)
 
     bitint = 0
