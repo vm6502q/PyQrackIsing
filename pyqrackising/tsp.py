@@ -814,7 +814,16 @@ def get_G_m(G_data, G_rows, G_cols, low, high):
 def path_length_sparse(path, G_data, G_rows, G_cols):
     tot_len = 0.0
     for i in range(len(path) - 1):
-        tot_len += get_G_m(G_data, G_rows, G_cols, path[i], path[i + 1])
+        low, high = path[i], path[i + 1]
+        if high < low:
+            low, high = high, low
+
+        start = G_rows[low]
+        end = G_rows[low + 1]
+
+        i = binary_search(G_cols[start:end], high) + start
+        if i < end:
+            tot_len += G_data[i]
 
     return tot_len
 
@@ -1030,7 +1039,16 @@ def tsp_sparse_bruteforce(G_data, G_rows, G_cols, perms):
     for path in perms:
         weight = 0.0
         for i in range(max_i):
-            weight += get_G_m(G_data, G_rows, G_cols, path[i], path[i+1])
+            low, high = path[i], path[i + 1]
+            if high < low:
+                low, high = high, low
+
+            start = G_rows[low]
+            end = G_rows[low + 1]
+
+            i = binary_search(G_cols[start:end], high) + start
+            if i < end:
+                weight += G_data[i]
 
         if weight < best_weight:
             best_weight = weight
