@@ -600,7 +600,7 @@ def tsp_symmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    if monte_carlo and is_parallel:
+    if monte_carlo and is_parallel and len(a) > 3 and len(b) > 3:
         args = (
             (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True),
             (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
@@ -798,7 +798,7 @@ def tsp_asymmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    if monte_carlo and is_parallel:
+    if monte_carlo and is_parallel and len(a) > 2 and len(b) > 2:
         args = (
             (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True),
             (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
@@ -1195,7 +1195,7 @@ def tsp_symmetric_sparse(
 
     G_a, G_b = init_G_a_b_sparse(G_m, a, b, dtype)
 
-    if is_parallel:
+    if is_parallel and len(a) > 3 and len(b) > 3:
         args = (
             (G_a, 0, False, True),
             (G_b, 0, False, True)
@@ -1506,7 +1506,7 @@ def tsp_symmetric_streaming(
 
     a, b = monte_carlo_loop(n_nodes)
 
-    if is_parallel:
+    if is_parallel and len(a) > 3 and len(b) > 3:
         args = (
             (G_func, a, 0, False, True),
             (G_func, b, 0, False, True)
