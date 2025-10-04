@@ -1,8 +1,8 @@
 from .spin_glass_solver import spin_glass_solver
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
+from concurrent.futures import ThreadPoolExecutor
+import time
 import itertools
-import multiprocessing
-import multiprocessing.pool
 import networkx as nx
 from numba import njit
 import numpy as np
@@ -11,27 +11,6 @@ from scipy.sparse import lil_matrix
 
 
 max_parallel_level = np.log2(os.cpu_count())
-
-
-# See https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic#answer-53180921
-class NoDaemonProcess(multiprocessing.Process):
-    @property
-    def daemon(self):
-        return False
-
-    @daemon.setter
-    def daemon(self, value):
-        pass
-
-
-class NoDaemonContext(type(multiprocessing.get_context())):
-    Process = NoDaemonProcess
-
-
-class NestablePool(multiprocessing.pool.Pool):
-    def __init__(self, *args, **kwargs):
-        kwargs['context'] = NoDaemonContext()
-        super(NestablePool, self).__init__(*args, **kwargs)
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
@@ -606,12 +585,10 @@ def tsp_symmetric(
     G_a, G_b = init_G_a_b(G_m, a, b)
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
-        args = (
-            (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1),
-            (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
-        )
-        with NestablePool(2) as pool:
-            sol_a, sol_b = pool.starmap(tsp_symmetric, args)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_a = f.result()
     else:
         sol_a = tsp_symmetric(
             G_a,
@@ -807,12 +784,10 @@ def tsp_asymmetric(
     G_a, G_b = init_G_a_b(G_m, a, b)
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 2) and (len(b) > 2):
-        args = (
-            (G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1),
-            (G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
-        )
-        with NestablePool(2) as pool:
-            sol_a, sol_b = pool.starmap(tsp_asymmetric, args)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_a = f.result()
     else:
         sol_a = tsp_asymmetric(
             G_a,
@@ -1207,12 +1182,10 @@ def tsp_symmetric_sparse(
     G_a, G_b = init_G_a_b_sparse(G_m, a, b, dtype)
 
     if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
-        args = (
-            (G_a, False, True, parallel_level + 1),
-            (G_b, False, True, parallel_level + 1)
-        )
-        with NestablePool(2) as pool:
-            sol_a, sol_b = pool.starmap(tsp_symmetric_sparse, args)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric_sparse, G_a, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_sparse(G_b, False, True, parallel_level + 1)
+            sol_a = f.result()
     else:
         sol_a = tsp_symmetric_sparse(
             G_a,
@@ -1521,12 +1494,10 @@ def tsp_symmetric_streaming(
     a, b = monte_carlo_loop(n_nodes)
 
     if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
-        args = (
-            (G_func, a, False, True, parallel_level + 1),
-            (G_func, b, False, True, parallel_level + 1)
-        )
-        with NestablePool(2) as pool:
-            sol_a, sol_b = pool.starmap(tsp_symmetric_streaming, args)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric_streaming, G_func, a, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_streaming(G_func, b, False, True, parallel_level + 1)
+            sol_a = f.result()
     else:
         sol_a = tsp_symmetric_streaming(
             G_func,
