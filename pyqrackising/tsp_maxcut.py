@@ -4,14 +4,15 @@ from .spin_glass_solver import spin_glass_solver
 from .spin_glass_solver_sparse import spin_glass_solver_sparse
 from .spin_glass_solver_streaming import spin_glass_solver_streaming
 import networkx as nx
-from numba import njit
+from numba import njit, prange
 
 
-@njit
+@njit(parallel=True)
 def tsp_to_maxcut_bipartition(tsp_path, weights):
     n = len(tsp_path)
     best_cut_value = -float('inf')
-    best_partition = None
+    best_partition_A = None
+    best_partition_B = None
     direction = 0
 
     for offset in [-1, 0, 1]:
@@ -19,16 +20,18 @@ def tsp_to_maxcut_bipartition(tsp_path, weights):
         A = tsp_path[:mid]
         B = tsp_path[mid:]
         cut_value = 0.0
-        for u in A:
+        for i in prange(len(A)):
+            u = A[i]
             for v in B:
                 cut_value += weights[u, v]
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             direction = offset
 
     if direction == 0:
-        return best_partition, best_cut_value
+        return best_partition_A, best_partition_B, best_cut_value
 
     improved = True
     best_offset = direction
@@ -39,16 +42,18 @@ def tsp_to_maxcut_bipartition(tsp_path, weights):
         A = tsp_path[:mid]
         B = tsp_path[mid:]
         cut_value = 0.0
-        for u in A:
+        for i in prange(len(A)):
+            u = A[i]
             for v in B:
                 cut_value += weights[u, v]
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             best_offset = offset
             improved = True
 
-    return best_partition, best_cut_value
+    return best_partition_A, best_partition_B, best_cut_value
 
 
 @njit
@@ -73,6 +78,20 @@ def get_bitstring(partition, nodes):
     return bitstring
 
 
+@njit(parallel=True)
+def early_exit(G_m, partition, nodes):
+    n_qubits = len(nodes)
+    bitstring = get_bitstring(partition, nodes)
+    theta_bits = [(b == "1") for b in list(bitstring)]
+    energy = 0
+    for u in prange(n_qubits):
+        for v in range(u + 1, n_qubits):
+            val = G_m[nodes[u], nodes[v]]
+            energy += (val if theta_bits[u] == theta_bits[v] else -val)
+
+    return bitstring, energy
+
+
 def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     G_m = None
     if isinstance(G, nx.Graph):
@@ -85,16 +104,11 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
         G_m = G
 
     path, length = tsp_symmetric(G, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors, is_parallel=is_parallel)
-    partition, cut_value = tsp_to_maxcut_bipartition(path, G_m)
+    l, r, cut_value = tsp_to_maxcut_bipartition(path, G_m)
+    partition = (l, r)
 
     if not is_optimized:
-        bitstring = get_bitstring(partition, nodes)
-        theta_bits = [(b == "1") for b in list(bitstring)]
-        energy = 0
-        for u in range(n_qubits):
-            for v in range(u + 1, n_qubits):
-                val = G_m[nodes[u], nodes[v]]
-                energy += (val if theta_bits[u] == theta_bits[v] else -val)
+        bitstring, energy = early_exit(G_m, partition, nodes)
 
         return bitstring, cut_value, partition, energy
 
@@ -108,11 +122,12 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
     return bitstring, cut_value, (l, r), energy
 
 
-@njit
+@njit(parallel=True)
 def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
     n = len(tsp_path)
     best_cut_value = -float('inf')
-    best_partition = None
+    best_partition_A = None
+    best_partition_B = None
     direction = 0
 
     for offset in [-1, 0, 1]:
@@ -120,7 +135,8 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
         A = tsp_path[:mid]
         B = tsp_path[mid:]
         cut_value = 0.0
-        for u in A:
+        for i in prange(len(A)):
+            u = A[i]
             for v in B:
                 low, high = (u, v) if u < v else (v, u)
                 start = G_rows[low]
@@ -130,11 +146,12 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
                     cut_value += G_data[i]
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             direction = offset
 
     if direction == 0:
-        return best_partition, best_cut_value
+        return best_partition_A, best_partition_B, best_cut_value
 
     improved = True
     best_offset = direction
@@ -145,7 +162,8 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
         A = tsp_path[:mid]
         B = tsp_path[mid:]
         cut_value = 0.0
-        for u in A:
+        for i in prange(len(A)):
+            u = A[i]
             for v in B:
                 low, high = (u, v) if u < v else (v, u)
                 start = G_rows[low]
@@ -155,11 +173,30 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
                     cut_value += G_data[i]
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             best_offset = offset
             improved = True
 
-    return best_partition, best_cut_value
+    return best_partition_A, best_partition_B, best_cut_value
+
+
+@njit(parallel=True)
+def early_exit_sparse(G_data, G_rows, G_cols, partition, nodes):
+    n_qubits = len(nodes)
+    bitstring = get_bitstring(partition, nodes)
+    theta_bits = [(b == "1") for b in list(bitstring)]
+    energy = 0
+    for u in prange(n_qubits):
+        for v in range(u + 1, n_qubits):
+            start = G_rows[u]
+            end = G_rows[u + 1]
+            i = binary_search(G_cols[start:end], v) + start
+            if i < end:
+                val = G_data[i]
+                energy += (val if theta_bits[u] == theta_bits[v] else -val)
+
+    return bitstring, energy
 
 
 def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
@@ -174,16 +211,11 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
         G_m = G
 
     path, length = tsp_symmetric_sparse(G, k_neighbors=k_neighbors, is_parallel=is_parallel)
-    partition, cut_value = tsp_to_maxcut_bipartition_sparse(path, G_m.data, G_m.indptr, G_m.indices)
+    l, r, cut_value = tsp_to_maxcut_bipartition_sparse(path, G_m.data, G_m.indptr, G_m.indices)
+    partition = (l, r)
 
     if not is_optimized:
-        bitstring = get_bitstring(partition, nodes)
-        theta_bits = [(b == "1") for b in list(bitstring)]
-        energy = 0
-        for u in range(n_qubits):
-            for v in range(u + 1, n_qubits):
-                val = G_m[nodes[u], nodes[v]]
-                energy += (val if theta_bits[u] == theta_bits[v] else -val)
+        bitstring, energy = early_exit_sparse(G_m.data, G_m.indptr, G_m.indices, partition, nodes)
 
         return bitstring, cut_value, partition, energy
 
@@ -197,28 +229,31 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
     return bitstring, cut_value, (l, r), energy
 
 
+@njit(parallel=True)
 def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
     n = len(tsp_path)
     best_cut_value = -float('inf')
-    best_partition = None
+    best_partition_A = None
+    best_partition_B = None
     direction = 0
 
     for offset in [-1, 0, 1]:
         mid = n // 2 + offset
         A = tsp_path[:mid]
         B = tsp_path[mid:]
-        cut_value = sum(
-            G_func(u, v)
-            for u in A
-            for v in B
-        )
+        cut_value = 0.0
+        for i in prange(len(A)):
+            u = A[i]
+            for v in B:
+                cut_value += G_func(u, v)
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             direction = offset
 
     if direction == 0:
-        return best_partition, best_cut_value
+        return best_partition_A, best_partition_B, best_cut_value
 
     improved = True
     best_offset = direction
@@ -228,33 +263,43 @@ def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
         mid = n // 2 + offset
         A = tsp_path[:mid]
         B = tsp_path[mid:]
-        cut_value = sum(
-            G_func(u, v)
-            for u in A
-            for v in B
-        )
+        cut_value = 0.0
+        for i in prange(len(A)):
+            u = A[i]
+            for v in B:
+                cut_value += G_func(u, v)
         if cut_value > best_cut_value:
             best_cut_value = cut_value
-            best_partition = (A, B)
+            best_partition_A = A
+            best_partition_B = B
             best_offset = offset
             improved = True
 
-    return best_partition, best_cut_value
+    return best_partition_A, best_partition_B, best_cut_value
+
+
+@njit(parallel=True)
+def early_exit_streaming(G_func, partition, nodes):
+    n_qubits = len(nodes)
+    bitstring = get_bitstring(partition, nodes)
+    theta_bits = [(b == "1") for b in list(bitstring)]
+    energy = 0
+    for u in prange(n_qubits):
+        for v in range(u + 1, n_qubits):
+            val = G_func(nodes[u], nodes[v])
+            energy += (val if theta_bits[u] == theta_bits[v] else -val)
+
+    return bitstring, energy
 
 
 def tsp_maxcut_streaming(G_func, nodes, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     n_qubits = len(nodes)
     path, length = tsp_symmetric_streaming(G_func, nodes, k_neighbors=k_neighbors, is_parallel=is_parallel)
-    partition, cut_value = tsp_to_maxcut_bipartition_streaming(path, G_func)
+    l, r, cut_value = tsp_to_maxcut_bipartition_streaming(path, G_func)
+    partition = (l, r)
 
     if not is_optimized:
-        bitstring = get_bitstring(partition, nodes)
-        theta_bits = [(b == "1") for b in list(bitstring)]
-        energy = 0
-        for u in range(n_qubits):
-            for v in range(u + 1, n_qubits):
-                val = G_func(nodes[u], nodes[v])
-                energy += (val if theta_bits[u] == theta_bits[v] else -val)
+        bitstring, energy = early_exit_streaming(G_func, partition, nodes)
 
         return bitstring, cut_value, partition, energy
 
