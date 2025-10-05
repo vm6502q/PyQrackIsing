@@ -109,7 +109,7 @@ def two_opt(path, G):
 
 
 @njit
-def targeted_three_opt(path, W, k_neighbors=20):
+def targeted_three_opt(path, W, neighbor_lists, k_neighbors=20):
     """
     Lin-Kernighan style 3-opt heuristic for TSP improvement.
 
@@ -122,11 +122,6 @@ def targeted_three_opt(path, W, k_neighbors=20):
     best_path = path[:]
     best_dist = path_length(best_path, W)
     improved = True
-
-    # Precompute nearest neighbors for each node
-    neighbor_lists = [
-        np.argsort(W[i])[:k_neighbors] for i in range(n)
-    ]
 
     while improved:
         improved = False
@@ -461,7 +456,7 @@ def tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
 
 
 @njit
-def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c):
+def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, neighbor_lists):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -494,7 +489,7 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
             best_path, _ = one_way_two_opt(best_path, G_m)
 
         if k_neighbors > 0:
-            best_path, _ = targeted_three_opt(best_path, G_m, k_neighbors)
+            best_path, _ = targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
 
         # We just corrected segments of 2 and 3,
         # and this is top level,
@@ -615,7 +610,24 @@ def tsp_symmetric(
             is_parallel=False
         )
 
-    return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
+    neighbor_lists = [[0]]
+    if k_neighbors > 0:
+        # Precompute nearest neighbors for each node
+        neighbor_lists = [
+            ([(float("inf"), 0)] * k_neighbors) for i in range(n_nodes)
+        ]
+
+        for i in range(n_nodes):
+            for j in range(n_nodes):
+                val = G_m[i, j]
+                if val < neighbor_lists[i][-1][0]:
+                    neighbor_lists[i][-1] = (val, j)
+                    neighbor_lists[i].sort(key=lambda x: x[0])
+
+        for i in range(len(neighbor_lists)):
+            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+    return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, np.array(neighbor_lists))
 
 
 @njit
@@ -1102,7 +1114,9 @@ def init_G_a_b_sparse(G_m, a, b, dtype):
 
     return G_a.tocsr(), G_b.tocsr()
 
-def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b):
+
+@njit
+def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, neighbor_lists):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -1115,24 +1129,7 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
         best_path, _ = one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols)
 
         if k_neighbors > 0:
-            # Precompute nearest neighbors for each node
-            n_rows = len(G_rows) - 1
-
-            neighbor_lists = [
-                ([(float("inf"), 0)] * k_neighbors) for i in range(n_rows)
-            ]
-
-            for i in range(n_rows):
-                for j in range(n_rows):
-                    val = get_G_m(G_data, G_rows, G_cols, i, j)
-                    if val < neighbor_lists[i][-1][0]:
-                        neighbor_lists[i][-1] = (val, j)
-                        neighbor_lists[i].sort(key=lambda x: x[0])
-
-            for i in range(len(neighbor_lists)):
-                neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
-
-            best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, np.array(neighbor_lists), k_neighbors)
+            best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors)
 
         # We just corrected segments of 2 and 3,
         # and this is top level,
@@ -1194,7 +1191,24 @@ def tsp_symmetric_sparse(
             is_parallel=False
         )
 
-    return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b)
+    neighbor_lists = [[0]]
+    if k_neighbors > 0:
+        # Precompute nearest neighbors for each node
+        neighbor_lists = [
+            ([(float("inf"), 0)] * k_neighbors) for i in range(n_nodes)
+        ]
+
+        for i in range(n_nodes):
+            for j in range(n_nodes):
+                val = G_m[i, j]
+                if val < neighbor_lists[i][-1][0]:
+                    neighbor_lists[i][-1] = (val, j)
+                    neighbor_lists[i].sort(key=lambda x: x[0])
+
+        for i in range(len(neighbor_lists)):
+            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+    return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, np.array(neighbor_lists))
 
 
 @njit
@@ -1427,7 +1441,8 @@ def tsp_streaming_bruteforce(G_func, perms, n):
     return best_path, best_weight
 
 
-def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b):
+@njit
+def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists):
     restitch_streaming(G_func, path_a)
     restitch_streaming(G_func, path_b)
 
@@ -1437,24 +1452,7 @@ def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, pat
         best_path, _ = one_way_two_opt_streaming(best_path, G_func)
 
         if k_neighbors > 0:
-            # Precompute nearest neighbors for each node
-            n_rows = len(nodes)
-
-            neighbor_lists = [
-                ([(float("inf"), 0)] * k_neighbors) for i in range(n_rows)
-            ]
-
-            for i in nodes:
-                for j in nodes:
-                    val = G_func(i, j)
-                    if val < neighbor_lists[i][-1][0]:
-                        neighbor_lists[i][-1] = (val, j)
-                        neighbor_lists[i].sort(key=lambda x: x[0])
-
-            for i in range(len(neighbor_lists)):
-                neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
-
-            best_path, _ = targeted_three_opt_streaming(best_path, G_func, np.array(neighbor_lists), k_neighbors)
+            best_path, _ = targeted_three_opt_streaming(best_path, G_func, neighbor_lists, k_neighbors)
 
         # We just corrected segments of 2 and 3,
         # and this is top level,
@@ -1507,4 +1505,21 @@ def tsp_symmetric_streaming(
             is_parallel=False
         )
 
-    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0])
+    neighbor_lists = [[0]]
+    if k_neighbors > 0:
+        # Precompute nearest neighbors for each node
+        neighbor_lists = [
+            ([(float("inf"), 0)] * k_neighbors) for i in range(n_nodes)
+        ]
+
+        for i in nodes:
+            for j in nodes:
+                val = G_func(i, j)
+                if val < neighbor_lists[i][-1][0]:
+                    neighbor_lists[i][-1] = (val, j)
+                    neighbor_lists[i].sort(key=lambda x: x[0])
+
+        for i in range(len(neighbor_lists)):
+            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0], np.array(neighbor_lists))
