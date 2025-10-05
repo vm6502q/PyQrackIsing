@@ -1,6 +1,6 @@
 from .spin_glass_solver import spin_glass_solver
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import time
 import itertools
 import networkx as nx
@@ -8,6 +8,9 @@ from numba import njit
 import numpy as np
 import os
 from scipy.sparse import lil_matrix
+
+
+max_parallel_level = np.log2(os.cpu_count())
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
@@ -515,7 +518,8 @@ def tsp_symmetric(
     is_cyclic=True,
     multi_start=1,
     is_top_level=True,
-    is_parallel=False
+    is_parallel=False,
+    parallel_level=0
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -575,10 +579,10 @@ def tsp_symmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    if monte_carlo and is_parallel and (len(a) > 3) and (len(b) > 3):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
-            sol_b = tsp_symmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
+    if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric(
@@ -723,7 +727,8 @@ def tsp_asymmetric(
     is_cyclic=True,
     multi_start=1,
     is_top_level=True,
-    is_parallel=False
+    is_parallel=False,
+    parallel_level=0
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -787,10 +792,10 @@ def tsp_asymmetric(
 
     G_a, G_b = init_G_a_b(G_m, a, b)
 
-    if monte_carlo and is_parallel and (len(a) > 2) and (len(b) > 2):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
-            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True)
+    if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 2) and (len(b) > 2):
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_asymmetric(
@@ -1136,7 +1141,8 @@ def tsp_symmetric_sparse(
     G,
     k_neighbors=20,
     is_top_level=True,
-    is_parallel=True
+    is_parallel=True,
+    parallel_level=0
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -1163,10 +1169,10 @@ def tsp_symmetric_sparse(
 
     G_a, G_b = init_G_a_b_sparse(G_m, a, b, dtype)
 
-    if is_parallel and (len(a) > 3) and (len(b) > 3):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric_sparse, G_a, False, True)
-            sol_b = tsp_symmetric_sparse(G_b, False, True)
+    if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric_sparse, G_a, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_sparse(G_b, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric_sparse(
@@ -1454,7 +1460,8 @@ def tsp_symmetric_streaming(
     nodes,
     k_neighbors=20,
     is_top_level=True,
-    is_parallel=True
+    is_parallel=True,
+    parallel_level=0
 ):
     dtype = opencl_context.dtype
     n_nodes = len(nodes)
@@ -1469,10 +1476,10 @@ def tsp_symmetric_streaming(
 
     a, b = monte_carlo_loop(n_nodes)
 
-    if is_parallel and (len(a) > 3) and (len(b) > 3):
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric_streaming, G_func, a, False, True)
-            sol_b = tsp_symmetric_streaming(G_func, b, False, True)
+    if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            f = executor.submit(tsp_symmetric_streaming, G_func, a, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_streaming(G_func, b, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric_streaming(
