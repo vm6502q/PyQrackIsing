@@ -10,7 +10,8 @@ import os
 from scipy.sparse import lil_matrix
 
 
-max_parallel_level = np.log2(os.cpu_count())
+n_threads = os.cpu_count()
+max_parallel_level = np.log2(n_threads)
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
@@ -24,11 +25,10 @@ def path_length(path, G_m):
 
 
 @njit
-def one_way_two_opt(path, G):
+def one_way_two_opt(best_path, G):
     improved = True
-    best_path = path
     best_dist = path_length(best_path, G)
-    path_len = len(path)
+    path_len = len(best_path)
 
     while improved:
         improved = False
@@ -40,17 +40,41 @@ def one_way_two_opt(path, G):
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
                     improved = True
-        path = best_path
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def one_way_two_opt_parallel(best_path, G):
+    improved = True
+    best_dist = path_length(best_path, G)
+    paths = [best_path] * n_threads
+    dists = [best_dist] * n_threads
+    path_len = len(best_path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len, n_threads):
+                max_k = min(n_threads, path_len - j)
+                for k in prange(max_k):
+                    l = j + k
+                    new_path = best_path[:]
+                    new_path[i:l] = best_path[l-1:i-1:-1]
+                    dists[k] = path_length(new_path, G)
+                    paths[k] = new_path
+                for k in range(max_k):
+                    if dists[k] < best_dist:
+                        best_path, best_dist, improved = paths[k], dists[k], True
 
     return best_path, best_dist
 
 
 @njit
-def anchored_two_opt(path, G):
+def anchored_two_opt(best_path, G):
     improved = True
-    best_path = path
     best_dist = path_length(best_path, G)
-    path_len = len(path)
+    path_len = len(best_path)
 
     while improved:
         improved = False
@@ -62,39 +86,41 @@ def anchored_two_opt(path, G):
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
                     improved = True
-        path = best_path
 
     return best_path, best_dist
 
 
-@njit
-def reversed_anchored_two_opt(path, G):
+@njit(parallel=True)
+def anchored_two_opt_parallel(best_path, G):
     improved = True
-    best_path = path
     best_dist = path_length(best_path, G)
-    path_len = len(path)
+    paths = [best_path] * n_threads
+    dists = [best_dist] * n_threads
+    path_len = len(best_path)
 
     while improved:
         improved = False
-        for i in range(1, path_len - 2):
-            for j in range(i + 2, path_len - 1):
-                new_path = best_path[:]
-                new_path[i:j] = best_path[j-1:i-1:-1]
-                new_dist = path_length(new_path, G)
-                if new_dist < best_dist:
-                    best_path, best_dist = new_path, new_dist
-                    improved = True
-        path = best_path
+        for i in range(2, path_len - 1):
+            for j in range(i + 2, path_len, n_threads):
+                max_k = min(n_threads, path_len - j)
+                for k in prange(max_k):
+                    l = j + k
+                    new_path = best_path[:]
+                    new_path[i:l] = best_path[l-1:i-1:-1]
+                    dists[k] = path_length(new_path, G)
+                    paths[k] = new_path
+                for k in range(max_k):
+                    if dists[k] < best_dist:
+                        best_path, best_dist, improved = paths[k], dists[k], True
 
     return best_path, best_dist
 
 
 @njit
-def two_opt(path, G):
+def two_opt(best_path, G):
     improved = True
-    best_path = path
     best_dist = path_length(best_path, G)
-    path_len = len(path)
+    path_len = len(best_path)
 
     while improved:
         improved = False
@@ -106,7 +132,32 @@ def two_opt(path, G):
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
                     improved = True
-        path = best_path
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def two_opt_parallel(best_path, G):
+    improved = True
+    best_dist = path_length(best_path, G)
+    paths = [best_path] * n_threads
+    dists = [best_dist] * n_threads
+    path_len = len(best_path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 2):
+            for j in range(i + 2, path_len - 1, n_threads):
+                max_k = min(n_threads, path_len - (j + 1))
+                for k in prange(max_k):
+                    l = j + k
+                    new_path = best_path[:]
+                    new_path[i:l] = best_path[l-1:i-1:-1]
+                    dists[k] = path_length(new_path, G)
+                    paths[k] = new_path
+                for k in range(max_k):
+                    if dists[k] < best_dist:
+                        best_path, best_dist, improved = paths[k], dists[k], True
 
     return best_path, best_dist
 
@@ -229,7 +280,7 @@ def targeted_three_opt_parallel(path, W, neighbor_lists, k_neighbors=20):
                             case _:
                                 new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
 
-                        dists[l] = path_length(best_path, W)
+                        dists[l] = path_length(new_path, W)
                         paths[l] = new_path
 
                     for i in range(7):
@@ -520,9 +571,6 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
-    restitch(G_m, path_a, True)
-    restitch(G_m, path_b, True)
-
     if start_node is None:
         best_path = stitch_symmetric(G_m, path_a, path_b)
     else:
@@ -540,13 +588,25 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     if is_top_level:
         if is_cyclic:
             best_path += [best_path[0]]
-            best_path, _ = two_opt(best_path, G_m)
+            if is_parallel:
+                best_path, _ = two_opt_parallel(best_path, G_m)
+            else:
+                best_path, _ = two_opt(best_path, G_m)
         elif not end_node is None:
-            best_path, _ = two_opt(best_path, G_m)
+            if is_parallel:
+                best_path, _ = two_opt_parallel(best_path, G_m)
+            else:
+                best_path, _ = two_opt(best_path, G_m)
         elif not start_node is None:
-            best_path, _ = anchored_two_opt(best_path, G_m)
+            if is_parallel:
+                best_path, _ = anchored_two_opt_parallel(best_path, G_m)
+            else:
+                best_path, _ = anchored_two_opt(best_path, G_m)
         else:
-            best_path, _ = one_way_two_opt(best_path, G_m)
+            if is_parallel:
+                best_path, _ = one_way_two_opt_parallel(best_path, G_m)
+            else:
+                best_path, _ = one_way_two_opt(best_path, G_m)
 
         if k_neighbors > 0:
             if is_parallel:
@@ -554,10 +614,7 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
             else:
                 best_path, _ = targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
 
-        # We just corrected segments of 2 and 3,
-        # and this is top level,
-        # so correct segments of 4 to 7.
-        restitch(G_m, best_path, True)
+    best_path = restitch(G_m, best_path, True)
 
     best_weight = path_length(best_path, G_m)
 
@@ -689,7 +746,7 @@ def tsp_symmetric(
                     neighbor_lists[i].sort(key=lambda x: x[0])
 
         for i in range(len(neighbor_lists)):
-            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+            neighbor_lists[i] = [x[1] for x in neighbor_lists[i]]
 
     return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, np.array(neighbor_lists), is_parallel)
 
@@ -711,12 +768,9 @@ def tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
 
 
 @njit
-def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, is_parallel):
+def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, neighbor_lists, is_parallel):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
-
-    restitch(G_m, path_a, False)
-    restitch(G_m, path_b, False)
 
     if start_node is None:
         best_path = stitch_asymmetric(G_m, path_a, path_b)
@@ -729,41 +783,41 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     if is_top_level:
         if is_cyclic:
             best_path += [best_path[0]]
-            final_path, best_weight = two_opt(best_path.copy(), G_m)
+            final_path, best_weight = two_opt_parallel(best_path.copy(), G_m) if is_parallel else two_opt(best_path.copy(), G_m)
             best_path.reverse()
-            path, weight = two_opt(best_path, G_m)
+            path, weight = two_opt_parallel(best_path, G_m) if is_parallel else two_opt(best_path, G_m)
             if weight < best_weight:
                 final_path, best_weight = path, weight
         elif not end_node is None:
-            final_path, best_weight = two_opt(best_path.copy(), G_m)
+            final_path, best_weight = two_opt_parallel(best_path.copy(), G_m) if is_parallel else two_opt(best_path.copy(), G_m)
             best_path.reverse()
-            path, weight = two_opt(best_path, G_m)
+            path, weight = two_opt_parallel(best_path, G_m) if is_parallel else two_opt(best_path, G_m)
             if weight < best_weight:
                 final_path, best_weight = path, weight
         elif not start_node is None:
-            final_path, best_weight = anchored_two_opt(best_path.copy(), G_m)
+            final_path, best_weight = anchored_two_opt_parallel(best_path.copy(), G_m) if is_parallel else anchored_two_opt(best_path.copy(), G_m)
             best_path.reverse()
-            path, weight = reversed_anchored_two_opt(best_path, G_m)
+            path, weight = two_opt_parallel(best_path, G_m) if is_parallel else two_opt(best_path, G_m)
             if weight < best_weight:
                 final_path, best_weight = path, weight
         else:
-            final_path, best_weight = one_way_two_opt(best_path.copy(), G_m)
+            final_path, best_weight = one_way_two_opt_parallel(best_path.copy(), G_m) if is_parallel else one_way_two_opt(best_path.copy(), G_m)
             best_path.reverse()
-            path, weight = one_way_two_opt(best_path, G_m)
+            path, weight = one_way_two_opt_parallel(best_path, G_m) if is_parallel else one_way_two_opt(best_path, G_m)
             if weight < best_weight:
                 final_path, best_weight = path, weight
 
         if k_neighbors > 0:
             best_path = final_path
-            final_path, best_weight = targeted_three_opt_parallel(best_path.copy(), G_m, k_neighbors) if is_parallel else targeted_three_opt(best_path.copy(), G_m, k_neighbors)
+            final_path, best_weight = targeted_three_opt_parallel(best_path.copy(), G_m, neighbor_lists, k_neighbors) if is_parallel else targeted_three_opt(best_path.copy(), G_m, neighbor_lists, k_neighbors)
             best_path.reverse()
-            path, weight = targeted_three_opt_parallel(best_path.copy(), G_m, k_neighbors) if is_parallel else targeted_three_opt(best_path.copy(), G_m, k_neighbors)
+            path, weight = targeted_three_opt_parallel(best_path, G_m, neighbor_lists, k_neighbors) if is_parallel else targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
             if weight < best_weight:
                 final_path, best_weight = path, weight
     else:
         final_path = best_path
 
-    final_path = restitch(G_m, final_path, True)
+    final_path = restitch(G_m, final_path, False)
 
     best_weight = path_length(final_path, G_m)
 
@@ -887,7 +941,24 @@ def tsp_asymmetric(
             is_parallel=False
         )
 
-    return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, is_parallel)
+    neighbor_lists = [[0]]
+    if k_neighbors > 0:
+        # Precompute nearest neighbors for each node
+        neighbor_lists = [
+            ([(float("inf"), 0)] * k_neighbors) for i in range(n_nodes)
+        ]
+
+        for i in range(n_nodes):
+            for j in range(n_nodes):
+                val = G_m[i, j]
+                if val < neighbor_lists[i][-1][0]:
+                    neighbor_lists[i][-1] = (val, j)
+                    neighbor_lists[i].sort(key=lambda x: x[0])
+
+        for i in range(len(neighbor_lists)):
+            neighbor_lists[i] = [x[1] for x in neighbor_lists[i]]
+
+    return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, np.array(neighbor_lists), is_parallel)
 
 
 @njit
@@ -924,11 +995,10 @@ def path_length_sparse(path, G_data, G_rows, G_cols):
 
 
 @njit
-def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
+def one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols):
     improved = True
-    best_path = path
     best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
-    path_len = len(path)
+    path_len = len(best_path)
 
     while improved:
         improved = False
@@ -940,7 +1010,32 @@ def one_way_two_opt_sparse(path, G_data, G_rows, G_cols):
                 if new_dist < best_dist:
                     best_path, best_dist = new_path, new_dist
                     improved = True
-        path = best_path
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def one_way_two_opt_sparse_parallel(best_path, G_data, G_rows, G_cols):
+    improved = True
+    best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
+    paths = [best_path] * n_threads
+    dists = [best_dist] * n_threads
+    path_len = len(best_path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len, n_threads):
+                max_k = min(n_threads, path_len - j)
+                for k in prange(max_k):
+                    l = j + k
+                    new_path = best_path[:]
+                    new_path[i:l] = best_path[l-1:i-1:-1]
+                    dists[k] = path_length_sparse(new_path, G_data, G_rows, G_cols)
+                    paths[k] = new_path
+                for k in range(max_k):
+                    if dists[k] < best_dist:
+                        best_path, best_dist, improved = paths[k], dists[k], True
 
     return best_path, best_dist
 
@@ -1242,7 +1337,10 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
     best_path = stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b)
 
     if is_top_level:
-        best_path, _ = one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols)
+        if is_parallel:
+            best_path, _ = one_way_two_opt_sparse_parallel(best_path, G_data, G_rows, G_cols)
+        else:
+            best_path, _ = one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols)
 
         if k_neighbors > 0:
             if is_parallel:
@@ -1323,7 +1421,7 @@ def tsp_symmetric_sparse(
                     neighbor_lists[i].sort(key=lambda x: x[0])
 
         for i in range(len(neighbor_lists)):
-            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+            neighbor_lists[i] = [x[1] for x in neighbor_lists[i]]
 
     return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, np.array(neighbor_lists), is_parallel)
 
@@ -1338,11 +1436,10 @@ def path_length_streaming(path, G_func):
 
 
 @njit
-def one_way_two_opt_streaming(path, G_func):
+def one_way_two_opt_streaming(best_path, G_func):
     improved = True
-    best_path = path
     best_dist = path_length_streaming(best_path, G_func)
-    path_len = len(path)
+    path_len = len(best_path)
 
     while improved:
         improved = False
@@ -1352,9 +1449,33 @@ def one_way_two_opt_streaming(path, G_func):
                 new_path[i:j] = best_path[j-1:i-1:-1]
                 new_dist = path_length_streaming(new_path, G_func)
                 if new_dist < best_dist:
-                    best_path, best_dist = new_path, new_dist
-                    improved = True
-        path = best_path
+                    best_path, best_dist, improved = new_path, new_dist, True
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def one_way_two_opt_streaming_parallel(best_path, G_func):
+    improved = True
+    best_dist = path_length_streaming(best_path, G_func)
+    paths = [best_path] * n_threads
+    dists = [best_dist] * n_threads
+    path_len = len(best_path)
+
+    while improved:
+        improved = False
+        for i in range(1, path_len - 1):
+            for j in range(i + 2, path_len, n_threads):
+                max_k = min(n_threads, path_len - j)
+                for k in prange(max_k):
+                    l = j + k
+                    new_path = best_path[:]
+                    new_path[i:l] = best_path[l-1:i-1:-1]
+                    dists[k] = path_length_streaming(new_path, G_func)
+                    paths[k] = new_path
+                for k in range(max_k):
+                    if dists[k] < best_dist:
+                        best_path, best_dist, improved = paths[k], dists[k], True
 
     return best_path, best_dist
 
@@ -1620,7 +1741,10 @@ def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, pat
     best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
 
     if is_top_level:
-        best_path, _ = one_way_two_opt_streaming(best_path, G_func)
+        if is_parallel:
+            best_path, _ = one_way_two_opt_streaming_parallel(best_path, G_func)
+        else:
+            best_path, _ = one_way_two_opt_streaming(best_path, G_func)
 
         if k_neighbors > 0:
             if is_parallel:
@@ -1692,6 +1816,6 @@ def tsp_symmetric_streaming(
                     neighbor_lists[i].sort(key=lambda x: x[0])
 
         for i in range(len(neighbor_lists)):
-            neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+            neighbor_lists[i] = [x[1] for x in neighbor_lists[i]]
 
     return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0], np.array(neighbor_lists), is_parallel)
