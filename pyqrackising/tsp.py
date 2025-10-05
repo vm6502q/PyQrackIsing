@@ -1389,8 +1389,8 @@ def tsp_symmetric_sparse(
 
     if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric_sparse, G_a, False, True, parallel_level + 1)
-            sol_b = tsp_symmetric_sparse(G_b, False, True, parallel_level + 1)
+            f = executor.submit(tsp_symmetric_sparse, G_a, 0, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_sparse(G_b, 0, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric_sparse(
@@ -1782,8 +1782,8 @@ def tsp_symmetric_streaming(
 
     if is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric_streaming, G_func, a, False, True, parallel_level + 1)
-            sol_b = tsp_symmetric_streaming(G_func, b, False, True, parallel_level + 1)
+            f = executor.submit(tsp_symmetric_streaming, G_func, a, 0, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric_streaming(G_func, b, 0, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric_streaming(
