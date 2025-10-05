@@ -1240,7 +1240,7 @@ def one_way_two_opt_streaming(path, G_func):
 
 
 @njit(parallel=True)
-def one_way_two_opt_streaming_parallel(path, G_func, n_cores):
+def one_way_two_opt_streaming_parallel(path, G_func):
     improved = True
     best_path = path
     best_dist = path_length_streaming(best_path, G_func)
@@ -1248,20 +1248,18 @@ def one_way_two_opt_streaming_parallel(path, G_func, n_cores):
 
     while improved:
         improved = False
-        best_paths = [best_path] * n_cores
-        best_dists = np.full(n_cores, np.finfo(np.float32).max, dtype=np.float32)
-        for _i in prange(n_cores):
+        best_paths = [best_path] * (path_len - 2)
+        best_dists = np.full(path_len - 2, np.finfo(np.float32).max, dtype=np.float32)
+        for _i in prange(path_len - 2):
             i = _i + 1
-            while i < (path_len - 1):
-                for j in range(i + 2, path_len):
-                    new_path = best_path[:]
-                    new_path[i:j] = best_path[j-1:i-1:-1]
-                    new_dist = path_length_streaming(new_path, G_func)
-                    if new_dist < best_dists[_i]:
-                        best_paths[_i] = new_path
-                        best_dists[_i] = new_dist
-                        improved = True
-                i += n_cores
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length_streaming(new_path, G_func)
+                if new_dist < best_dists[_i]:
+                    best_paths[_i] = new_path
+                    best_dists[_i] = new_dist
+                    improved = True
         best_index = np.argmin(best_dists)
         best_path = best_paths[best_index]
         best_dist = best_dists[best_index]
@@ -1535,7 +1533,7 @@ def tsp_symmetric_streaming(
     best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
 
     if is_top_level:
-        best_path, _ = one_way_two_opt_streaming_parallel(best_path, G_func, os.cpu_count()) if is_parallel else one_way_two_opt_streaming(best_path, G_func)
+        best_path, _ = one_way_two_opt_streaming_parallel(best_path, G_func) if is_parallel else one_way_two_opt_streaming(best_path, G_func)
 
         if k_neighbors > 0:
             # Precompute nearest neighbors for each node
