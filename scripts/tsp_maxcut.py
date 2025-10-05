@@ -44,7 +44,7 @@ if __name__ == "__main__":
     seconds = time.perf_counter() - start
 
     print(f"Seconds to MAXCUT solution: {seconds}")
-    print(f"Partition: {partition}")
+    print(f"Partition: {bit_string}")
     print(f"Cut value: {cut_value}")
     print(
         "(The average randomized and normalized separation between each and every node is about 0.5.)"
