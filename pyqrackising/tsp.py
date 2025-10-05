@@ -4,7 +4,7 @@ from concurrent.futures import ProcessPoolExecutor
 import time
 import itertools
 import networkx as nx
-from numba import njit
+from numba import njit, prange
 import numpy as np
 import os
 from scipy.sparse import lil_matrix
@@ -136,9 +136,6 @@ def targeted_three_opt(path, W, neighbor_lists, k_neighbors=20):
                     if k <= j or k >= n-1:
                         continue
 
-                    # Extract indices
-                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
-
                     # 7 unique cases (same as brute force, but restricted)
                     new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
                     dist = path_length(new_path, W)
@@ -180,6 +177,66 @@ def targeted_three_opt(path, W, neighbor_lists, k_neighbors=20):
                     dist = path_length(new_path, W)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def targeted_three_opt_parallel(path, W, neighbor_lists, k_neighbors=20):
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length(best_path, W)
+    paths = [best_path] * 7
+    dists = [best_dist] * 7
+    improved = True
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for _j in range(k_neighbors):
+                j = neighbor_lists[path[i], _j]
+                if j <= i or j >= n-3:
+                    continue
+                for _k in range(k_neighbors):
+                    k = neighbor_lists[path[j], _k]
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    for l in prange(7):
+                        match l:
+                            case 0:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                            case 1:
+                                new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 2:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 3:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                            case 4:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case 5:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case _:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+
+                        dists[l] = path_length(best_path, W)
+                        paths[l] = new_path
+
+                    for i in range(7):
+                        if dists[i] < best_dist:
+                            best_path, best_dist, improved = paths[i], dists[i], True
+
+                    if improved:
                         break
 
                 if improved:
@@ -459,7 +516,7 @@ def tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
 
 
 @njit
-def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, neighbor_lists):
+def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, neighbor_lists, is_parallel):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -492,7 +549,10 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
             best_path, _ = one_way_two_opt(best_path, G_m)
 
         if k_neighbors > 0:
-            best_path, _ = targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
+            if is_parallel:
+                best_path, _ = targeted_three_opt_parallel(best_path, G_m, neighbor_lists, k_neighbors)
+            else:
+                best_path, _ = targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
 
         # We just corrected segments of 2 and 3,
         # and this is top level,
@@ -631,7 +691,7 @@ def tsp_symmetric(
         for i in range(len(neighbor_lists)):
             neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
 
-    return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, np.array(neighbor_lists))
+    return tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, np.array(neighbor_lists), is_parallel)
 
 
 @njit
@@ -651,7 +711,7 @@ def tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
 
 
 @njit
-def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c):
+def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c, is_parallel):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -695,9 +755,9 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
 
         if k_neighbors > 0:
             best_path = final_path
-            final_path, best_weight = targeted_three_opt(best_path.copy(), G_m, k_neighbors)
+            final_path, best_weight = targeted_three_opt_parallel(best_path.copy(), G_m, k_neighbors) if is_parallel else targeted_three_opt(best_path.copy(), G_m, k_neighbors)
             best_path.reverse()
-            path, weight = targeted_three_opt(best_path.copy(), G_m, k_neighbors)
+            path, weight = targeted_three_opt_parallel(best_path.copy(), G_m, k_neighbors) if is_parallel else targeted_three_opt(best_path.copy(), G_m, k_neighbors)
             if weight < best_weight:
                 final_path, best_weight = path, weight
     else:
@@ -827,7 +887,7 @@ def tsp_asymmetric(
             is_parallel=False
         )
 
-    return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None)
+    return tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node, end_node, k_neighbors, nodes, sol_a, sol_b, a, b, c[0] if len(c) else None, is_parallel)
 
 
 @njit
@@ -904,9 +964,6 @@ def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_ne
                     if k <= j or k >= n-1:
                         continue
 
-                    # Extract indices
-                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
-
                     # 7 unique cases (same as brute force, but restricted)
                     new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
                     dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
@@ -948,6 +1005,66 @@ def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_ne
                     dist = path_length_sparse(new_path, G_data, G_rows, G_cols)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def targeted_three_opt_sparse_parallel(path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors=20):
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
+    paths = [best_path] * 7
+    dists = [best_dist] * 7
+    improved = True
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for _j in range(k_neighbors):
+                j = neighbor_lists[path[i], _j]
+                if j <= i or j >= n-3:
+                    continue
+                for _k in range(k_neighbors):
+                    k = neighbor_lists[path[j], _k]
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    for l in prange(7):
+                        match l:
+                            case 0:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                            case 1:
+                                new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 2:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 3:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                            case 4:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case 5:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case _:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+
+                        dists[l] = path_length_sparse(new_path, G_data, G_rows, G_cols)
+                        paths[l] = new_path
+
+                    for i in range(7):
+                        if dists[i] < best_dist:
+                            best_path, best_dist, improved = paths[i], dists[i], True
+
+                    if improved:
                         break
 
                 if improved:
@@ -1118,7 +1235,7 @@ def init_G_a_b_sparse(G_m, a, b, dtype):
 
 
 @njit
-def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, neighbor_lists):
+def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, neighbor_lists, is_parallel):
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
@@ -1128,7 +1245,10 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
         best_path, _ = one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols)
 
         if k_neighbors > 0:
-            best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors)
+            if is_parallel:
+                best_path, _ = targeted_three_opt_sparse_parallel(best_path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors)
+            else:
+                best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors)
 
     best_path = restitch_sparse(G_data, G_rows, G_cols, best_path)
 
@@ -1205,7 +1325,7 @@ def tsp_symmetric_sparse(
         for i in range(len(neighbor_lists)):
             neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
 
-    return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, np.array(neighbor_lists))
+    return tsp_symmetric_sparse_driver(G_m.data, G_m.indptr, G_m.indices, is_top_level, k_neighbors, nodes, sol_a, sol_b, a, b, np.array(neighbor_lists), is_parallel)
 
 
 @njit
@@ -1258,9 +1378,6 @@ def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
                     if k <= j or k >= n-1:
                         continue
 
-                    # Extract indices
-                    A, B, C, D, E, F = path[i], path[i+1], path[j], path[j+1], path[k], path[k+1]
-
                     # 7 unique cases (same as brute force, but restricted)
                     new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
                     dist = path_length_streaming(new_path, G_func)
@@ -1302,6 +1419,66 @@ def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
                     dist = path_length_streaming(new_path, G_func)
                     if dist < best_dist:
                         best_path, best_dist, improved = new_path, dist, True
+                        break
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        path = best_path[:]
+
+    return best_path, best_dist
+
+
+@njit(parallel=True)
+def targeted_three_opt_streaming_parallel(path, G_func, neighbor_lists, k_neighbors=20):
+    n = len(path)
+    best_path = path[:]
+    best_dist = path_length_streaming(best_path, G_func)
+    paths = [best_path] * 7
+    dists = [best_dist] * 7
+    improved = True
+
+    while improved:
+        improved = False
+        for i in range(n - 5):
+            for _j in range(k_neighbors):
+                j = neighbor_lists[path[i], _j]
+                if j <= i or j >= n-3:
+                    continue
+                for _k in range(k_neighbors):
+                    k = neighbor_lists[path[j], _k]
+                    if k <= j or k >= n-1:
+                        continue
+
+                    # 7 unique cases (same as brute force, but restricted)
+                    for l in prange(7):
+                        match l:
+                            case 0:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:]
+                            case 1:
+                                new_path = best_path[:j+1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 2:
+                                new_path = best_path[:i+1] + best_path[i+1:j+1][::-1] + best_path[j+1:k+1][::-1] + best_path[k+1:]
+                            case 3:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1] + best_path[k+1:]
+                            case 4:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case 5:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1] + best_path[i+1:j+1][::-1] + best_path[k+1:]
+                            case _:
+                                new_path = best_path[:i+1] + best_path[j+1:k+1][::-1] + best_path[i+1:j+1] + best_path[k+1:]
+
+                        dists[l] = path_length_streaming(new_path, G_func)
+                        paths[l] = new_path
+
+                    for i in range(7):
+                        if dists[i] < best_dist:
+                            best_path, best_dist, improved = paths[i], dists[i], True
+
+                    if improved:
                         break
 
                 if improved:
@@ -1439,14 +1616,17 @@ def tsp_streaming_bruteforce(G_func, perms, n):
 
 
 @njit
-def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists):
+def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists, is_parallel):
     best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
 
     if is_top_level:
         best_path, _ = one_way_two_opt_streaming(best_path, G_func)
 
         if k_neighbors > 0:
-            best_path, _ = targeted_three_opt_streaming(best_path, G_func, neighbor_lists, k_neighbors)
+            if is_parallel:
+                best_path, _ = targeted_three_opt_streaming_parallel(best_path, G_func, neighbor_lists, k_neighbors)
+            else:
+                best_path, _ = targeted_three_opt_streaming(best_path, G_func, neighbor_lists, k_neighbors)
 
     best_path = restitch_streaming(G_func, best_path)
 
@@ -1514,4 +1694,4 @@ def tsp_symmetric_streaming(
         for i in range(len(neighbor_lists)):
             neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
 
-    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0], np.array(neighbor_lists))
+    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0], np.array(neighbor_lists), is_parallel)
