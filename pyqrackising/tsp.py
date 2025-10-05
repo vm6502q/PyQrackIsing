@@ -696,13 +696,10 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
             path, weight = targeted_three_opt(best_path.copy(), G_m, k_neighbors)
             if weight < best_weight:
                 final_path, best_weight = path, weight
-
-        # We just corrected segments of 2 and 3,
-        # and this is top level,
-        # so correct segments of 4 to 7.
-        restitch(G_m, final_path, True)
     else:
         final_path = best_path
+
+    final_path = restitch(G_m, final_path, True)
 
     best_weight = path_length(final_path, G_m)
 
@@ -1120,9 +1117,6 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
     path_a = [a[x] for x in sol_a[0]]
     path_b = [b[x] for x in sol_b[0]]
 
-    restitch_sparse(G_data, G_rows, G_cols, path_a)
-    restitch_sparse(G_data, G_rows, G_cols, path_b)
-
     best_path = stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b)
 
     if is_top_level:
@@ -1131,10 +1125,7 @@ def tsp_symmetric_sparse_driver(G_data, G_rows, G_cols, is_top_level, k_neighbor
         if k_neighbors > 0:
             best_path, _ = targeted_three_opt_sparse(best_path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors)
 
-        # We just corrected segments of 2 and 3,
-        # and this is top level,
-        # so correct segments of 4 to 7.
-        restitch_sparse(G_data, G_rows, G_cols, best_path)
+    best_path = restitch_sparse(G_data, G_rows, G_cols, best_path)
 
     best_weight = path_length_sparse(best_path, G_data, G_rows, G_cols)
 
@@ -1443,9 +1434,6 @@ def tsp_streaming_bruteforce(G_func, perms, n):
 
 @njit
 def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists):
-    restitch_streaming(G_func, path_a)
-    restitch_streaming(G_func, path_b)
-
     best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
 
     if is_top_level:
@@ -1454,10 +1442,7 @@ def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, pat
         if k_neighbors > 0:
             best_path, _ = targeted_three_opt_streaming(best_path, G_func, neighbor_lists, k_neighbors)
 
-        # We just corrected segments of 2 and 3,
-        # and this is top level,
-        # so correct segments of 4 to 7.
-        restitch_streaming(G_func, best_path)
+    best_path = restitch_streaming(G_func, best_path)
 
     best_weight = path_length_streaming(best_path, G_func)
 
