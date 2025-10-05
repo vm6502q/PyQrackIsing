@@ -4,7 +4,7 @@ from concurrent.futures import ProcessPoolExecutor
 import time
 import itertools
 import networkx as nx
-from numba import njit
+from numba import njit, prange
 import numpy as np
 import os
 from scipy.sparse import lil_matrix
@@ -1239,6 +1239,35 @@ def one_way_two_opt_streaming(path, G_func):
     return best_path, best_dist
 
 
+@njit(parallel=True)
+def one_way_two_opt_streaming_parallel(path, G_func):
+    improved = True
+    best_path = path
+    best_dist = path_length_streaming(best_path, G_func)
+    path_len = len(path)
+
+    while improved:
+        improved = False
+        best_paths = [best_path] * (path_len - 2)
+        best_dists = np.full(path_len - 2, np.finfo(np.float32).max, dtype=np.float32)
+        for _i in prange(path_len - 2):
+            i = _i + 1
+            for j in range(i + 2, path_len):
+                new_path = best_path[:]
+                new_path[i:j] = best_path[j-1:i-1:-1]
+                new_dist = path_length_streaming(new_path, G_func)
+                if new_dist < best_dists[_i]:
+                    best_paths[_i] = new_path
+                    best_dists[_i] = new_dist
+                    improved = True
+        best_index = np.argmin(best_dists)
+        best_path = best_paths[best_index]
+        best_dist = best_dists[best_index]
+        path = best_path
+
+    return best_path, best_dist
+
+
 @njit
 def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
     n = len(path)
@@ -1438,23 +1467,6 @@ def tsp_streaming_bruteforce(G_func, perms, n):
     return best_path, best_weight
 
 
-@njit
-def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists):
-    best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
-
-    if is_top_level:
-        best_path, _ = one_way_two_opt_streaming(best_path, G_func)
-
-        if k_neighbors > 0:
-            best_path, _ = targeted_three_opt_streaming(best_path, G_func, neighbor_lists, k_neighbors)
-
-    best_path = restitch_streaming(G_func, best_path)
-
-    best_weight = path_length_streaming(best_path, G_func)
-
-    return [nodes[x] for x in best_path], best_weight
-
-
 def tsp_symmetric_streaming(
     G_func,
     nodes,
@@ -1497,7 +1509,6 @@ def tsp_symmetric_streaming(
             is_parallel=False
         )
 
-    neighbor_lists = [[0]]
     if k_neighbors > 0:
         # Precompute nearest neighbors for each node
         neighbor_lists = [
@@ -1514,4 +1525,36 @@ def tsp_symmetric_streaming(
         for i in range(len(neighbor_lists)):
             neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
 
-    return tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, sol_a[0], sol_b[0], np.array(neighbor_lists))
+        neighbor_lists = np.array(neighbor_lists)
+
+    path_a = sol_a[0]
+    path_b = sol_b[0]
+
+    best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
+
+    if is_top_level:
+        best_path, _ = one_way_two_opt_streaming_parallel(best_path, G_func) if is_parallel else one_way_two_opt_streaming(best_path, G_func)
+
+        if k_neighbors > 0:
+            # Precompute nearest neighbors for each node
+            neighbor_lists = [
+                ([(float("inf"), 0)] * k_neighbors) for i in range(n_nodes)
+            ]
+
+            for i in nodes:
+                for j in nodes:
+                    val = G_func(i, j)
+                    if val < neighbor_lists[i][-1][0]:
+                        neighbor_lists[i][-1] = (val, j)
+                        neighbor_lists[i].sort(key=lambda x: x[0])
+
+            for i in range(len(neighbor_lists)):
+                neighbor_lists[i] = [c[1] for c in neighbor_lists[i]]
+
+            best_path, _ = targeted_three_opt_streaming(best_path, G_func, np.array(neighbor_lists), k_neighbors)
+
+    best_path = restitch_streaming(G_func, best_path)
+
+    best_weight = path_length_streaming(best_path, G_func)
+
+    return [nodes[x] for x in best_path], best_weight
