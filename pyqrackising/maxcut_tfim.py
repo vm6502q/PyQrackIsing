@@ -212,14 +212,14 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
+def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, epsilon):
     J_eff, degrees = init_J_and_z(G_m, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff, dtype)
 
@@ -248,6 +248,7 @@ def maxcut_tfim(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
+    epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
@@ -291,7 +292,7 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
+        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, epsilon)
 
     J_eff, degrees = init_J_and_z(G_m, dtype)
 
@@ -351,7 +352,7 @@ def maxcut_tfim(
 
     if not is_alt_gpu_sampling:
         degrees = None
-        J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
+        J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
         return gpu_footer(shots, n_qubits, G_m, J_eff, hamming_prob, nodes, dtype)
 

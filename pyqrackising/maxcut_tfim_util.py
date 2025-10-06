@@ -178,11 +178,12 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits, dtype):
 
 
 class OpenCLContext:
-    def __init__(self, p, a, w, d, r, c, q, i, m, b, s, x, y, k, l):
+    def __init__(self, p, a, w, d, e, r, c, q, i, m, b, s, x, y, k, l):
         self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.work_group_size = w
         self.dtype = d
+        self.epsilon = e
         self.max_alloc = r
         self.ctx = c
         self.queue = q
@@ -204,6 +205,7 @@ ctx = None
 queue = None
 compute_units = None
 dtype = np.float32
+epsilon = 2 ** -23
 work_group_size = 32
 max_alloc = 0xFFFFFFFFFFFFFFFF
 init_theta_kernel = None
@@ -219,6 +221,7 @@ dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
 kernel_src = ''
 if dtype_bits <= 4:
     dtype = np.float16
+    epsilon = 2 ** -10
     kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n"
     kernel_src += "#define FP16 1\n"
     kernel_src += "#define real1 half\n"
@@ -229,6 +232,7 @@ if dtype_bits <= 4:
     kernel_src += "#define TWO_R1 ((half)2.0f)\n"
 elif dtype_bits >= 6:
     dtype = np.float64
+    epsilon = 2 ** -52
     kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n"
     kernel_src += "#define real1 double\n"
     kernel_src += "#define qint long\n"
@@ -238,6 +242,7 @@ elif dtype_bits >= 6:
     kernel_src += "#define TWO_R1 2.0\n"
 else:
     dtype = np.float32
+    epsilon = 2 ** -23
     kernel_src += "#define real1 float\n"
     kernel_src += "#define qint int\n"
     kernel_src += "#define EPSILON FLT_EPSILON\n"
@@ -280,4 +285,4 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, max_alloc, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, sample_for_solution_best_bitset_kernel, sample_for_solution_best_bitset_sparse_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, init_theta_kernel, maxcut_hamming_cdf_kernel, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, sample_for_solution_best_bitset_kernel, sample_for_solution_best_bitset_sparse_kernel)

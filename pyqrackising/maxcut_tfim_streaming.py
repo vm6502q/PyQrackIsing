@@ -144,7 +144,7 @@ def init_J_and_z(G_func, nodes, dtype):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype):
+def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype, epsilon):
     J_eff, degrees, G_max = init_J_and_z(G_func, nodes, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
@@ -152,7 +152,7 @@ def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype):
 
     max_weight = degrees.sum()
     degrees = None
-    J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_weight, J_eff, n_qubits, dtype)
 
@@ -180,6 +180,7 @@ def maxcut_tfim_streaming(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
+    epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
     n_qubits = len(nodes)
 
@@ -208,7 +209,7 @@ def maxcut_tfim_streaming(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype)
+        return cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype, epsilon)
 
     J_eff, degrees, G_max = init_J_and_z(G_func, nodes, dtype)
 
@@ -268,6 +269,6 @@ def maxcut_tfim_streaming(
 
     max_weight = degrees.sum()
     degrees = None
-    J_eff = 1.0 / (1.0 + (2 ** -52) - J_eff)
+    J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     return gpu_footer(shots, n_qubits, G_func, nodes, G_max, J_eff, degrees, hamming_prob, max_weight, dtype)
