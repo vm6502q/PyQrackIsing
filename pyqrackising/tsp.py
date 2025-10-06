@@ -283,9 +283,9 @@ def targeted_three_opt_parallel(path, W, neighbor_lists, k_neighbors=20):
                         dists[l] = path_length(new_path, W)
                         paths[l] = new_path
 
-                    for i in range(7):
-                        if dists[i] < best_dist:
-                            best_path, best_dist, improved = paths[i], dists[i], True
+                    for l in range(7):
+                        if dists[l] < best_dist:
+                            best_path, best_dist, improved = paths[l], dists[l], True
 
                     if improved:
                         break
@@ -1155,9 +1155,9 @@ def targeted_three_opt_sparse_parallel(path, G_data, G_rows, G_cols, neighbor_li
                         dists[l] = path_length_sparse(new_path, G_data, G_rows, G_cols)
                         paths[l] = new_path
 
-                    for i in range(7):
-                        if dists[i] < best_dist:
-                            best_path, best_dist, improved = paths[i], dists[i], True
+                    for l in range(7):
+                        if dists[l] < best_dist:
+                            best_path, best_dist, improved = paths[l], dists[l], True
 
                     if improved:
                         break
@@ -1595,9 +1595,9 @@ def targeted_three_opt_streaming_parallel(path, G_func, neighbor_lists, k_neighb
                         dists[l] = path_length_streaming(new_path, G_func)
                         paths[l] = new_path
 
-                    for i in range(7):
-                        if dists[i] < best_dist:
-                            best_path, best_dist, improved = paths[i], dists[i], True
+                    for l in range(7):
+                        if dists[l] < best_dist:
+                            best_path, best_dist, improved = paths[l], dists[l], True
 
                     if improved:
                         break
