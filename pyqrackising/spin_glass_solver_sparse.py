@@ -192,7 +192,7 @@ def spin_glass_solver_sparse(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits)
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits, dtype)
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
