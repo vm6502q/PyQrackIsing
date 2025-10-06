@@ -1,4 +1,4 @@
-from .maxcut_tfim_util import binary_search, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
 from .tsp import tsp_symmetric, tsp_symmetric_sparse, tsp_symmetric_streaming
 from .spin_glass_solver import spin_glass_solver
 from .spin_glass_solver_sparse import spin_glass_solver_sparse
@@ -93,6 +93,7 @@ def early_exit(G_m, partition, nodes):
 
 
 def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
+    dtype = opencl_context.dtype
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
@@ -200,6 +201,7 @@ def early_exit_sparse(G_data, G_rows, G_cols, partition, nodes):
 
 
 def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
+    dtype = opencl_context.dtype
     G_m = None
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
