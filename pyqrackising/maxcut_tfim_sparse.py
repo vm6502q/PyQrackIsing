@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, fix_cdf, get_cut, init_thresholds, maxcut_hamming_cdf, opencl_context, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, fix_cdf, get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -301,27 +301,17 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, dtype):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_cols, dtype)
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, dtype):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
+    theta = init_theta(h_mult, n_qubits, J_eff, degrees, dtype)
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, J_eff, dtype)
-
-    bit_string, l, r = get_cut(best_solution, nodes)
-
-    return bit_string, best_value, (l, r)
-
-
-@njit
-def gpu_footer(shots, n_qubits, G_data, G_rows, G_cols, weights, hamming_prob, nodes, dtype):
-    fix_cdf(hamming_prob)
-
-    best_solution, best_value = sample_for_solution(G_data, G_rows, G_cols, shots, hamming_prob, weights, dtype)
+    best_solution, best_value = sample_for_solution(G_data, G_rows, G_col, shots, hamming_prob, J_eff, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -398,7 +388,7 @@ def maxcut_tfim_sparse(
     args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
     J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
     deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * 4))
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * dtype().nbytes))
 
     # Warp size is 32:
     group_size = min(wgs, n_qubits)
@@ -410,22 +400,10 @@ def maxcut_tfim_sparse(
     )
 
     hamming_prob = init_thresholds(n_qubits, dtype)
-
-    # Warp size is 32:
-    group_size = min(wgs, n_qubits - 1)
-    grid_dim = n_steps * n_qubits * group_size
-
-    # Move to GPU
-    ham_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=hamming_prob)
-
-    # Kernel execution
-    opencl_context.maxcut_hamming_cdf_kernel(
-        opencl_context.queue, (grid_dim,), (group_size,),
-        np.int32(n_qubits), deg_buf, args_buf, J_buf, theta_buf, ham_buf
-    )
+    theta = init_theta(h_mult, n_qubits, J_eff, degrees, dtype)
 
     # Fetch results
-    cl.enqueue_copy(opencl_context.queue, hamming_prob, ham_buf)
+    cl.enqueue_copy(opencl_context.queue, theta, theta_buf)
     opencl_context.queue.finish()
 
     args_buf.release()
@@ -438,14 +416,13 @@ def maxcut_tfim_sparse(
     deg_buf = None
     theta_buf = None
 
-    if not is_alt_gpu_sampling:
-        degrees = None
-        J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, theta, quality, hamming_prob, dtype)
 
-        return gpu_footer(shots, n_qubits, G_m.data, G_m.indptr, G_m.indices, J_eff, hamming_prob, nodes, dtype)
+    degrees = None
+    J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    fix_cdf(hamming_prob)
-    best_solution, best_value = run_sampling_opencl(G_m, hamming_prob, shots, n_qubits, is_g_buf_reused)
+    best_solution, best_value = sample_for_solution(G_m.data, G_m.indptr, G_m.indices, shots, hamming_prob, J_eff, dtype)
+
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
