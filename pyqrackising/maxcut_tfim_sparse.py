@@ -13,6 +13,9 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
 
 
+epsilon = opencl_context.epsilon
+
+
 @njit
 def update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, node):
     # Select node
@@ -23,7 +26,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, 
         nbr = G_cols[j]
         if used[nbr]:
             continue
-        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_data[j] / max_edge)
+        weights[nbr] *= max(epsilon, 1 - G_data[j] / max_edge)
 
     for nbr in range(node):
         if used[nbr]:
@@ -32,7 +35,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, 
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= max(1.1920928955078125e-7, 1 - G_data[j] / max_edge)
+            weights[nbr] *= max(epsilon, 1 - G_data[j] / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -298,7 +301,7 @@ def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, dtype, epsilon):
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, dtype):
     J_eff, degrees = init_J_and_z(G_data, G_rows, G_cols, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
@@ -334,7 +337,6 @@ def maxcut_tfim_sparse(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
-    epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
@@ -378,7 +380,7 @@ def maxcut_tfim_sparse(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype, epsilon)
+        return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype)
 
     J_eff, degrees = init_J_and_z(G_m.data, G_m.indptr, G_m.indices, dtype)
 

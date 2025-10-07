@@ -13,6 +13,9 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
 
 
+epsilon = opencl_context.epsilon
+
+
 @njit
 def update_repulsion_choice(G_m, max_edge, weights, n, used, node):
     # Select node
@@ -22,7 +25,7 @@ def update_repulsion_choice(G_m, max_edge, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_m[node, nbr] / max_edge)
+        weights[nbr] *= max(epsilon, 1 - G_m[node, nbr] / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -263,7 +266,7 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, epsilon):
+def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
     J_eff, degrees = init_J_and_z(G_m, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
@@ -299,7 +302,6 @@ def maxcut_tfim(
     is_base_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
-    epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
@@ -343,7 +345,7 @@ def maxcut_tfim(
     grid_size = n_steps * n_qubits
 
     if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, epsilon)
+        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
 
     J_eff, degrees = init_J_and_z(G_m, dtype)
 
