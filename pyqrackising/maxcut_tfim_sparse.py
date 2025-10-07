@@ -328,7 +328,7 @@ def maxcut_tfim_sparse(
         is_alt_gpu_sampling = False
 
     if quality is None:
-        quality = 3
+        quality = 2
 
     if shots is None:
         # Number of measurement shots
