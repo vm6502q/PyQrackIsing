@@ -49,10 +49,11 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n,
             node = i
             break
 
-    update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
-
     if m == 1:
+        used[node] = True
         return used
+
+    update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
 
     for _ in range(1, m - 1):
         # Count available
