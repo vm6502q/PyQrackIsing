@@ -104,14 +104,13 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
         nodes = list(range(n_qubits))
         G_m = G
 
-    path, length = tsp_symmetric(G, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors, is_parallel=is_parallel)
+    path, _ = tsp_symmetric(G_m, is_cyclic=False, monte_carlo=True, k_neighbors=k_neighbors, is_parallel=is_parallel)
     l, r, cut_value = tsp_to_maxcut_bipartition(path, G_m)
-    partition = (l, r)
 
     if not is_optimized:
-        bitstring, energy = early_exit(G_m, partition, nodes)
+        bitstring, energy = early_exit(G_m, (l, r), nodes)
 
-        return bitstring, cut_value, partition, energy
+        return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
     bitint = 0
     for b in partition[0]:
@@ -120,7 +119,7 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
     bitstring, cut_value, cut, energy = spin_glass_solver(G_m, best_guess=bitint, **kwargs)
     l, r = get_cut(bitstring, nodes)
 
-    return bitstring, cut_value, (l, r), energy
+    return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
 
 @njit(parallel=True)
@@ -212,14 +211,13 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
         nodes = list(range(n_qubits))
         G_m = G
 
-    path, length = tsp_symmetric_sparse(G, k_neighbors=k_neighbors, is_parallel=is_parallel)
+    path, _ = tsp_symmetric_sparse(G_m, k_neighbors=k_neighbors, is_parallel=is_parallel)
     l, r, cut_value = tsp_to_maxcut_bipartition_sparse(path, G_m.data, G_m.indptr, G_m.indices)
-    partition = (l, r)
 
     if not is_optimized:
-        bitstring, energy = early_exit_sparse(G_m.data, G_m.indptr, G_m.indices, partition, nodes)
+        bitstring, energy = early_exit_sparse(G_m.data, G_m.indptr, G_m.indices, (l, r), nodes)
 
-        return bitstring, cut_value, partition, energy
+        return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
     bitint = 0
     for b in partition[0]:
@@ -228,7 +226,7 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
     bitstring, cut_value, cut, energy = spin_glass_solver_sparse(G_m, best_guess=bitint, **kwargs)
     l, r = get_cut(bitstring, nodes)
 
-    return bitstring, cut_value, (l, r), energy
+    return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
 
 @njit(parallel=True)
@@ -296,14 +294,13 @@ def early_exit_streaming(G_func, partition, nodes):
 
 def tsp_maxcut_streaming(G_func, nodes, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs):
     n_qubits = len(nodes)
-    path, length = tsp_symmetric_streaming(G_func, nodes, k_neighbors=k_neighbors, is_parallel=is_parallel)
+    path, _ = tsp_symmetric_streaming(G_func, nodes, k_neighbors=k_neighbors, is_parallel=is_parallel)
     l, r, cut_value = tsp_to_maxcut_bipartition_streaming(path, G_func)
-    partition = (l, r)
 
     if not is_optimized:
-        bitstring, energy = early_exit_streaming(G_func, partition, nodes)
+        bitstring, energy = early_exit_streaming(G_func, (l, r), nodes)
 
-        return bitstring, cut_value, partition, energy
+        return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
     bitint = 0
     for b in partition[0]:
@@ -312,4 +309,4 @@ def tsp_maxcut_streaming(G_func, nodes, k_neighbors=20, is_optimized=False, is_p
     bitstring, cut_value, cut, energy = spin_glass_solver_streaming(G_func, nodes, best_guess=bitint, **kwargs)
     l, r = get_cut(bitstring, nodes)
 
-    return bitstring, cut_value, (l, r), energy
+    return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
