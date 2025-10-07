@@ -89,7 +89,7 @@ def compute_energy(sample, G_func, nodes, n_qubits):
 
 @njit(parallel=True)
 def sample_for_solution(G_func, nodes, max_weight, shots, thresholds, degrees_sum, weights, n, dtype):
-    shots >>= 1
+    shots = max(1, shots >> 1)
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)

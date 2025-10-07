@@ -85,7 +85,7 @@ def compute_energy(sample, G_m, n_qubits):
 
 @njit(parallel=True)
 def sample_for_solution(G_m, shots, thresholds, weights, dtype):
-    shots >>= 1
+    shots = max(1, shots >> 1)
     n = len(G_m)
     max_weight = G_m.max()
 

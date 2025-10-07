@@ -98,7 +98,7 @@ def compute_energy(sample, G_data, G_rows, G_cols):
 
 @njit(parallel=True)
 def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
-    shots >>= 1
+    shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     max_weight = G_data.max()
 
