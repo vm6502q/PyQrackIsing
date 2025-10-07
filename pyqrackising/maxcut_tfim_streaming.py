@@ -51,7 +51,10 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n,
 
     update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
 
-    for _ in range(1, m):
+    if m == 1:
+        return used
+
+    for _ in range(1, m - 1):
         # Count available
         total_w = 0.0
         for i in range(n):
@@ -76,11 +79,35 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n,
             while used[node]:
                 node += 1
 
-        # Select node
-        used[node] = True
-
         # Update answer and weights
         update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
+
+    # Count available
+    total_w = 0.0
+    for i in range(n):
+        if used[i]:
+            continue
+        total_w += weights[i]
+
+    # Normalize & sample
+    r = np.random.rand()
+    cum = 0.0
+    node = -1
+    for i in range(n):
+        if used[i]:
+            continue
+        cum += weights[i]
+        if (total_w * r) < cum:
+            node = i
+            break
+
+    if node == -1:
+        node = 0
+        while used[node]:
+            node += 1
+
+    # Select node
+    used[node] = True
 
     return used
 
