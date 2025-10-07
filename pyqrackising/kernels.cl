@@ -6,30 +6,6 @@
 #define fwrapper2(f, a, b) f(a, b)
 #endif
 
-__kernel void init_theta(
-    __constant real1* fargs,
-    const int n_qubits,
-    __constant real1* J_eff,
-    __constant uint* degrees,
-    __global real1* theta
-) {
-    const int q = get_global_id(0);
-    if (q >= n_qubits) {
-        return;
-    }
-
-    const real1 h_mult = fwrapper(fabs, fargs[2]);
-    const real1 J = J_eff[q];
-    const uint z = degrees[q];
-    const real1 abs_zJ = fwrapper(fabs, z * J);
-
-#if FP16
-    theta[q] = (abs_zJ <= EPSILON) ? ((J > ZERO_R1) ? M_PI_F : -M_PI_F) : (real1)asin(fmax(-1.0f, fmin(1.0f, (float)(h_mult / (z * J)))));
-#else
-    theta[q] = (abs_zJ <= EPSILON) ? ((J > ZERO_R1) ? M_PI_F : -M_PI_F) : asin(fmax(-ONE_R1, fmin(ONE_R1, h_mult / (z * J))));
-#endif
-}
-
 inline uint xorshift32(uint *state) {
     uint x = *state;
     x ^= x << 13;

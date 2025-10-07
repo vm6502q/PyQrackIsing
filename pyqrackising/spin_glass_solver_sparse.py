@@ -182,8 +182,6 @@ def spin_glass_solver_sparse(
     quality=None,
     shots=None,
     best_guess=None,
-    is_alt_gpu_sampling=False,
-    is_base_maxcut_gpu=True,
     is_combo_maxcut_gpu=True
 ):
     dtype = opencl_context.dtype
@@ -230,7 +228,7 @@ def spin_glass_solver_sparse(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_g_buf_reused=True, is_base_maxcut_gpu=is_base_maxcut_gpu)
+        bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:

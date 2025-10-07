@@ -627,8 +627,6 @@ def tsp_symmetric(
     end_node=None,
     quality=None,
     shots=None,
-    is_alt_gpu_sampling=False,
-    is_base_maxcut_gpu=True,
     is_combo_maxcut_gpu=True,
     monte_carlo=True,
     k_neighbors=20,
@@ -681,7 +679,7 @@ def tsp_symmetric(
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_base_maxcut_gpu=is_base_maxcut_gpu, is_combo_maxcut_gpu=is_combo_maxcut_gpu)
+                    _, _, bits, energy = spin_glass_solver(G_m, quality=quality, shots=shots, is_combo_maxcut_gpu=is_combo_maxcut_gpu)
                 if energy < best_energy:
                     best_energy = energy
                     a, b = bits
@@ -698,16 +696,14 @@ def tsp_symmetric(
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
-            sol_b = tsp_symmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric(G_b, None, None, quality, shots, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric(
             G_a,
             quality=quality,
             shots=shots,
-            is_alt_gpu_sampling=is_alt_gpu_sampling,
-            is_base_maxcut_gpu=is_base_maxcut_gpu,
             is_combo_maxcut_gpu=is_combo_maxcut_gpu,
             monte_carlo=monte_carlo,
             is_cyclic=False,
@@ -720,8 +716,6 @@ def tsp_symmetric(
             G_b,
             quality=quality,
             shots=shots,
-            is_alt_gpu_sampling=is_alt_gpu_sampling,
-            is_base_maxcut_gpu=is_base_maxcut_gpu,
             is_combo_maxcut_gpu=is_combo_maxcut_gpu,
             monte_carlo=monte_carlo,
             is_cyclic=False,
@@ -833,8 +827,6 @@ def tsp_asymmetric(
     end_node=None,
     quality=None,
     shots=None,
-    is_alt_gpu_sampling=False,
-    is_base_maxcut_gpu=True,
     is_combo_maxcut_gpu=True,
     monte_carlo=True,
     k_neighbors=20,
@@ -891,7 +883,7 @@ def tsp_asymmetric(
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots, is_alt_gpu_sampling=is_alt_gpu_sampling, is_base_maxcut_gpu=is_base_maxcut_gpu, is_combo_maxcut_gpu=is_combo_maxcut_gpu)
+                    _, _, bits, energy = spin_glass_solver((G_m + G_m.T) / 2, quality=quality, shots=shots, is_combo_maxcut_gpu=is_combo_maxcut_gpu)
                 if energy < best_energy:
                     best_energy = energy
                     a, b = bits
@@ -908,16 +900,14 @@ def tsp_asymmetric(
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 2) and (len(b) > 2):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
-            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, is_alt_gpu_sampling, is_base_maxcut_gpu, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, is_combo_maxcut_gpu, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_asymmetric(
             G_a,
             quality=quality,
             shots=shots,
-            is_alt_gpu_sampling=is_alt_gpu_sampling,
-            is_base_maxcut_gpu=is_base_maxcut_gpu,
             is_combo_maxcut_gpu=is_combo_maxcut_gpu,
             monte_carlo=monte_carlo,
             is_cyclic=False,
@@ -930,8 +920,6 @@ def tsp_asymmetric(
             G_b,
             quality=quality,
             shots=shots,
-            is_alt_gpu_sampling=is_alt_gpu_sampling,
-            is_base_maxcut_gpu=is_base_maxcut_gpu,
             is_combo_maxcut_gpu=is_combo_maxcut_gpu,
             monte_carlo=monte_carlo,
             is_cyclic=False,

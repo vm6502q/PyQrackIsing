@@ -94,7 +94,7 @@ def init_thresholds(n_qubits, dtype):
 
 
 @njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, theta, quality, hamming_prob, dtype):
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob, dtype):
     if n_qubits < 2:
         hamming_prob.fill(0.0)
         return
@@ -104,6 +104,8 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, theta, quality, hamming_prob, 
     tot_t = 2.0 * n_steps * delta_t
     h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
+
+    theta = init_theta(h_mult, n_qubits, J_func, degrees, dtype)
 
     for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
@@ -176,7 +178,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits, dtype):
 
 
 class OpenCLContext:
-    def __init__(self, p, a, w, d, e, r, c, q, i, b, s, x, y):
+    def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y):
         self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.work_group_size = w
@@ -185,7 +187,6 @@ class OpenCLContext:
         self.max_alloc = r
         self.ctx = c
         self.queue = q
-        self.init_theta_kernel = i
         self.bootstrap_kernel = b
         self.bootstrap_sparse_kernel = s
         self.bootstrap_segmented_kernel = x
@@ -203,7 +204,6 @@ dtype = np.float32
 epsilon = 2 ** -23
 work_group_size = 32
 max_alloc = 0xFFFFFFFFFFFFFFFF
-init_theta_kernel = None
 bootstrap_kernel = None
 bootstrap_sparse_kernel = None
 bootstrap_segmented_kernel = None
@@ -258,7 +258,6 @@ try:
     kernel_src += f"#define TOP_N {os.getenv('PYQRACKISING_GPU_TOP_N', '32')}\n"
     kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
-    init_theta_kernel = program.init_theta
     bootstrap_kernel = program.bootstrap
     bootstrap_sparse_kernel = program.bootstrap_sparse
     bootstrap_segmented_kernel = program.bootstrap_segmented
@@ -274,4 +273,4 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, init_theta_kernel, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel)

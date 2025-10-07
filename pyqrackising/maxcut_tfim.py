@@ -269,7 +269,6 @@ def run_sampling_opencl(G_m_np, thresholds_np, shots, n, is_g_buf_reused):
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
     J_eff, degrees = init_J_and_z(G_m, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
-    theta = init_theta(h_mult, n_qubits, J_eff, degrees, dtype)
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
@@ -286,10 +285,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
 def maxcut_tfim(
     G,
     quality=None,
-    shots=None,
-    is_alt_gpu_sampling=False,
-    is_g_buf_reused=False,
-    is_base_maxcut_gpu=True
+    shots=None
 ):
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
@@ -334,60 +330,4 @@ def maxcut_tfim(
     n_steps = n_qubits << quality
     grid_size = n_steps * n_qubits
 
-    if (not is_base_maxcut_gpu) or (not IS_OPENCL_AVAILABLE):
-        return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
-
-    J_eff, degrees = init_J_and_z(G_m, dtype)
-
-    delta_t = 1.0 / n_steps
-    tot_t = 2.0 * n_steps * delta_t
-    h_mult = 2.0 / tot_t
-
-    args = np.empty(3, dtype=dtype)
-    args[0] = delta_t
-    args[1] = tot_t
-    args[2] = h_mult
-
-    # Move to GPU
-    mf = cl.mem_flags
-    args_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args)
-    J_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=J_eff)
-    deg_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=degrees)
-    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_WRITE, size=(n_qubits * dtype().nbytes))
-
-    # Warp size is 32:
-    group_size = min(wgs, n_qubits)
-    global_size = ((n_qubits + group_size - 1) // group_size) * group_size
-
-    opencl_context.init_theta_kernel(
-        opencl_context.queue, (global_size,), (group_size,),
-        args_buf, np.int32(n_qubits), J_buf, deg_buf, theta_buf
-    )
-
-    hamming_prob = init_thresholds(n_qubits, dtype)
-    theta = init_theta(h_mult, n_qubits, J_eff, degrees, dtype)
-
-    # Fetch results
-    cl.enqueue_copy(opencl_context.queue, theta, theta_buf)
-    opencl_context.queue.finish()
-
-    args_buf.release()
-    J_buf.release()
-    deg_buf.release()
-    theta_buf.release()
-
-    args_buf = None
-    J_buf = None
-    deg_buf = None
-    theta_buf = None
-
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, theta, quality, hamming_prob, dtype)
-
-    degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
-
-    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff, dtype)
-
-    bit_string, l, r = get_cut(best_solution, nodes)
-
-    return bit_string, best_value, (l, r)
+    return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
