@@ -565,7 +565,6 @@ real1 compute_cut_bitset(__global const real1* G_m, const uint* sol_bits, int n)
     return cut_val;
 }
 
-#define MIN_WEIGHT ((real1)FLT_EPSILON)
 #define MAX_WORDS 4096
 #define MAX_WORDS_MASK 4095
 
@@ -635,7 +634,7 @@ __kernel void sample_for_solution_best_bitset(
                                 break;
                             }
                             if ((temp_sol[k >> 5] >> l) & 1) {
-                                weight *= fwrapper2(max, MIN_WEIGHT, ONE_R1 - G_m[u_offset + v] / max_weight);
+                                weight *= fwrapper2(max, EPSILON, ONE_R1 - G_m[u_offset + v] / max_weight);
                             }
                         }
                     }
@@ -840,7 +839,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         const int v = G_cols[col];
 
                         if ((temp_sol[v >> 5] >> (v & 31)) & 1) {
-                            weight *= fwrapper2(max, MIN_WEIGHT, ONE_R1 - G_data[col] / max_weight);
+                            weight *= fwrapper2(max, EPSILON, ONE_R1 - G_data[col] / max_weight);
                         }
                     }
 
@@ -852,7 +851,7 @@ __kernel void sample_for_solution_best_bitset_sparse(
                         int end = G_rows[v + 1];
                         int j = binary_search(&(G_cols[start]), u, end - start) + start;
                         if (j < end) {
-                            weight *= fwrapper2(max, MIN_WEIGHT, ONE_R1 - G_data[j] / max_weight);
+                            weight *= fwrapper2(max, EPSILON, ONE_R1 - G_data[j] / max_weight);
                         }
                     }
 
