@@ -14,7 +14,7 @@ except ImportError:
 
 
 @njit
-def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
+def update_repulsion_choice(G_m, max_edge, weights, n, used, node):
     # Select node
     used[node] = True
 
@@ -22,12 +22,12 @@ def update_repulsion_choice(G_m, max_weight, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_m[node, nbr] / max_weight)
+        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_m[node, nbr] / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_m, max_weight, weights, n, m, shot):
+def local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -39,8 +39,17 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m, shot):
     weights = weights.copy()
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
-    # Update answer and weights
-    update_repulsion_choice(G_m, max_weight, weights, n, used, shot % n)
+    # First bit:
+    r = np.random.rand()
+    cum = 0.0
+    node = 0
+    for i in range(n):
+        cum += weights[i]
+        if (tot_init_weight * r) < cum:
+            node = i
+            break
+
+    update_repulsion_choice(G_m, max_edge, weights, n, used, node)
 
     for _ in range(1, m):
         # Count available
@@ -68,7 +77,7 @@ def local_repulsion_choice(G_m, max_weight, weights, n, m, shot):
                 node += 1
 
         # Update answer and weights
-        update_repulsion_choice(G_m, max_weight, weights, n, used, node)
+        update_repulsion_choice(G_m, max_edge, weights, n, used, node)
 
     return used
 
@@ -87,7 +96,8 @@ def compute_energy(sample, G_m, n_qubits):
 def sample_for_solution(G_m, shots, thresholds, weights, dtype):
     shots = max(1, shots >> 1)
     n = len(G_m)
-    max_weight = G_m.max()
+    max_edge = G_m.max()
+    tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
@@ -107,7 +117,7 @@ def sample_for_solution(G_m, shots, thresholds, weights, dtype):
             m += 1
 
             # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_m, max_weight, weights, n, m, s)
+            sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, n, m)
             solutions[s] = sample
             energies[s] = compute_energy(sample, G_m, n)
 

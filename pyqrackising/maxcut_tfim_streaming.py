@@ -14,7 +14,7 @@ except ImportError:
 
 
 @njit
-def update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, node):
+def update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node):
     # Select node
     used[node] = True
 
@@ -22,12 +22,12 @@ def update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_func(nodes[node], nodes[nbr]) / max_weight)
+        weights[nbr] *= max(1.1920928955078125e-7, 1 - G_func(nodes[node], nodes[nbr]) / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, shot):
+def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -39,8 +39,17 @@ def local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, shot):
     weights = weights.copy()
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
-    # Update answer and weights
-    update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, shot % n)
+    # First bit:
+    r = np.random.rand()
+    cum = 0.0
+    node = 0
+    for i in range(n):
+        cum += weights[i]
+        if (tot_init_weight * r) < cum:
+            node = i
+            break
+
+    update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
 
     for _ in range(1, m):
         # Count available
@@ -71,7 +80,7 @@ def local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, shot):
         used[node] = True
 
         # Update answer and weights
-        update_repulsion_choice(G_func, nodes, max_weight, weights, n, used, node)
+        update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node)
 
     return used
 
@@ -88,8 +97,9 @@ def compute_energy(sample, G_func, nodes, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_solution(G_func, nodes, max_weight, shots, thresholds, degrees_sum, weights, n, dtype):
+def sample_for_solution(G_func, nodes, max_edge, shots, thresholds, degrees_sum, weights, n, dtype):
     shots = max(1, shots >> 1)
+    tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
@@ -109,7 +119,7 @@ def sample_for_solution(G_func, nodes, max_weight, shots, thresholds, degrees_su
             m += 1
 
             # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, s)
+            sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n, m)
             solutions[s] = sample
             energies[s] = compute_energy(sample, G_func, nodes, n)
 
@@ -162,11 +172,11 @@ def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype, epsilon):
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
 
-    max_weight = degrees.sum()
+    max_edge = degrees.sum()
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_weight, J_eff, n_qubits, dtype)
+    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -174,10 +184,10 @@ def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype, epsilon):
 
 
 @njit
-def gpu_footer(shots, n_qubits, G_func, nodes, G_max, weights, degrees, hamming_prob, max_weight, dtype):
+def gpu_footer(shots, n_qubits, G_func, nodes, G_max, weights, degrees, hamming_prob, max_edge, dtype):
     fix_cdf(hamming_prob)
 
-    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_weight, weights, n_qubits, dtype)
+    best_solution, best_value = sample_for_solution(G_func, nodes, G_max, shots, hamming_prob, max_edge, weights, n_qubits, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
