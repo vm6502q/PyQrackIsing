@@ -9,13 +9,11 @@ import time
 
 
 def generate_adjacency(n_nodes=64, seed=None):
-    if seed is not None:
+    if not (seed is None):
         np.random.seed(seed)
 
-    # construct numpy view into shared memory
-    G_m = np.ndarray((n_nodes, n_nodes), dtype=np.float32)
+    G_m = np.empty((n_nodes, n_nodes), dtype=np.float32)
 
-    # fill with symmetric random weights
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
             weight = np.random.random()

@@ -2,21 +2,19 @@
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
 from pyqrackising import maxcut_tfim, spin_glass_solver
-from numba import njit, prange
 import numpy as np
 import sys
 import time
 
 
 # Random MAXCUT adjacency matrix
-@njit
 def generate_adjacency(n_nodes=64, seed=None):
     if not (seed is None):
         np.random.seed(seed)
 
     G_m = np.empty((n_nodes, n_nodes), dtype=np.float32)
 
-    for u in prange(n_nodes):
+    for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
             weight = np.random.random()
             G_m[u, v] = weight
