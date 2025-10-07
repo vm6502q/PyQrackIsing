@@ -89,24 +89,36 @@ def compute_energy(sample, G_func, nodes, n_qubits):
 
 @njit(parallel=True)
 def sample_for_solution(G_func, nodes, max_weight, shots, thresholds, degrees_sum, weights, n, dtype):
+    shots >>= 1
+
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
 
-    for s in prange(shots):
-        # First dimension: Hamming weight
-        mag_prob = np.random.random()
-        m = 0
-        while thresholds[m] < mag_prob:
+    best_solution = solutions[0]
+    best_energy = float("inf")
+
+    improved = True
+    while improved:
+        improved = False
+        for s in prange(shots):
+            # First dimension: Hamming weight
+            mag_prob = np.random.random()
+            m = 0
+            while thresholds[m] < mag_prob:
+                m += 1
             m += 1
-        m += 1
 
-        # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, s)
+            # Second dimension: permutation within Hamming weight
+            sample = local_repulsion_choice(G_func, nodes, max_weight, weights, n, m, s)
+            solutions[s] = sample
+            energies[s] = compute_energy(sample, G_func, nodes, n)
 
-        solutions[s] = sample
-        energies[s] = compute_energy(sample, G_func, nodes, n)
-
-    best_solution = solutions[np.argmin(energies)]
+        best_index = np.argmin(energies)
+        energy = energies[best_index]
+        if energy < best_energy:
+            best_energy = energy
+            best_solution = solutions[best_index].copy()
+            improved = True
 
     best_value = 0.0
     for u in range(n):

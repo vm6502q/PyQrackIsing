@@ -90,33 +90,46 @@ def compute_energy(sample, G_data, G_rows, G_cols):
     for u in range(n_qubits):
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            energy += G_data[col] * (1 if sample[u] == sample[v] else -1)
+            val = G_data[col]
+            energy += val if sample[u] == sample[v] else -val
 
     return energy
 
 
 @njit(parallel=True)
 def sample_for_solution(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
+    shots >>= 1
     n = G_rows.shape[0] - 1
     max_weight = G_data.max()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
 
-    for s in prange(shots):
-        # First dimension: Hamming weight
-        mag_prob = np.random.random()
-        m = 0
-        while thresholds[m] < mag_prob:
+    best_solution = solutions[0]
+    best_energy = float("inf")
+
+    improved = True
+    while improved:
+        improved = False
+        for s in prange(shots):
+            # First dimension: Hamming weight
+            mag_prob = np.random.random()
+            m = 0
+            while thresholds[m] < mag_prob:
+                m += 1
             m += 1
-        m += 1
 
-        # Second dimension: permutation within Hamming weight
-        sample = local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m, s)
-        solutions[s] = sample
-        energies[s] = compute_energy(sample, G_data, G_rows, G_cols)
+            # Second dimension: permutation within Hamming weight
+            sample = local_repulsion_choice(G_cols, G_data, G_rows, max_weight, weights, n, m, s)
+            solutions[s] = sample
+            energies[s] = compute_energy(sample, G_data, G_rows, G_cols)
 
-    best_solution = solutions[np.argmin(energies)]
+        best_index = np.argmin(energies)
+        energy = energies[best_index]
+        if energy < best_energy:
+            best_energy = energy
+            best_solution = solutions[best_index].copy()
+            improved = True
 
     best_value = 0.0
     for u in range(n):
