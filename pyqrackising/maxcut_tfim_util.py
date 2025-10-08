@@ -159,7 +159,7 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
         J = J_eff[q]
         z = degrees[q]
         abs_zJ = abs(z * J)
-        theta[q] = (np.pi if J > 0 else -np.pi) if abs_zJ <= epsilon else np.arcsin(max(-1.0, min(1.0, h_mult / (z * J))))
+        theta[q] = (np.pi if J > 0 else -np.pi) if abs_zJ < epsilon else np.arcsin(max(-1.0, min(1.0, h_mult / (z * J))))
 
     return theta
 
@@ -237,6 +237,9 @@ def fix_cdf(hamming_prob):
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
+    if abs(J) < epsilon:
+        return np.full((n_qubits - 1,), 1.0 / (n_qubits - 1), dtype=dtype)
+
     ratio = max(1.0, min(-1.0, abs(h) / (z * J)))
     theta_c = np.arcsin(ratio)
 
