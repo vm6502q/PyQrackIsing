@@ -253,7 +253,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
     bias = np.empty(n_qubits - 1, dtype=dtype)
     for q in range(n_qubits - 1):
-        result = numerator * pow(2.0, -((n_qubits + 1.0) * p) - p * q) / denominator
+        result = numerator * pow(2.0, -((n_qubits + 1) * p) - p * q) / denominator
         bias[q] = 0.0 if np.isnan(result) or np.isinf(result) else result
 
     if J > 0.0:
