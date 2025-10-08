@@ -237,9 +237,7 @@ def fix_cdf(hamming_prob):
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    ratio = abs(h) / (z * J)
-    if (ratio > 1.0):
-        ratio = 1.0
+    ratio = max(1.0, min(-1.0, abs(h) / (z * J)))
     theta_c = np.arcsin(ratio)
 
     p = (
