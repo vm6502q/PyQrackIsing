@@ -304,7 +304,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 8
+        quality = 5
 
     if shots is None:
         # Number of measurement shots

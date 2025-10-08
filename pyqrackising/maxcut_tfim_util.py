@@ -201,7 +201,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 
     bias = np.empty(n_qubits - 1, dtype=np.float64)
-    factor = 2.0 ** -p
+    factor = 2.0 ** -(p / n_qubits)
     result = 1.0
     tot_n = 0.0
     for q in range(n_qubits - 1):
