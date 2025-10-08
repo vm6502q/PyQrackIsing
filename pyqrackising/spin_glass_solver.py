@@ -163,7 +163,8 @@ def spin_glass_solver(
     quality=None,
     shots=None,
     best_guess=None,
-    is_combo_maxcut_gpu=True
+    is_combo_maxcut_gpu=True,
+    is_spin_glass=True
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -198,9 +199,6 @@ def spin_glass_solver(
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
-    if quality is None:
-        quality = 3
-
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
@@ -209,7 +207,7 @@ def spin_glass_solver(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots)
+        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
