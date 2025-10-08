@@ -158,15 +158,8 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
     for q in prange(n_qubits):
         J = J_eff[q]
         z = degrees[q]
-        theta[q] = np.arcsin(
-            max(
-                -1.0,
-                min(
-                    1.0,
-                    np.sign(J) if np.isclose(abs(z * J), 0.0) else (h_mult / (z * J)),
-                ),
-            )
-        )
+        abs_zJ = abs(z * J)
+        theta[q] = (np.pi if J > 0 else -np.pi) if abs_zJ <= epsilon else np.arcsin(max(-1.0, min(1.0, h_mult / (z * J))))
 
     return theta
 
