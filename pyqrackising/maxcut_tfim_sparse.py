@@ -261,11 +261,6 @@ def maxcut_tfim_sparse(
 
             return "01", weight, ([nodes[0]], [nodes[1]])
 
-    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
-    if is_segmented and is_alt_gpu_sampling:
-        print("[WARN] Using segmented solver, so disabling is_alt_gpu_sampling.")
-        is_alt_gpu_sampling = False
-
     if quality is None:
         quality = 2
 
