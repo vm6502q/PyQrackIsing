@@ -186,10 +186,11 @@ def init_thresholds(n_qubits):
 
 
 @njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
     if n_qubits < 2:
-        hamming_prob.fill(0.0)
-        return
+        return np.full((n_qubits,), 1.0 / n_qubits, dtype=dtype)
+
+    hamming_prob = init_thresholds(n_qubits)
 
     n_steps = 1 << quality
     delta_t = 1.0 / n_steps
@@ -203,8 +204,6 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
         step = qc // n_qubits
         q = qc % n_qubits
         J_eff = J_func[q]
-        if np.isclose(abs(J_eff), 0.0):
-            continue
         z = degrees[q]
         theta_eff = theta[q]
         t = step * delta_t
@@ -215,15 +214,9 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
-    tot_prob = hamming_prob.sum()
-    hamming_prob /= tot_prob
+    fix_cdf(hamming_prob)
 
-    tot_prob = 0.0
-    for i in range(n_bias):
-        tot_prob += hamming_prob[i]
-        hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 2.0
-
+    return hamming_prob
 
 @njit
 def fix_cdf(hamming_prob):

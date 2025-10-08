@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import fix_cdf, get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
+from .maxcut_tfim_util import get_cut, maxcut_hamming_cdf, opencl_context
 
 
 epsilon = opencl_context.epsilon
@@ -240,10 +240,8 @@ def init_J_and_z(G_func, nodes):
 @njit
 def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass):
     J_eff, degrees, G_max = init_J_and_z(G_func, nodes)
-    hamming_prob = init_thresholds(n_qubits)
+    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
     max_edge = degrees.sum()
-
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
