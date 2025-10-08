@@ -50,10 +50,10 @@ from pyqrackising import maxcut_tfim
 import networkx as nx
 
 G = nx.petersen_graph()
-best_solution_bit_string, best_cut_value, best_node_groups = maxcut_tfim(G, quality=5, shots=None, is_spin_glass=False, anneal_t=8.0, anneal_h=8.0)
+best_solution_bit_string, best_cut_value, best_node_groups = maxcut_tfim(G, quality=8, shots=None, is_spin_glass=False, anneal_t=8.0, anneal_h=8.0)
 ```
 
-We also provide `maxcut_tfim_sparse(G)`, for `scipy` CSR sparse arrays (or `networkx` graphs), and `maxcut_tfim_streaming(G_func, nodes)` for `numba` JIT streaming weights function definitions. The (integer) `quality` setting is optional, with a default value of `5`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) `anneal_t` and `anneal_h` control the physical maximum annealing time and `h` transverse field parameter, as in Trotterized Ising model. If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
+We also provide `maxcut_tfim_sparse(G)`, for `scipy` CSR sparse arrays (or `networkx` graphs), and `maxcut_tfim_streaming(G_func, nodes)` for `numba` JIT streaming weights function definitions. The (integer) `quality` setting is optional, with a default value of `8`, but you can turn it up for higher-quality results, or turn it down to save time. (You can also optionally specify the number of measurement `shots` as an argument, if you want specific fine-grained control over resource usage.) `anneal_t` and `anneal_h` control the physical maximum annealing time and `h` transverse field parameter, as in Trotterized Ising model. If you want to run MAXCUT on a graph with non-uniform edge weights, specify them as the `weight` attribute of each edge, with `networkx`. (If any `weight` attribute is not defined, the solver assumes it's `1.0` for that edge.)
 
 Based on a combination of the TFIM-inspired MAXCUT solver and another technique for finding ground-state energy in quantum chemistry that we call the _"binary Clifford eigensolver,"_ we also provide an (approximate) spin glass ground-state solver:
 ```py
@@ -73,7 +73,7 @@ def generate_spin_glass_graph(n_nodes=16, degree=3, seed=None):
 
 
 G = generate_spin_glass_graph(n_nodes=64, seed=42)
-solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=5, shots=None, anneal_t=8.0, anneal_h=8.0, best_guess=None, is_combo_maxcut_gpu=True)
+solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quality=8, shots=None, anneal_t=8.0, anneal_h=8.0, best_guess=None, is_combo_maxcut_gpu=True)
 # solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, best_guess=maxcut_tfim(G, quality=6)[0])
 ```
 We also provide `spin_glass_solver_sparse(G)` and `spin_glass_solver_streaming(G_func, nodes)`. `is_combo_maxcut_gpu` controls whether gradient descent optimization is done on GPU (which is costly and the only GPU-based feature). `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention.
