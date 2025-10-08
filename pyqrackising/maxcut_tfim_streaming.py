@@ -276,7 +276,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 5
+        quality = 4
 
     if anneal_t is None:
         anneal_t = 8.0

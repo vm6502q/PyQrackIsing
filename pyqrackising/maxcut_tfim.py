@@ -278,7 +278,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 5
+        quality = 4
 
     if shots is None:
         # Number of measurement shots

@@ -45,7 +45,7 @@ static inline std::vector<double> probability_by_hamming_weight(double J, double
         if ((p * n_qubits) >= 1024) {
             bias[0] = 1.0;
         } else {
-            const double factor = std::pow(2.0, -p);
+            const double factor = std::pow(2.0, -p / (n_qubits + 1));
             double n = 1.0;
             double tot_n = 0.0;
             for (size_t q = 0U; q <= n_qubits; ++q) {
