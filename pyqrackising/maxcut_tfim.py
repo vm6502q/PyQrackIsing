@@ -215,24 +215,11 @@ def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
-    J_max = -float("inf")
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
         J = (-G_m[n].sum() / degree) if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
-        J_abs = abs(J)
-        J_max = max(J_abs, J_max)
-
-    G_max = abs(G_m.max())
-    G_min = abs(G_m.min())
-    if G_min > G_max:
-        G_max = G_min
-
-    # Paramagnetic or diamagnetic?
-    nrm = G_max if G_max > J_max else J_max
-
-    J_eff /= nrm
 
     return J_eff, degrees
 
@@ -260,8 +247,8 @@ def maxcut_tfim(
     quality=None,
     shots=None,
     is_spin_glass=False,
-    anneal_t = 2.0,
-    anneal_h = 4.0
+    anneal_t=None,
+    anneal_h=None
 ):
     wgs = opencl_context.work_group_size
     nodes = None
@@ -291,10 +278,16 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 10
+        quality = 3
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
+
+    if anneal_t is None:
+        anneal_t = 2.0
+
+    if anneal_h is None:
+        anneal_h = 4.0
 
     return cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h)

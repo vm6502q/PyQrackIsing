@@ -223,10 +223,10 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
 
 
 @njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols, G_max):
+def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
-    degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=dtype)
+    degrees = np.zeros(n_qubits, dtype=np.uint32)
+    J_eff = np.zeros(n_qubits, dtype=dtype)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
@@ -243,25 +243,16 @@ def init_J_and_z(G_data, G_rows, G_cols, G_max):
             degrees[c] += 1
             J_eff[c] += G_data[idx]
 
-    J_max = -float("inf")
     for r in prange(n_qubits):
-        J = J_eff[r]
         degree = degrees[r]
-        J_eff[r] = -J / degree if degree > 0 else 0
-        J_abs = abs(J)
-        J_max = max(J_abs, J_max)
-
-    # Paramagnetic or diamagnetic?
-    nrm = G_max if G_max > J_max else J_max
-
-    J_eff /= nrm
+        J_eff[r] = -J_eff[r] / degree if degree > 0 else 0
 
     return J_eff, degrees
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, G_max, anneal_t, anneal_h):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, G_max)
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
@@ -282,8 +273,8 @@ def maxcut_tfim_sparse(
     quality=None,
     shots=None,
     is_spin_glass=False,
-    anneal_t=2.0,
-    anneal_h=4.0
+    anneal_t=None,
+    anneal_h=None
 ):
     wgs = opencl_context.work_group_size
     nodes = None
@@ -313,15 +304,16 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 10
+        quality = 3
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    G_max = abs(G_m.max())
-    G_min = abs(G_m.min())
-    if G_min > G_max:
-        G_max = G_min
+    if anneal_t is None:
+        anneal_t = 2.0
 
-    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, G_max, anneal_t, anneal_h)
+    if anneal_h is None:
+        anneal_h = 4.0
+
+    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h)
