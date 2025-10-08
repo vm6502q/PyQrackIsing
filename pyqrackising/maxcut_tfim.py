@@ -297,7 +297,4 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = n_qubits << quality
-    grid_size = n_steps * n_qubits
-
     return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, is_spin_glass)

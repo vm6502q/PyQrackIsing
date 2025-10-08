@@ -319,9 +319,6 @@ def maxcut_tfim_sparse(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    n_steps = n_qubits << quality
-    grid_size = n_steps * n_qubits
-
     G_max = abs(G_m.max())
     G_min = abs(G_m.min())
     if G_min > G_max:
