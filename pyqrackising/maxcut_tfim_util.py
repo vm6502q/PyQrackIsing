@@ -237,8 +237,10 @@ def fix_cdf(hamming_prob):
 
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
-    # critical angle
-    theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
+    ratio = abs(h) / (z * J)
+    if (ratio > 1.0):
+        ratio = 1.0
+    theta_c = np.arcsin(ratio)
 
     p = (
         pow(2.0, abs(J / h) - 1.0)
@@ -246,22 +248,13 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
         - 0.5
     )
 
-    if (p * n_qubits) >= 1024:
-        return np.zeros(n_qubits - 1, dtype=dtype)
+    numerator = pow(2.0, (n_qubits + 2) * p) - 1.0
+    denominator = pow(2.0, p) - 1.0
 
     bias = np.empty(n_qubits - 1, dtype=dtype)
-    tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
-    factor = pow(2.0, -p)
-    n = 1.0
-    for q in range(1, n_qubits):
-        n *= factor
-        bias[q - 1] = n
-        tot_n += n
-
-    if np.isnan(tot_n) or np.isinf(tot_n):
-        return np.zeros(n_qubits - 1, dtype=dtype)
-
-    bias /= tot_n
+    for q in range(n_qubits - 1):
+        result = numerator * pow(2.0, -((n_qubits + 1.0) * p) - p * q) / denominator
+        bias[q] = 0.0 if np.isnan(result) or np.isinf(result) else result
 
     if J > 0.0:
         return bias[::-1]
