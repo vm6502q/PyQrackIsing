@@ -227,7 +227,11 @@ def init_J_and_z(G_func, nodes, dtype):
         J_eff[n] = J
         J_abs = abs(J)
         J_max = max(J_abs, J_max)
-    J_eff /= J_max
+
+    # Paramagnetic or diamagnetic?
+    nrm = G_max if G_max > J_max else J_max
+
+    J_eff /= nrm
 
     return J_eff, degrees, G_max
 

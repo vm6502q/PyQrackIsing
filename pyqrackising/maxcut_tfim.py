@@ -222,7 +222,16 @@ def init_J_and_z(G_m, dtype):
         J_eff[n] = J
         J_abs = abs(J)
         J_max = max(J_abs, J_max)
-    J_eff /= J_max
+
+    G_max = abs(G_m.max())
+    G_min = abs(G_m.min())
+    if G_min > G_max:
+        G_max = G_min
+
+    # Paramagnetic or diamagnetic?
+    nrm = G_max if G_max > J_max else J_max
+
+    J_eff /= nrm
 
     return J_eff, degrees
 

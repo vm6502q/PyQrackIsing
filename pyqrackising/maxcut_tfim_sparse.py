@@ -222,7 +222,7 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
 
 
 @njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols, dtype):
+def init_J_and_z(G_data, G_rows, G_cols, dtype, G_max):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
@@ -249,14 +249,18 @@ def init_J_and_z(G_data, G_rows, G_cols, dtype):
         J_eff[r] = -J / degree if degree > 0 else 0
         J_abs = abs(J)
         J_max = max(J_abs, J_max)
-    J_eff /= J_max
+
+    # Paramagnetic or diamagnetic?
+    nrm = G_max if G_max > J_max else J_max
+
+    J_eff /= nrm
 
     return J_eff, degrees
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, dtype, is_spin_glass):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, dtype)
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, dtype, is_spin_glass, G_max):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, dtype, G_max)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
     maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
@@ -318,4 +322,9 @@ def maxcut_tfim_sparse(
     n_steps = n_qubits << quality
     grid_size = n_steps * n_qubits
 
-    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype, is_spin_glass)
+    G_max = abs(G_m.max())
+    G_min = abs(G_m.min())
+    if G_min > G_max:
+        G_max = G_min
+
+    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype, is_spin_glass, G_max)
