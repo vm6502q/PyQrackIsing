@@ -8,7 +8,6 @@ from .maxcut_tfim_util import get_cut, maxcut_hamming_cdf, opencl_context
 
 
 epsilon = opencl_context.epsilon
-dtype = opencl_context.dtype
 
 
 @njit
@@ -140,7 +139,7 @@ def sample_for_energy(G_m, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
+    energies = np.empty(shots, dtype=np.float64)
 
     best_solution = solutions[0]
     best_energy = float("inf")
@@ -179,7 +178,7 @@ def sample_for_cut(G_m, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    cuts = np.empty(shots, dtype=dtype)
+    cuts = np.empty(shots, dtype=np.float64)
 
     best_solution = solutions[0]
     best_cut = -float("inf")
@@ -214,7 +213,7 @@ def sample_for_cut(G_m, shots, thresholds, weights):
 def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
-    J_eff = np.empty(n_qubits, dtype=dtype)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
     for n in prange(n_qubits):
         degree = sum(G_m[n] != 0.0)
         J = (-G_m[n].sum() / degree) if degree > 0 else 0

@@ -153,7 +153,7 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
 
 @njit(parallel=True)
 def init_theta(h_mult, n_qubits, J_eff, degrees):
-    theta = np.empty(n_qubits, dtype=dtype)
+    theta = np.empty(n_qubits, dtype=np.float64)
     h_mult = abs(h_mult)
     for q in prange(n_qubits):
         J = J_eff[q]
@@ -167,7 +167,7 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
-    thresholds = np.empty(n_bias, dtype=dtype)
+    thresholds = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
     p = 1.0
     if n_qubits & 1:
@@ -188,27 +188,26 @@ def init_thresholds(n_qubits):
 @njit
 def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
     if abs(J) < epsilon:
-        return np.full((n_qubits - 1,), 1.0 / (n_qubits - 1), dtype=dtype)
+        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1), dtype=np.float64)
 
     ratio = max(1.0, min(-1.0, abs(h) / (z * J)))
     theta_c = np.arcsin(ratio)
 
     p = (
-        pow(2.0, abs(J / h) - 1.0)
+        2.0 ** (abs(J / h) - 1.0)
         * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
         - 0.5
     )
 
 
-    bias = np.empty(n_qubits - 1, dtype=dtype)
-    tot_n = 0
+    bias = np.empty(n_qubits - 1, dtype=np.float64)
+    factor = 2.0 ** -p
+    result = 1.0 / (n_qubits + 1)
+    tot_n = 0.0
     for q in range(n_qubits - 1):
-        result = pow(2.0, -p * q)
+        result *= factor
         bias[q] = result
         tot_n += result
-
-    if np.isnan(tot_n) or np.isinf(tot_n):
-        return np.zeros(n_qubits - 1, dtype=dtype)
 
     if J > 0.0:
         return bias[::-1]
@@ -221,7 +220,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
     if n_qubits < 2:
-        return np.full((n_qubits,), 1.0 / n_qubits, dtype=dtype)
+        return np.full((n_qubits,), 1.0 / n_qubits, dtype=np.float64)
 
     hamming_prob = init_thresholds(n_qubits)
 

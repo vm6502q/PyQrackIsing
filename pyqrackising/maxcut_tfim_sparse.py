@@ -8,7 +8,6 @@ from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl
 
 
 epsilon = opencl_context.epsilon
-dtype = opencl_context.dtype
 
 
 @njit
@@ -152,7 +151,7 @@ def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
+    energies = np.empty(shots, dtype=np.float64)
 
     best_solution = solutions[0]
     best_energy = float("inf")
@@ -191,7 +190,7 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    cuts = np.empty(shots, dtype=dtype)
+    cuts = np.empty(shots, dtype=np.float64)
 
     best_solution = solutions[0]
     best_cut = -float("inf")
@@ -226,7 +225,7 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
 def init_J_and_z(G_data, G_rows, G_cols):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.zeros(n_qubits, dtype=np.uint32)
-    J_eff = np.zeros(n_qubits, dtype=dtype)
+    J_eff = np.zeros(n_qubits, dtype=np.float64)
     for r in prange(n_qubits):
         # Row sum
         start = G_rows[r]
