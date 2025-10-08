@@ -120,8 +120,19 @@ def compute_energy(sample, G_m, n_qubits):
     return energy
 
 
+@njit
+def compute_cut(sample, G_m, n_qubits):
+    cut = 0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            if sample[u] != sample[v]:
+                cut += G_m[u, v]
+
+    return cut
+
+
 @njit(parallel=True)
-def sample_for_solution(G_m, shots, thresholds, weights, dtype):
+def sample_for_energy(G_m, shots, thresholds, weights, dtype):
     shots = max(1, shots >> 1)
     n = len(G_m)
     max_edge = G_m.max()
@@ -156,13 +167,46 @@ def sample_for_solution(G_m, shots, thresholds, weights, dtype):
             best_solution = solutions[best_index].copy()
             improved = True
 
-    best_value = 0.0
-    for u in range(n):
-        for v in range(u + 1, n):
-            if best_solution[u] != best_solution[v]:
-                best_value += G_m[u, v]
+    return best_solution, compute_cut(best_solution, G_m, n)
 
-    return best_solution, best_value
+
+@njit(parallel=True)
+def sample_for_cut(G_m, shots, thresholds, weights, dtype):
+    shots = max(1, shots >> 1)
+    n = len(G_m)
+    max_edge = G_m.max()
+    tot_init_weight = weights.sum()
+
+    solutions = np.empty((shots, n), dtype=np.bool_)
+    cuts = np.empty(shots, dtype=dtype)
+
+    best_solution = solutions[0]
+    best_cut = -float("inf")
+
+    improved = True
+    while improved:
+        improved = False
+        for s in prange(shots):
+            # First dimension: Hamming weight
+            mag_prob = np.random.random()
+            m = 0
+            while thresholds[m] < mag_prob:
+                m += 1
+            m += 1
+
+            # Second dimension: permutation within Hamming weight
+            sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, n, m)
+            solutions[s] = sample
+            cuts[s] = compute_cut(sample, G_m, n)
+
+        best_index = np.argmax(cuts)
+        cut = cuts[best_index]
+        if cut > best_cut:
+            best_cut = cut
+            best_solution = solutions[best_index].copy()
+            improved = True
+
+    return best_solution, best_cut
 
 
 @njit(parallel=True)
@@ -184,7 +228,7 @@ def init_J_and_z(G_m, dtype):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
+def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, is_spin_glass):
     J_eff, degrees = init_J_and_z(G_m, dtype)
     hamming_prob = init_thresholds(n_qubits, dtype)
 
@@ -193,7 +237,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_solution(G_m, shots, hamming_prob, J_eff, dtype)
+    best_solution, best_value = sample_for_energy(G_m, shots, hamming_prob, J_eff, dtype) if is_spin_glass else sample_for_cut(G_m, shots, hamming_prob, J_eff, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -203,7 +247,8 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype):
 def maxcut_tfim(
     G,
     quality=None,
-    shots=None
+    shots=None,
+    is_spin_glass=False
 ):
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
@@ -243,4 +288,4 @@ def maxcut_tfim(
     n_steps = n_qubits << quality
     grid_size = n_steps * n_qubits
 
-    return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype)
+    return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, is_spin_glass)
