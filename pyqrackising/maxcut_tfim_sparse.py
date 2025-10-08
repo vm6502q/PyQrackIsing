@@ -6,12 +6,6 @@ from numba import njit, prange
 
 from .maxcut_tfim_util import binary_search, fix_cdf, get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, to_scipy_sparse_upper_triangular
 
-IS_OPENCL_AVAILABLE = True
-try:
-    import pyopencl as cl
-except ImportError:
-    IS_OPENCL_AVAILABLE = False
-
 
 epsilon = opencl_context.epsilon
 
@@ -215,89 +209,6 @@ def init_J_and_z(G_data, G_rows, G_cols, dtype):
     J_eff /= J_max
 
     return J_eff, degrees
-
-
-def run_sampling_opencl(G_m_csr, thresholds_np, shots, n, is_g_buf_reused):
-    ctx = opencl_context.ctx
-    queue = opencl_context.queue
-    kernel = opencl_context.sample_for_solution_best_bitset_sparse_kernel
-    dtype = opencl_context.dtype
-    wgs = opencl_context.work_group_size
-
-    local_size = min(wgs, shots)  # tune
-    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
-    global_size = min(((shots + local_size - 1) // local_size) * local_size, max_global_size)
-    num_groups = global_size // local_size
-
-    # Bit-packing params
-    words = (n + 31) // 32
-
-    # Random seeds (host)
-    rng_seeds_np = np.random.randint(1, 2**31-1, size=global_size, dtype=np.uint32)
-
-    # Device buffers
-    mf = cl.mem_flags
-    G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.data)
-    G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.indptr)
-    G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m_csr.indices)
-    thresholds_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=thresholds_np)
-    rng_buf = cl.Buffer(ctx, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=rng_seeds_np)
-
-    # Solutions buffer: each work-item writes a candidate bitset
-    solutions_buf = cl.Buffer(ctx, mf.READ_WRITE, size=num_groups * words * np.uint32().nbytes)
-
-    # Best energies and solutions (per group)
-    # We'll reuse solutions_buf to hold them after reduction (kernel copies winners into group slices)
-    best_energies_np = np.empty(num_groups, dtype=dtype)
-    best_energies_buf = cl.Buffer(ctx, mf.WRITE_ONLY, best_energies_np.nbytes)
-
-    # Local memory buffers
-    local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
-    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
-
-    # Set kernel args
-    kernel.set_args(
-        G_data_buf,
-        G_rows_buf,
-        G_cols_buf,
-        thresholds_buf,
-        np.int32(n),
-        np.int32(shots),
-        dtype(G_m_csr.data.max()),
-        rng_buf,
-        solutions_buf,
-        best_energies_buf,
-        local_energy_buf,
-        local_index_buf
-    )
-
-    # Launch
-    cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
-
-    # Copy back
-    cl.enqueue_copy(queue, best_energies_np, best_energies_buf)
-    solutions_np = np.empty(num_groups * words, dtype=np.uint32)
-    cl.enqueue_copy(queue, solutions_np, solutions_buf)  # all candidates, includes per-group winners
-    queue.finish()
-
-    # Host reduction
-    best_group = np.argmax(best_energies_np)  # max cut
-    best_energy = float(best_energies_np[best_group])
-    best_solution_bits = solutions_np[best_group * words : (best_group + 1) * words]
-
-    # Unpack bitset into boolean vector
-    best_solution = np.zeros(n, dtype=np.bool_)
-    for u in range(n):
-        w = u >> 5
-        b = u & 31
-        best_solution[u] = (best_solution_bits[w] >> b) & 1
-
-    if is_g_buf_reused:
-        opencl_context.G_data_buf = G_data_buf
-        opencl_context.G_rows_buf = G_rows_buf
-        opencl_context.G_cols_buf = G_cols_buf
-
-    return best_solution, best_energy
 
 
 @njit

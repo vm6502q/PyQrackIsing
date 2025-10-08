@@ -6,12 +6,6 @@ from numba import njit, prange
 
 from .maxcut_tfim_util import fix_cdf, get_cut, init_theta, init_thresholds, maxcut_hamming_cdf, opencl_context, probability_by_hamming_weight
 
-IS_OPENCL_AVAILABLE = True
-try:
-    import pyopencl as cl
-except ImportError:
-    IS_OPENCL_AVAILABLE = False
-
 
 epsilon = opencl_context.epsilon
 
