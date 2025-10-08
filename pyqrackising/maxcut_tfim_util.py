@@ -6,177 +6,6 @@ from numba import njit, prange
 from scipy.sparse import lil_matrix
 
 
-@njit
-def get_cut(solution, nodes):
-    bit_string = ""
-    l, r = [], []
-    for i in range(len(solution)):
-        if solution[i]:
-            bit_string += "1"
-            r.append(nodes[i])
-        else:
-            bit_string += "0"
-            l.append(nodes[i])
-
-    return bit_string, l, r
-
-
-@njit
-def binary_search(l, t):
-    left = 0
-    right = len(l) - 1
-
-    while left <= right:
-        mid = (left + right) >> 1
-
-        if l[mid] == t:
-            return mid
-
-        if l[mid] < t:
-            left = mid + 1
-        else:
-            right = mid - 1
-
-    return len(l)
-
-
-def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
-    lil = lil_matrix((n_nodes, n_nodes), dtype=opencl_context.dtype)
-    for u in range(n_nodes):
-        u_node = nodes[u]
-        for v in range(u + 1, n_nodes):
-            v_node = nodes[v]
-            if G.has_edge(u_node, v_node):
-                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
-
-    return lil.tocsr()
-
-
-@njit(parallel=True)
-def init_theta(h_mult, n_qubits, J_eff, degrees, dtype):
-    theta = np.empty(n_qubits, dtype=dtype)
-    h_mult = abs(h_mult)
-    for q in prange(n_qubits):
-        J = J_eff[q]
-        z = degrees[q]
-        theta[q] = np.arcsin(
-            max(
-                -1.0,
-                min(
-                    1.0,
-                    np.sign(J) if np.isclose(abs(z * J), 0.0) else (h_mult / (z * J)),
-                ),
-            )
-        )
-
-    return theta
-
-
-@njit
-def init_thresholds(n_qubits, dtype):
-    n_bias = n_qubits - 1
-    thresholds = np.empty(n_bias, dtype=dtype)
-    tot_prob = 0
-    p = 1.0
-    if n_qubits & 1:
-        q = n_qubits // 2
-        thresholds[q - 1] = p
-        tot_prob = p
-        p /= 2
-    for q in range(1, n_qubits // 2):
-        thresholds[q - 1] = p
-        thresholds[n_bias - q] = p
-        tot_prob += 2 * p
-        p /= 2
-    thresholds /= tot_prob
-
-    return thresholds
-
-
-@njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob, dtype):
-    if n_qubits < 2:
-        hamming_prob.fill(0.0)
-        return
-
-    n_steps = 1 << quality
-    delta_t = 1.0 / n_steps
-    tot_t = 2.0 * n_steps * delta_t
-    h_mult = 2.0 / tot_t
-    n_bias = n_qubits - 1
-
-    theta = init_theta(h_mult, n_qubits, J_func, degrees, dtype)
-
-    for qc in prange(n_qubits, n_steps * n_qubits):
-        step = qc // n_qubits
-        q = qc % n_qubits
-        J_eff = J_func[q]
-        if np.isclose(abs(J_eff), 0.0):
-            continue
-        z = degrees[q]
-        theta_eff = theta[q]
-        t = step * delta_t
-        tm1 = (step - 1) * delta_t
-        h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits, dtype)
-        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits, dtype)
-        for i in range(n_bias):
-            hamming_prob[i] += bias[i] - last_bias[i]
-
-    tot_prob = hamming_prob.sum()
-    hamming_prob /= tot_prob
-
-    tot_prob = 0.0
-    for i in range(n_bias):
-        tot_prob += hamming_prob[i]
-        hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 2.0
-
-
-@njit
-def fix_cdf(hamming_prob):
-    hamming_prob /= hamming_prob.sum()
-    tot_prob = 0.0
-    for i in range(len(hamming_prob)):
-        tot_prob += hamming_prob[i]
-        hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 2.0
-
-
-@njit
-def probability_by_hamming_weight(J, h, z, theta, t, n_qubits, dtype):
-    # critical angle
-    theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
-
-    p = (
-        pow(2.0, abs(J / h) - 1.0)
-        * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
-        - 0.5
-    )
-
-    if (p * n_qubits) >= 1024:
-        return np.zeros(n_qubits - 1, dtype=dtype)
-
-    bias = np.empty(n_qubits - 1, dtype=dtype)
-    tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
-    factor = pow(2.0, -p)
-    n = 1.0
-    for q in range(1, n_qubits):
-        n *= factor
-        bias[q - 1] = n
-        tot_n += n
-
-    if np.isnan(tot_n) or np.isinf(tot_n):
-        return np.zeros(n_qubits - 1, dtype=dtype)
-
-    bias /= tot_n
-
-    if J > 0.0:
-        return bias[::-1]
-
-    return bias
-
-
 class OpenCLContext:
     def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y):
         self.MAX_GPU_PROC_ELEM = p
@@ -274,3 +103,174 @@ except ImportError:
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
 opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel)
+
+
+@njit
+def get_cut(solution, nodes):
+    bit_string = ""
+    l, r = [], []
+    for i in range(len(solution)):
+        if solution[i]:
+            bit_string += "1"
+            r.append(nodes[i])
+        else:
+            bit_string += "0"
+            l.append(nodes[i])
+
+    return bit_string, l, r
+
+
+@njit
+def binary_search(l, t):
+    left = 0
+    right = len(l) - 1
+
+    while left <= right:
+        mid = (left + right) >> 1
+
+        if l[mid] == t:
+            return mid
+
+        if l[mid] < t:
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return len(l)
+
+
+def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
+    lil = lil_matrix((n_nodes, n_nodes), dtype=dtype)
+    for u in range(n_nodes):
+        u_node = nodes[u]
+        for v in range(u + 1, n_nodes):
+            v_node = nodes[v]
+            if G.has_edge(u_node, v_node):
+                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
+
+    return lil.tocsr()
+
+
+@njit(parallel=True)
+def init_theta(h_mult, n_qubits, J_eff, degrees):
+    theta = np.empty(n_qubits, dtype=dtype)
+    h_mult = abs(h_mult)
+    for q in prange(n_qubits):
+        J = J_eff[q]
+        z = degrees[q]
+        theta[q] = np.arcsin(
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    np.sign(J) if np.isclose(abs(z * J), 0.0) else (h_mult / (z * J)),
+                ),
+            )
+        )
+
+    return theta
+
+
+@njit
+def init_thresholds(n_qubits):
+    n_bias = n_qubits - 1
+    thresholds = np.empty(n_bias, dtype=dtype)
+    tot_prob = 0
+    p = 1.0
+    if n_qubits & 1:
+        q = n_qubits // 2
+        thresholds[q - 1] = p
+        tot_prob = p
+        p /= 2
+    for q in range(1, n_qubits // 2):
+        thresholds[q - 1] = p
+        thresholds[n_bias - q] = p
+        tot_prob += 2 * p
+        p /= 2
+    thresholds /= tot_prob
+
+    return thresholds
+
+
+@njit(parallel=True)
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, hamming_prob):
+    if n_qubits < 2:
+        hamming_prob.fill(0.0)
+        return
+
+    n_steps = 1 << quality
+    delta_t = 1.0 / n_steps
+    tot_t = 2.0 * n_steps * delta_t
+    h_mult = 2.0 / tot_t
+    n_bias = n_qubits - 1
+
+    theta = init_theta(h_mult, n_qubits, J_func, degrees)
+
+    for qc in prange(n_qubits, n_steps * n_qubits):
+        step = qc // n_qubits
+        q = qc % n_qubits
+        J_eff = J_func[q]
+        if np.isclose(abs(J_eff), 0.0):
+            continue
+        z = degrees[q]
+        theta_eff = theta[q]
+        t = step * delta_t
+        tm1 = (step - 1) * delta_t
+        h_t = h_mult * (tot_t - t)
+        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits)
+        for i in range(n_bias):
+            hamming_prob[i] += bias[i] - last_bias[i]
+
+    tot_prob = hamming_prob.sum()
+    hamming_prob /= tot_prob
+
+    tot_prob = 0.0
+    for i in range(n_bias):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 2.0
+
+
+@njit
+def fix_cdf(hamming_prob):
+    hamming_prob /= hamming_prob.sum()
+    tot_prob = 0.0
+    for i in range(len(hamming_prob)):
+        tot_prob += hamming_prob[i]
+        hamming_prob[i] = tot_prob
+    hamming_prob[-1] = 2.0
+
+
+@njit
+def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
+    # critical angle
+    theta_c = np.arcsin(max(-1.0, min(1.0, abs(h) / (z * J))))
+
+    p = (
+        pow(2.0, abs(J / h) - 1.0)
+        * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
+        - 0.5
+    )
+
+    if (p * n_qubits) >= 1024:
+        return np.zeros(n_qubits - 1, dtype=dtype)
+
+    bias = np.empty(n_qubits - 1, dtype=dtype)
+    tot_n = 1.0 + 1.0 / pow(2.0, p * n_qubits)
+    factor = pow(2.0, -p)
+    n = 1.0
+    for q in range(1, n_qubits):
+        n *= factor
+        bias[q - 1] = n
+        tot_n += n
+
+    if np.isnan(tot_n) or np.isinf(tot_n):
+        return np.zeros(n_qubits - 1, dtype=dtype)
+
+    bias /= tot_n
+
+    if J > 0.0:
+        return bias[::-1]
+
+    return bias

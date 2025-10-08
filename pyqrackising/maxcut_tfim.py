@@ -8,6 +8,7 @@ from .maxcut_tfim_util import fix_cdf, get_cut, init_theta, init_thresholds, max
 
 
 epsilon = opencl_context.epsilon
+dtype = opencl_context.dtype
 
 
 @njit
@@ -132,7 +133,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_energy(G_m, shots, thresholds, weights, dtype):
+def sample_for_energy(G_m, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = len(G_m)
     max_edge = G_m.max()
@@ -171,7 +172,7 @@ def sample_for_energy(G_m, shots, thresholds, weights, dtype):
 
 
 @njit(parallel=True)
-def sample_for_cut(G_m, shots, thresholds, weights, dtype):
+def sample_for_cut(G_m, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = len(G_m)
     max_edge = G_m.max()
@@ -210,7 +211,7 @@ def sample_for_cut(G_m, shots, thresholds, weights, dtype):
 
 
 @njit(parallel=True)
-def init_J_and_z(G_m, dtype):
+def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
@@ -237,19 +238,19 @@ def init_J_and_z(G_m, dtype):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, is_spin_glass):
-    J_eff, degrees = init_J_and_z(G_m, dtype)
-    hamming_prob = init_thresholds(n_qubits, dtype)
+def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass):
+    J_eff, degrees = init_J_and_z(G_m)
+    hamming_prob = init_thresholds(n_qubits)
 
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_m, shots, hamming_prob, J_eff, dtype)
+        best_solution, best_value = sample_for_energy(G_m, shots, hamming_prob, J_eff)
     else:
-        best_solution, best_value = sample_for_cut(G_m, shots, hamming_prob, J_eff, dtype)
+        best_solution, best_value = sample_for_cut(G_m, shots, hamming_prob, J_eff)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -262,7 +263,6 @@ def maxcut_tfim(
     shots=None,
     is_spin_glass=False
 ):
-    dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
@@ -297,4 +297,4 @@ def maxcut_tfim(
         # Number of measurement shots
         shots = n_qubits << quality
 
-    return cpu_footer(shots, quality, n_qubits, G_m, nodes, dtype, is_spin_glass)
+    return cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass)

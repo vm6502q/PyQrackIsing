@@ -8,6 +8,7 @@ from .maxcut_tfim_util import binary_search, fix_cdf, get_cut, init_theta, init_
 
 
 epsilon = opencl_context.epsilon
+dtype = opencl_context.dtype
 
 
 @njit
@@ -144,7 +145,7 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
+def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     max_edge = G_data.max()
@@ -183,7 +184,7 @@ def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights, dtype)
 
 
 @njit(parallel=True)
-def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
+def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     max_edge = G_data.max()
@@ -222,7 +223,7 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights, dtype):
 
 
 @njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols, dtype, G_max):
+def init_J_and_z(G_data, G_rows, G_cols, G_max):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
@@ -259,19 +260,19 @@ def init_J_and_z(G_data, G_rows, G_cols, dtype, G_max):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, dtype, is_spin_glass, G_max):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, dtype, G_max)
-    hamming_prob = init_thresholds(n_qubits, dtype)
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, G_max):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, G_max)
+    hamming_prob = init_thresholds(n_qubits)
 
-    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob, dtype)
+    maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, hamming_prob)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_data, G_rows, G_col, shots, hamming_prob, J_eff, dtype)
+        best_solution, best_value = sample_for_energy(G_data, G_rows, G_col, shots, hamming_prob, J_eff)
     else:
-        best_solution, best_value = sample_for_cut(G_data, G_rows, G_col, shots, hamming_prob, J_eff, dtype)
+        best_solution, best_value = sample_for_cut(G_data, G_rows, G_col, shots, hamming_prob, J_eff)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -284,7 +285,6 @@ def maxcut_tfim_sparse(
     shots=None,
     is_spin_glass=False
 ):
-    dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
     nodes = None
     n_qubits = 0
@@ -292,7 +292,7 @@ def maxcut_tfim_sparse(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits, dtype)
+        G_m = to_scipy_sparse_upper_triangular(G, nodes, n_qubits)
     else:
         n_qubits = G.shape[0]
         nodes = list(range(n_qubits))
@@ -324,4 +324,4 @@ def maxcut_tfim_sparse(
     if G_min > G_max:
         G_max = G_min
 
-    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, dtype, is_spin_glass, G_max)
+    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, G_max)
