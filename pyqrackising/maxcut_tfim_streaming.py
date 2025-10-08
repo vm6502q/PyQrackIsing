@@ -243,7 +243,10 @@ def cpu_footer(shots, quality, n_qubits, G_func, nodes, dtype, is_spin_glass):
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_energy(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits, dtype) if is_spin_glass else sample_for_cut(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits, dtype)
+    if is_spin_glass:
+        best_solution, best_value = sample_for_energy(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits, dtype)
+    else:
+        best_solution, best_value = sample_for_cut(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits, dtype)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
