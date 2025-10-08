@@ -114,7 +114,8 @@ def compute_energy(sample, G_m, n_qubits):
     energy = 0
     for u in range(n_qubits):
         for v in range(u + 1, n_qubits):
-            energy += G_m[u, v] * (1 if sample[u] == sample[v] else -1)
+            val = G_m[u, v]
+            energy += val if sample[u] == sample[v] else -val
 
     return energy
 
