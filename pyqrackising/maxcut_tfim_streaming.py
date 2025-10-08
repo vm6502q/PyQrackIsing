@@ -212,6 +212,7 @@ def init_J_and_z(G_func, nodes):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=dtype)
+    G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
@@ -220,6 +221,8 @@ def init_J_and_z(G_func, nodes):
             if val != 0.0:
                 degree += 1
                 J += val
+            if val > G_max:
+                G_max = val
         J = -J / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
