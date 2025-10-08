@@ -226,7 +226,7 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
 
     theta = init_theta(h_mult, n_qubits, J_func, degrees)
 
-    for qc in range(n_qubits, n_steps * n_qubits):
+    for qc in prange(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
         q = qc % n_qubits
         J_eff = J_func[q]

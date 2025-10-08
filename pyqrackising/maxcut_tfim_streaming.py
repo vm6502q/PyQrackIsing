@@ -273,13 +273,13 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 3
+        quality = 5
 
     if anneal_t is None:
-        anneal_t = 2.0
+        anneal_t = 8.0
 
     if anneal_h is None:
-        anneal_h = 4.0
+        anneal_h = 8.0
 
     if shots is None:
         # Number of measurement shots

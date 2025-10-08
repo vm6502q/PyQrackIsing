@@ -278,16 +278,16 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 3
+        quality = 5
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
     if anneal_t is None:
-        anneal_t = 2.0
+        anneal_t = 8.0
 
     if anneal_h is None:
-        anneal_h = 4.0
+        anneal_h = 8.0
 
     return cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h)
