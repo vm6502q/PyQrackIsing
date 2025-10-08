@@ -238,9 +238,9 @@ def init_J_and_z(G_func, nodes):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass):
+def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h):
     J_eff, degrees, G_max = init_J_and_z(G_func, nodes)
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
     max_edge = degrees.sum()
 
     degrees = None
@@ -261,7 +261,9 @@ def maxcut_tfim_streaming(
     nodes,
     quality=None,
     shots=None,
-    is_spin_glass=False
+    is_spin_glass=False,
+    anneal_t=2.0,
+    anneal_h=4.0
 ):
     wgs = opencl_context.work_group_size
     n_qubits = len(nodes)
@@ -281,10 +283,10 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 2
+        quality = 10
 
     if shots is None:
         # Number of measurement shots
         shots = n_qubits << quality
 
-    return cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass)
+    return cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h)

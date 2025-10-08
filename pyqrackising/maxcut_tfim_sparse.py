@@ -260,9 +260,9 @@ def init_J_and_z(G_data, G_rows, G_cols, G_max):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, G_max):
+def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, G_max, anneal_t, anneal_h):
     J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, G_max)
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality)
+    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
@@ -281,7 +281,9 @@ def maxcut_tfim_sparse(
     G,
     quality=None,
     shots=None,
-    is_spin_glass=False
+    is_spin_glass=False,
+    anneal_t=2.0,
+    anneal_h=4.0
 ):
     wgs = opencl_context.work_group_size
     nodes = None
@@ -311,7 +313,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 2
+        quality = 10
 
     if shots is None:
         # Number of measurement shots
@@ -322,4 +324,4 @@ def maxcut_tfim_sparse(
     if G_min > G_max:
         G_max = G_min
 
-    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, G_max)
+    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, G_max, anneal_t, anneal_h)

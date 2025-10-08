@@ -186,7 +186,7 @@ def init_thresholds(n_qubits):
 
 
 @njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
+def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
     if n_qubits < 2:
         return np.full((n_qubits,), 1.0 / n_qubits, dtype=dtype)
 
@@ -194,8 +194,6 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality):
 
     n_steps = 1 << quality
     delta_t = 1.0 / n_steps
-    tot_t = 2.0 * n_steps * delta_t
-    h_mult = 2.0 / tot_t
     n_bias = n_qubits - 1
 
     theta = init_theta(h_mult, n_qubits, J_func, degrees)
