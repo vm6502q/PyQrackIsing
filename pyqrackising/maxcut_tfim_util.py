@@ -209,10 +209,12 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
         bias[q] = result
         tot_n += result
 
+    if (tot_n == 0.0) or np.isnan(tot_n):
+        print("[WARN]: probability_by_hamming_weight() went below maximum precision.")
+        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1), dtype=np.float64)
+
     if J > 0.0:
         return bias[::-1]
-
-    tot_n += result
 
     return bias
 

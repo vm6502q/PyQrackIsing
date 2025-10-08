@@ -8,6 +8,7 @@ from .maxcut_tfim_util import get_cut, maxcut_hamming_cdf, opencl_context
 
 
 epsilon = opencl_context.epsilon
+dtype = opencl_context.dtype
 
 
 @njit
@@ -30,7 +31,7 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, n,
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
     adjacency_data, adjacency_rows: CSR-format sparse adjacency data
-    weights: float64 array of shape (n,)
+    weights: float array of shape (n,)
     """
 
     weights = weights.copy()
@@ -138,7 +139,7 @@ def sample_for_energy(G_func, nodes, max_edge, shots, thresholds, degrees_sum, w
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=np.float64)
+    energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_energy = float("inf")
@@ -175,7 +176,7 @@ def sample_for_cut(G_func, nodes, max_edge, shots, thresholds, degrees_sum, weig
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    cuts = np.empty(shots, dtype=np.float64)
+    cuts = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_cut = -float("inf")

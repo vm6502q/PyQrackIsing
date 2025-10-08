@@ -8,6 +8,7 @@ from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl
 
 
 epsilon = opencl_context.epsilon
+dtype = opencl_context.dtype
 
 
 @njit
@@ -151,7 +152,7 @@ def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=np.float64)
+    energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_energy = float("inf")
@@ -190,7 +191,7 @@ def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    cuts = np.empty(shots, dtype=np.float64)
+    cuts = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_cut = -float("inf")
