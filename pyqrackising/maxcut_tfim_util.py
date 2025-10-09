@@ -186,9 +186,9 @@ def init_thresholds(n_qubits):
 
 
 @njit
-def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
+def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
     if abs(J) < epsilon:
-        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1), dtype=np.float64)
+        return np.full(n_bias, 1.0 / n_bias, dtype=np.float64)
 
     ratio = max(1.0, min(-1.0, abs(h) / (z * J)))
     theta_c = np.arcsin(ratio)
@@ -200,17 +200,17 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
     )
 
 
-    bias = np.empty(n_qubits - 1, dtype=np.float64)
-    factor = 2.0 ** -(p / (n_qubits + 1))
+    bias = np.empty(n_bias, dtype=np.float64)
+    factor = 2.0 ** -(p / n_bias)
     result = 1.0
-    for q in range(n_qubits - 2):
+    n_qubits = n_bias - 1
+    for q in range(n_qubits):
         bias[q] = result
         result *= factor
-    bias[n_qubits - 2] = result
+    bias[n_qubits] = result
 
     if (result == 0.0) or np.isnan(result):
         print("[WARN]: probability_by_hamming_weight() went below maximum precision.")
-        return np.full(n_qubits - 1, 1.0 / (n_qubits - 1), dtype=np.float64)
 
     if J > 0.0:
         return bias[::-1]
@@ -220,14 +220,11 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_qubits):
 
 @njit(parallel=True)
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
-    if n_qubits < 2:
-        return np.full((n_qubits,), 1.0 / n_qubits, dtype=np.float64)
-
     hamming_prob = init_thresholds(n_qubits)
 
     n_steps = 1 << quality
     delta_t = 1.0 / n_steps
-    n_bias = n_qubits - 1
+    n_bias = n_qubits + 1
 
     theta = init_theta(h_mult, n_qubits, J_func, degrees)
 
@@ -240,21 +237,24 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
         t = step * delta_t
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_qubits)
-        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_qubits)
+        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias)
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
-    fix_cdf(hamming_prob)
+    cum_prob = fix_cdf(hamming_prob)
 
-    return hamming_prob
+    return cum_prob
 
 @njit
 def fix_cdf(hamming_prob):
-    hamming_prob /= hamming_prob.sum()
+    hamming_prob /= hamming_prob.sum() - (hamming_prob[0] + hamming_prob[-1])
     tot_prob = 0.0
-    for i in range(len(hamming_prob)):
-        tot_prob += hamming_prob[i]
-        hamming_prob[i] = tot_prob
-    hamming_prob[-1] = 2.0
+    n_bias = len(hamming_prob) - 2
+    cum_prob = np.empty(n_bias, dtype=np.float64)
+    for i in range(n_bias):
+        tot_prob += hamming_prob[i + 1]
+        cum_prob[i] = tot_prob
+    cum_prob[-1] = 2.0
 
+    return cum_prob
