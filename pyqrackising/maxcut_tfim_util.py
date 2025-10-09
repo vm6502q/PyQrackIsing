@@ -203,11 +203,9 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
     bias = np.empty(n_bias, dtype=np.float64)
     factor = 2.0 ** -(p / n_bias)
     result = 1.0
-    n_qubits = n_bias - 1
-    for q in range(n_qubits):
-        bias[q] = result
+    for q in range(n_bias):
         result *= factor
-    bias[n_qubits] = result
+        bias[q] = result
 
     if (result == 0.0) or np.isnan(result):
         print("[WARN]: probability_by_hamming_weight() went below maximum precision.")
