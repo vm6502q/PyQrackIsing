@@ -167,7 +167,9 @@ def spin_glass_solver(
     is_spin_glass=True,
     anneal_t=None,
     anneal_h=None,
-    repulsion_base=None
+    repulsion_base=None,
+    min_order=1,
+    max_order=None
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -236,14 +238,17 @@ def spin_glass_solver(
             else:
                 G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
 
+    if max_order is None:
+        max_order = n_qubits
+
     min_energy = compute_energy(best_theta, G_m)
     improved = True
-    correction_quality = 1
+    correction_quality = min_order
     combos_list = []
     while improved:
         improved = False
         k = 1
-        while k <= correction_quality:
+        while (k <= correction_quality) and (k <= max_order):
             if n_qubits < k:
                 break
 
