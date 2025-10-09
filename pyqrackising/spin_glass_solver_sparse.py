@@ -188,7 +188,8 @@ def spin_glass_solver_sparse(
     anneal_h=None,
     repulsion_base=None,
     min_order=1,
-    max_order=None
+    max_order=None,
+    is_log=False
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -265,6 +266,12 @@ def spin_glass_solver_sparse(
         max_order = n_qubits
 
     min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
+
+    if is_log:
+        bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
+        cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
+        print(bitstring, float(cut_value), (l, r), float(min_energy))
+
     improved = True
     correction_quality = min_order
     combos_list = []
@@ -294,6 +301,12 @@ def spin_glass_solver_sparse(
                 improved = True
                 if correction_quality < (k + 1):
                     correction_quality = k + 1
+
+                if is_log:
+                    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
+                    cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
+                    print(bitstring, float(cut_value), (l, r), float(min_energy))
+
                 break
 
             k = k + 1
