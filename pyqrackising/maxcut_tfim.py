@@ -20,7 +20,7 @@ def update_repulsion_choice(G_m, max_edge, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(epsilon, 1 - G_m[node, nbr] / max_edge)
+        weights[nbr] *= 4 ** (-G_m[node, nbr] / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -133,10 +133,9 @@ def compute_cut(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_energy(G_m, shots, thresholds, weights):
+def sample_for_energy(G_m, max_edge, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = len(G_m)
-    max_edge = G_m.max()
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -172,10 +171,9 @@ def sample_for_energy(G_m, shots, thresholds, weights):
 
 
 @njit(parallel=True)
-def sample_for_cut(G_m, shots, thresholds, weights):
+def sample_for_cut(G_m, max_edge, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = len(G_m)
-    max_edge = G_m.max()
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -215,27 +213,37 @@ def init_J_and_z(G_m):
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
+    G_max = -float("inf")
     for n in prange(n_qubits):
-        degree = sum(G_m[n] != 0.0)
-        J = (-G_m[n].sum() / degree) if degree > 0 else 0
+        degree = 0
+        J = 0.0
+        for m in range(n_qubits):
+            val = G_m[n, m]
+            if val != 0.0:
+                degree += 1
+                J += val
+                val = abs(val)
+            if val > G_max:
+                G_max = val
+        J = -J / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
 
-    return J_eff, degrees
+    return J_eff, degrees, G_max
 
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h):
-    J_eff, degrees = init_J_and_z(G_m)
+    J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_m, shots, hamming_prob, J_eff)
+        best_solution, best_value = sample_for_energy(G_m, max_edge, shots, hamming_prob, J_eff)
     else:
-        best_solution, best_value = sample_for_cut(G_m, shots, hamming_prob, J_eff)
+        best_solution, best_value = sample_for_cut(G_m, max_edge, shots, hamming_prob, J_eff)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -278,7 +286,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 5
 
     if shots is None:
         # Number of measurement shots

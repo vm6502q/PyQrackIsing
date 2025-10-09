@@ -21,7 +21,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, 
         nbr = G_cols[j]
         if used[nbr]:
             continue
-        weights[nbr] *= max(epsilon, 1 - G_data[j] / max_edge)
+        weights[nbr] *= 4 ** (-G_data[j] / max_edge)
 
     for nbr in range(node):
         if used[nbr]:
@@ -30,7 +30,7 @@ def update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, 
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= max(epsilon, 1 - G_data[j] / max_edge)
+            weights[nbr] *= 4 ** (-G_data[j] / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -145,10 +145,9 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights):
+def sample_for_energy(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
-    max_edge = G_data.max()
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -184,10 +183,9 @@ def sample_for_energy(G_data, G_rows, G_cols, shots, thresholds, weights):
 
 
 @njit(parallel=True)
-def sample_for_cut(G_data, G_rows, G_cols, shots, thresholds, weights):
+def sample_for_cut(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
-    max_edge = G_data.max()
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
@@ -251,7 +249,7 @@ def init_J_and_z(G_data, G_rows, G_cols):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h):
+def cpu_footer(shots, quality, n_qubits, max_edge, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h):
     J_eff, degrees = init_J_and_z(G_data, G_rows, G_col)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
@@ -259,9 +257,9 @@ def cpu_footer(shots, quality, n_qubits, G_data, G_rows, G_col, nodes, is_spin_g
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_data, G_rows, G_col, shots, hamming_prob, J_eff)
+        best_solution, best_value = sample_for_energy(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff)
     else:
-        best_solution, best_value = sample_for_cut(G_data, G_rows, G_col, shots, hamming_prob, J_eff)
+        best_solution, best_value = sample_for_cut(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -304,7 +302,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 5
 
     if shots is None:
         # Number of measurement shots
@@ -316,4 +314,9 @@ def maxcut_tfim_sparse(
     if anneal_h is None:
         anneal_h = 8.0
 
-    return cpu_footer(shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h)
+    max_edge = abs(G_m.max())
+    min_edge = abs(G_m.min())
+    if min_edge > max_edge:
+        max_edge = min_edge
+
+    return cpu_footer(shots, quality, n_qubits, max_edge, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h)

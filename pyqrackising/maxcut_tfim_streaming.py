@@ -20,7 +20,7 @@ def update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node):
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= max(epsilon, 1 - G_func(nodes[node], nodes[nbr]) / max_edge)
+        weights[nbr] *= 4 ** (-G_func(nodes[node], nodes[nbr]) / max_edge)
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
@@ -221,6 +221,7 @@ def init_J_and_z(G_func, nodes):
             if val != 0.0:
                 degree += 1
                 J += val
+                val = abs(val)
             if val > G_max:
                 G_max = val
         J = -J / degree if degree > 0 else 0
@@ -232,7 +233,7 @@ def init_J_and_z(G_func, nodes):
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h):
-    J_eff, degrees, G_max = init_J_and_z(G_func, nodes)
+    J_eff, degrees, max_edge = init_J_and_z(G_func, nodes)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
     max_edge = degrees.sum()
 
@@ -240,9 +241,9 @@ def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t,
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits)
+        best_solution, best_value = sample_for_energy(G_func, nodes, max_edge, shots, hamming_prob, max_edge, J_eff, n_qubits)
     else:
-        best_solution, best_value = sample_for_cut(G_func, nodes, G_max, shots, hamming_prob, max_edge, J_eff, n_qubits)
+        best_solution, best_value = sample_for_cut(G_func, nodes, max_edge, shots, hamming_prob, max_edge, J_eff, n_qubits)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -276,7 +277,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 4
+        quality = 5
 
     if anneal_t is None:
         anneal_t = 8.0
