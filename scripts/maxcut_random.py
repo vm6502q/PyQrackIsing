@@ -2,6 +2,7 @@
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
 from pyqrackising import maxcut_tfim, spin_glass_solver
+import networkx as nx
 import numpy as np
 import sys
 import time
@@ -12,15 +13,14 @@ def generate_adjacency(n_nodes=64, seed=None):
     if not (seed is None):
         np.random.seed(seed)
 
-    G_m = np.empty((n_nodes, n_nodes), dtype=np.float32)
+    G = nx.Graph()
 
     for u in range(n_nodes):
         for v in range(u + 1, n_nodes):
             weight = np.random.random()
-            G_m[u, v] = weight
-            G_m[v, u] = weight
+            G.add_edge(u, v, weight=weight)
 
-    return G_m
+    return G
 
 
 if __name__ == "__main__":

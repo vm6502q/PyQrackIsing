@@ -629,6 +629,7 @@ def tsp_symmetric(
     shots=None,
     anneal_t=None,
     anneal_h=None,
+    repulsion_base=None,
     monte_carlo=True,
     k_neighbors=20,
     is_cyclic=True,
@@ -680,7 +681,7 @@ def tsp_symmetric(
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim(G_m, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h)
+                    _, cut_value, bits = maxcut_tfim(G_m, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
@@ -697,8 +698,8 @@ def tsp_symmetric(
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, anneal_t, anneal_h, True, 0, False, multi_start, False, True, parallel_level + 1)
-            sol_b = tsp_symmetric(G_b, None, None, quality, shots, anneal_t, anneal_h, True, 0, False, multi_start, False, True, parallel_level + 1)
+            f = executor.submit(tsp_symmetric, G_a, None, None, quality, shots, anneal_t, anneal_h, repulsion_base, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_symmetric(G_b, None, None, quality, shots, anneal_t, anneal_h, repulsion_base, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_symmetric(
@@ -707,6 +708,7 @@ def tsp_symmetric(
             shots=shots,
             anneal_t=anneal_t,
             anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
             monte_carlo=monte_carlo,
             is_cyclic=False,
             is_top_level=False,
@@ -720,6 +722,7 @@ def tsp_symmetric(
             shots=shots,
             anneal_t=anneal_t,
             anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
             monte_carlo=monte_carlo,
             is_cyclic=False,
             is_top_level=False,
@@ -832,6 +835,7 @@ def tsp_asymmetric(
     shots=None,
     anneal_t=None,
     anneal_h=None,
+    repulsion_base=None,
     monte_carlo=True,
     k_neighbors=20,
     is_cyclic=True,
@@ -887,7 +891,7 @@ def tsp_asymmetric(
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim((G_m + G_m.T) / 2, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h)
+                    _, cut_value, bits = maxcut_tfim((G_m + G_m.T) / 2, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
@@ -904,8 +908,8 @@ def tsp_asymmetric(
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 2) and (len(b) > 2):
         with ProcessPoolExecutor(max_workers=1) as executor:
-            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, anneal_t, anneal_h, True, 0, False, multi_start, False, True, parallel_level + 1)
-            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, anneal_t, anneal_h, True, 0, False, multi_start, False, True, parallel_level + 1)
+            f = executor.submit(tsp_asymmetric, G_a, None, None, quality, shots, anneal_t, anneal_h, repulsion_base, True, 0, False, multi_start, False, True, parallel_level + 1)
+            sol_b = tsp_asymmetric(G_b, None, None, quality, shots, anneal_t, anneal_h, repulsion_base, True, 0, False, multi_start, False, True, parallel_level + 1)
             sol_a = f.result()
     else:
         sol_a = tsp_asymmetric(
@@ -914,6 +918,7 @@ def tsp_asymmetric(
             shots=shots,
             anneal_t=anneal_t,
             anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
             monte_carlo=monte_carlo,
             is_cyclic=False,
             is_top_level=False,
@@ -927,6 +932,7 @@ def tsp_asymmetric(
             shots=shots,
             anneal_t=anneal_t,
             anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
             monte_carlo=monte_carlo,
             is_cyclic=False,
             is_top_level=False,

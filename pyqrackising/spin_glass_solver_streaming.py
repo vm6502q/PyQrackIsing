@@ -74,7 +74,8 @@ def spin_glass_solver_streaming(
     best_guess=None,
     is_spin_glass=True,
     anneal_t=None,
-    anneal_h=None
+    anneal_h=None,
+    repulsion_base=None
 ):
     dtype = opencl_context.dtype
     n_qubits = len(nodes)
@@ -101,7 +102,7 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h)
+        bitstring, _, _ = maxcut_tfim_streaming(G_func, nodes, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     min_energy = compute_energy(best_theta, G_func, nodes)
