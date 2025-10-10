@@ -293,4 +293,10 @@ def maxcut_tfim_streaming(
     if repulsion_base is None:
         repulsion_base = 4.0
 
-    return cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+
+    if best_value < 0.0:
+        # Best cut is trivial partition, all/empty
+        return '0' * n_qubits, 0.0, (nodes, [])
+
+    return bit_string, best_value, partition

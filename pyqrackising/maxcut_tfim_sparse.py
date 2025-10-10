@@ -323,4 +323,10 @@ def maxcut_tfim_sparse(
     if min_edge > max_edge:
         max_edge = min_edge
 
-    return cpu_footer(shots, quality, n_qubits, max_edge, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, max_edge, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+
+    if best_value < 0.0:
+        # Best cut is trivial partition, all/empty
+        return '0' * n_qubits, 0.0, (nodes, [])
+
+    return bit_string, best_value, partition
