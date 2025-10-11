@@ -6,6 +6,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
+import random
 
 
 IS_OPENCL_AVAILABLE = True
@@ -170,7 +171,8 @@ def spin_glass_solver(
     repulsion_base=None,
     min_order=1,
     max_order=None,
-    is_log=False
+    is_log=False,
+    reheat_tries=0
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -249,44 +251,60 @@ def spin_glass_solver(
         cut_value = evaluate_cut_edges(best_theta, G_m)
         print(bitstring, float(cut_value), (l, r), float(min_energy))
 
-    improved = True
-    correction_quality = min_order
     combos_list = []
-    while improved:
-        improved = False
-        k = 1
-        while (k <= correction_quality) and (k <= max_order):
-            if n_qubits < k:
-                break
+    reheat_theta = best_theta.copy()
+    reheat_min_energy = min_energy
+    for reheat_round in range(reheat_tries + 1):
+        improved = True
+        correction_quality = min_order
+        while improved:
+            improved = False
+            k = 1
+            while (k <= correction_quality) and (k <= max_order):
+                if n_qubits < k:
+                    break
 
-            combos = []
-            if len(combos_list) < k:
-                combos = np.array(list(
-                    item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                ))
-                combos_list.append(combos)
-            else:
-                combos = combos_list[k - 1]
+                combos = []
+                if len(combos_list) < k:
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
+                    ))
+                    combos_list.append(combos)
+                else:
+                    combos = combos_list[k - 1]
 
-            if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-                energy = run_bootstrap_opencl(best_theta, G_m_buf, combos, k, min_energy, is_segmented, segment_size)
-            else:
-                energy = bootstrap(best_theta, G_m, combos, k, min_energy, dtype)
+                if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
+                    energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_min_energy, is_segmented, segment_size)
+                else:
+                    energy = bootstrap(reheat_theta, G_m, combos, k, reheat_min_energy, dtype)
 
-            if energy < min_energy:
-                min_energy = energy
-                improved = True
-                if correction_quality < (k + 1):
-                    correction_quality = k + 1
+                if energy < reheat_min_energy:
+                    reheat_min_energy = energy
+                    improved = True
+                    if correction_quality < (k + 1):
+                        correction_quality = k + 1
 
-                if is_log:
-                    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-                    cut_value = evaluate_cut_edges(best_theta, G_m)
-                    print(bitstring, float(cut_value), (l, r), float(min_energy))
+                    if is_log:
+                        bitstring, l, r = get_cut_from_bit_array(reheat_theta, nodes)
+                        cut_value = evaluate_cut_edges(reheat_theta, G_m)
+                        print(bitstring, float(cut_value), (l, r), float(reheat_min_energy))
 
-                break
+                    break
 
-            k = k + 1
+                k = k + 1
+
+        if reheat_min_energy < min_energy:
+            best_theta = reheat_theta.copy()
+            min_energy = reheat_min_energy
+        else:
+            reheat_theta = best_theta.copy()
+
+        if reheat_round < reheat_tries:
+            num_to_flip = int(np.round(np.log2(n_qubits)))
+            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
+            for bit in bits_to_flip:
+                reheat_theta[bit] = not reheat_theta[bit]
+            reheat_min_energy = compute_energy(reheat_theta, G_m)
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     cut_value = evaluate_cut_edges(best_theta, G_m)
