@@ -159,11 +159,11 @@ def spin_glass_solver_streaming(
 
                 k = k + 1
 
-        if reheat_min_energy < min_energy:
+        if min_energy < reheat_min_energy:
+            reheat_theta = best_theta.copy()
+        else:
             best_theta = reheat_theta.copy()
             min_energy = reheat_min_energy
-        else:
-            reheat_theta = best_theta.copy()
 
         if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
