@@ -28,7 +28,7 @@ if __name__ == "__main__":
     print(f"Node count: {n_nodes}")
     start = time.perf_counter()
     if is_spin_glass:
-        bitstring, cut_value, cut, energy = spin_glass_solver_streaming(G_func, list(range(n_nodes)), quality=quality)
+        bitstring, cut_value, cut, energy = spin_glass_solver_streaming(G_func, list(range(n_nodes)), quality=quality, is_spin_glass=False)
     else:
         bitstring, cut_value, cut = maxcut_tfim_streaming(G_func, list(range(n_nodes)), quality=quality)
     seconds = time.perf_counter() - start

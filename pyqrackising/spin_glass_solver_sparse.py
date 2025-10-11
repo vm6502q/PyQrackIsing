@@ -43,22 +43,22 @@ def compute_energy(sample, G_data, G_rows, G_cols):
 
 
 @njit
-def bootstrap_worker(theta, G_data, G_rows, G_cols, indices):
+def bootstrap_worker(theta, G_data, G_rows, G_cols, indices, is_spin_glass):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_data, G_rows, G_cols)
+    energy = compute_energy(local_theta, G_data, G_rows, G_cols) if is_spin_glass else -evaluate_cut_edges(local_theta, G_data, G_rows, G_cols)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, dtype):
+def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, dtype, is_spin_glass):
     n = len(indices_array) // k
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(best_theta, G_data, G_rows, G_cols, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(best_theta, G_data, G_rows, G_cols, indices_array[j : j + k], is_spin_glass)
 
     energy = energies.min()
     if energy < min_energy:
@@ -71,7 +71,7 @@ def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, 
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy, is_segmented, segment_size):
+def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy, is_segmented, segment_size, is_spin_glass):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_sparse_segmented_kernel if is_segmented else opencl_context.bootstrap_sparse_kernel
@@ -85,7 +85,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
     # Args: [n, k, combo_count, segment_size]
-    args_np = np.array([n, k, combo_count, segment_size], dtype=np.int32)
+    args_np = np.array([n, k, combo_count, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
@@ -178,6 +178,16 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
     return lil.tocsr()
 
 
+def log_intermediate(theta, G_data, G_rows, G_cols, nodes, min_energy, is_spin_glass):
+    bitstring, l, r = get_cut_from_bit_array(theta, nodes)
+    if is_spin_glass:
+        cut_value = evaluate_cut_edges(theta, G_data, G_rows, G_cols)
+    else:
+        cut_value = -min_energy
+        min_energy = compute_energy(theta, G_data, G_rows, G_cols)
+    print(bitstring, float(cut_value), (l, r), float(min_energy))
+
+
 def spin_glass_solver_sparse(
     G,
     quality=None,
@@ -267,12 +277,10 @@ def spin_glass_solver_sparse(
     if max_order is None:
         max_order = n_qubits
 
-    min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
+    min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices) if is_spin_glass else -evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
 
     if is_log:
-        bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-        cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
-        print(bitstring, float(cut_value), (l, r), float(min_energy))
+        log_intermediate(best_theta, G_m.data, G_m.indptr, G_m.indices, nodes, min_energy, is_spin_glass)
 
     combos_list = []
     reheat_theta = best_theta.copy()
@@ -297,9 +305,9 @@ def spin_glass_solver_sparse(
                     combos = combos_list[k - 1]
 
                 if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-                    energy = run_bootstrap_opencl(reheat_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, reheat_min_energy, is_segmented, segment_size)
+                    energy = run_bootstrap_opencl(reheat_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, reheat_min_energy, is_segmented, segment_size, is_spin_glass)
                 else:
-                    energy = bootstrap(reheat_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, reheat_min_energy, dtype)
+                    energy = bootstrap(reheat_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, reheat_min_energy, dtype, is_spin_glass)
 
                 if energy < reheat_min_energy:
                     reheat_min_energy = energy
@@ -308,9 +316,7 @@ def spin_glass_solver_sparse(
                         correction_quality = k + 1
 
                     if is_log:
-                        bitstring, l, r = get_cut_from_bit_array(reheat_theta, nodes)
-                        cut_value = evaluate_cut_edges(reheat_theta, G_m.data, G_m.indptr, G_m.indices)
-                        print(bitstring, float(cut_value), (l, r), float(reheat_min_energy))
+                        log_intermediate(reheat_theta, G_m.data, G_m.indptr, G_m.indices, nodes, min_energy, is_spin_glass)
 
                     break
 
@@ -327,9 +333,17 @@ def spin_glass_solver_sparse(
             bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
-            reheat_min_energy = compute_energy(reheat_theta, G_m.data, G_m.indptr, G_m.indices)
+            reheat_min_energy = compute_energy(reheat_theta, G_m.data, G_m.indptr, G_m.indices) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_m.data, G_m.indptr, G_m.indices)
+
+    opencl_context.G_data_buf = None
+    opencl_context.G_rows_buf = None
+    opencl_context.G_cols_buf = None
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-    cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
+    if is_spin_glass:
+        cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices)
+    else:
+        cut_value = -min_energy
+        min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)

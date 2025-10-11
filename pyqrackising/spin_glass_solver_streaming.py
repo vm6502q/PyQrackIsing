@@ -37,22 +37,22 @@ def compute_energy(theta_bits, G_func, nodes):
 
 
 @njit
-def bootstrap_worker(theta, G_func, nodes, indices):
+def bootstrap_worker(theta, G_func, nodes, indices, is_spin_glass):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_func, nodes)
+    energy = compute_energy(local_theta, G_func, nodes) if is_spin_glass else -evaluate_cut_edges(local_theta, G_func, nodes)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_func, nodes, indices_array, k, min_energy, dtype):
+def bootstrap(best_theta, G_func, nodes, indices_array, k, min_energy, dtype, is_spin_glass):
     n = len(indices_array) // k
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(best_theta, G_func, nodes, indices_array[j : j + k])
+        energies[i] = bootstrap_worker(best_theta, G_func, nodes, indices_array[j : j + k], is_spin_glass)
 
     energy = energies.min()
     if energy < min_energy:
@@ -65,6 +65,16 @@ def bootstrap(best_theta, G_func, nodes, indices_array, k, min_energy, dtype):
             best_theta[i] = not best_theta[i]
 
     return min_energy
+
+
+def log_intermediate(theta, G_func, nodes, min_energy, is_spin_glass):
+    bitstring, l, r = get_cut_from_bit_array(theta, nodes)
+    if is_spin_glass:
+        cut_value = evaluate_cut_edges(theta, G_func, nodes)
+    else:
+        cut_value = -min_energy
+        min_energy = compute_energy(theta, G_func, nodes)
+    print(bitstring, float(cut_value), (l, r), float(min_energy))
 
 
 def spin_glass_solver_streaming(
@@ -113,12 +123,10 @@ def spin_glass_solver_streaming(
     if max_order is None:
         max_order = n_qubits
 
-    min_energy = compute_energy(best_theta, G_func, nodes)
+    min_energy = compute_energy(best_theta, G_func, nodes) if is_spin_glass else -evaluate_cut_edges(best_theta, G_func, nodes)
 
     if is_log:
-        bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-        cut_value = evaluate_cut_edges(best_theta, G_func, nodes)
-        print(bitstring, float(cut_value), (l, r), float(min_energy))
+        log_intermediate(best_theta, G_func, nodes, min_energy, is_spin_glass)
 
     combos_list = []
     reheat_theta = best_theta.copy()
@@ -142,7 +150,7 @@ def spin_glass_solver_streaming(
                 else:
                     combos = combos_list[k - 1]
 
-                energy = bootstrap(best_theta, G_func, nodes, combos, k, min_energy, dtype)
+                energy = bootstrap(best_theta, G_func, nodes, combos, k, min_energy, dtype, is_spin_glass)
 
                 if energy < reheat_min_energy:
                     reheat_min_energy = energy
@@ -151,9 +159,7 @@ def spin_glass_solver_streaming(
                         correction_quality = k + 1
 
                     if is_log:
-                        bitstring, l, r = get_cut_from_bit_array(reheat_theta, nodes)
-                        cut_value = evaluate_cut_edges(best_theta, G_func, nodes)
-                        print(bitstring, float(cut_value), (l, r), float(reheat_min_energy))
+                        log_intermediate(reheat_theta, G_func, nodes, min_energy, is_spin_glass)
 
                     break
 
@@ -170,9 +176,13 @@ def spin_glass_solver_streaming(
             bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
-            reheat_min_energy = compute_energy(reheat_theta, G_func, nodes)
+            reheat_min_energy = compute_energy(reheat_theta, G_func, nodes) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_func, nodes)
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
-    cut_value = evaluate_cut_edges(best_theta, G_func, nodes)
+    if is_spin_glass:
+        cut_value = evaluate_cut_edges(best_theta, G_func, nodes)
+    else:
+        cut_value = -min_energy
+        min_energy = compute_energy(best_theta, G_func, nodes)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)

@@ -15,7 +15,7 @@ inline uint xorshift32(uint *state) {
     return x;
 }
 
-real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n) {
+real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
     for (int u = 0; u < n; ++u) {
@@ -36,7 +36,11 @@ real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __cons
                     break;
                 }
             }
-            energy += (u_bit == v_bit) ? val : -val;
+            if (u_bit != v_bit) {
+                energy -= val;
+            } else if (is_spin_glass) {
+                energy += val;
+            }
         }
     }
 
@@ -57,6 +61,7 @@ __kernel void bootstrap(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
+    const bool is_spin_glass = args[3];
     int i = get_global_id(0);
 
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
@@ -67,7 +72,7 @@ __kernel void bootstrap(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n);
+        const real1 energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
@@ -104,7 +109,7 @@ __kernel void bootstrap(
     }
 }
 
-real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __constant int* indices, const int k, const int n) {
+real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     for (int u = 0; u < n; ++u) {
         bool u_bit = theta[u];
@@ -125,7 +130,11 @@ real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_da
                     break;
                 }
             }
-            energy += (u_bit == v_bit) ? val : -val;
+            if (u_bit != v_bit) {
+                energy -= val;
+            } else if (is_spin_glass) {
+                energy += val;
+            }
         }
     }
 
@@ -148,6 +157,7 @@ __kernel void bootstrap_sparse(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
+    const bool is_spin_glass = args[3];
     int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
@@ -157,7 +167,7 @@ __kernel void bootstrap_sparse(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n);
+        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
@@ -209,7 +219,8 @@ real1 bootstrap_worker_segmented(
     __constant int* indices,
     const int k,
     const int n,
-    const int segment_size
+    const int segment_size,
+    const bool is_spin_glass
 ) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
@@ -234,7 +245,12 @@ real1 bootstrap_worker_segmented(
                     break;
                 }
             }
-            energy += (u_bit == v_bit) ? val : -val;
+
+            if (u_bit != v_bit) {
+                energy -= val;
+            } else if (is_spin_glass) {
+                energy += val;
+            }
         }
     }
 
@@ -261,7 +277,8 @@ __kernel void bootstrap_segmented(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int segment_size = args[3];
+    const bool is_spin_glass = args[3];
+    const int segment_size = args[4];
     int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
@@ -271,7 +288,7 @@ __kernel void bootstrap_segmented(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices_array + j, k, n, segment_size, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
@@ -314,7 +331,8 @@ real1 bootstrap_worker_sparse_segmented(
     __constant int* indices,
     const int k,
     const int n,
-    const int segment_size
+    const int segment_size,
+    const bool is_spin_glass
 ) {
     real1 energy = ZERO_R1;
 
@@ -342,7 +360,11 @@ real1 bootstrap_worker_sparse_segmented(
                 }
             }
 
-            energy += (u_bit == v_bit) ? val : -val;
+            if (u_bit != v_bit) {
+                energy -= val;
+            } else if (is_spin_glass) {
+                energy += val;
+            }
         }
     }
 
@@ -370,7 +392,8 @@ __kernel void bootstrap_sparse_segmented(
     const int n = args[0];
     const int k = args[1];
     const int combo_count = args[2];
-    const int segment_size = args[3];
+    const bool is_spin_glass = args[3];
+    const int segment_size = args[4];
     int i = get_global_id(0);
 
     prng_seed ^= (uint)i;
@@ -380,7 +403,7 @@ __kernel void bootstrap_sparse_segmented(
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, segment_size);
+        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, segment_size, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
             best_i = i;
