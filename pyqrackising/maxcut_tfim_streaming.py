@@ -278,7 +278,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 5
+        quality = 6
 
     if shots is None:
         # Number of measurement shots
@@ -291,7 +291,7 @@ def maxcut_tfim_streaming(
         anneal_h = 8.0
 
     if repulsion_base is None:
-        repulsion_base = 4.0
+        repulsion_base = 8.0
 
     bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
