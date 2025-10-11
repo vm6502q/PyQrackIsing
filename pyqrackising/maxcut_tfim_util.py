@@ -204,7 +204,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
         result *= factor
         bias[q] = result
 
-    if (result == 0.0) or np.isnan(result):
+    if (result == 0.0) or np.isnan(result) or np.isinf(result):
         print("[WARN]: probability_by_hamming_weight() went below maximum precision.")
 
     if J > 0.0:
