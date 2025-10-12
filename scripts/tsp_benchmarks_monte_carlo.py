@@ -136,7 +136,7 @@ def benchmark_tsp_realistic(n_nodes=64):
         "Simulated Annealing": [],
         "PyQrackIsing": [],
     }
-    G, _ = generate_euclidean_tsp(n_nodes)
+    G, _ = generate_clustered_tsp(n_nodes)
     multi_start = os.cpu_count()
 
     # Exclude numba JIT overhead with warmup:

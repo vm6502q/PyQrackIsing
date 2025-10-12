@@ -585,6 +585,9 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     if not c is None:
         best_path.append(c)
 
+    if is_cyclic:
+        best_path = restitch(G_m, best_path, True)
+
     if is_top_level:
         if is_cyclic:
             best_path += [best_path[0]]
@@ -614,7 +617,8 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
             else:
                 best_path, _ = targeted_three_opt(best_path, G_m, neighbor_lists, k_neighbors)
 
-    best_path = restitch(G_m, best_path, True)
+    if not is_cyclic:
+        best_path = restitch(G_m, best_path, True)
 
     best_weight = path_length(best_path, G_m)
 
@@ -780,6 +784,9 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     if not c is None:
         best_path.append(c)
 
+    if is_cyclic:
+        best_path = restitch(G_m, best_path, False)
+
     if is_top_level:
         if is_cyclic:
             best_path += [best_path[0]]
@@ -817,7 +824,8 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     else:
         final_path = best_path
 
-    final_path = restitch(G_m, final_path, False)
+    if not is_cyclic:
+        final_path = restitch(G_m, final_path, False)
 
     best_weight = path_length(final_path, G_m)
 
