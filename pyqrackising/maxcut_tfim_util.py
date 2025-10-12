@@ -255,3 +255,22 @@ def fix_cdf(hamming_prob):
     cum_prob[-1] = 2.0
 
     return cum_prob
+
+@njit
+def sample_mag(cum_prob):
+    p = np.random.random()
+    m = 0
+    left = 0
+    right = len(cum_prob) - 1
+    while True:
+        m = (left + right) >> 1
+
+        if (cum_prob[m] >= p) and ((m == 0) or cum_prob[m - 1] < p):
+            break
+
+        if cum_prob[m] < p:
+            left = m + 1
+        else:
+            right = m - 1
+
+    return m + 1

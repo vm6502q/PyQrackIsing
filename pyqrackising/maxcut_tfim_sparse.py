@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl_context, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl_context, sample_mag, to_scipy_sparse_upper_triangular
 
 
 epsilon = opencl_context.epsilon
@@ -161,11 +161,7 @@ def sample_for_energy(max_edge, G_data, G_rows, G_cols, shots, thresholds, weigh
         improved = False
         for s in prange(shots):
             # First dimension: Hamming weight
-            mag_prob = np.random.random()
-            m = 0
-            while thresholds[m] < mag_prob:
-                m += 1
-            m += 1
+            m = sample_mag(thresholds)
 
             # Second dimension: permutation within Hamming weight
             sample = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
@@ -199,11 +195,7 @@ def sample_for_cut(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights,
         improved = False
         for s in prange(shots):
             # First dimension: Hamming weight
-            mag_prob = np.random.random()
-            m = 0
-            while thresholds[m] < mag_prob:
-                m += 1
-            m += 1
+            m = sample_mag(thresholds)
 
             # Second dimension: permutation within Hamming weight
             sample = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
