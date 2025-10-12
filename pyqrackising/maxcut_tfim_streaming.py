@@ -176,15 +176,15 @@ def init_J_and_z(G_func, nodes):
 def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     J_eff, degrees, max_edge = init_J_and_z(G_func, nodes)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
-    max_edge = degrees.sum()
+    degrees_sum = degrees.sum()
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
     if is_spin_glass:
-        best_solution, best_value = sample_for_energy(G_func, nodes, max_edge, shots, hamming_prob, max_edge, J_eff, n_qubits, repulsion_base)
+        best_solution, best_value = sample_for_energy(G_func, nodes, max_edge, shots, hamming_prob, degrees_sum, J_eff, n_qubits, repulsion_base)
     else:
-        best_solution, best_value = sample_for_cut(G_func, nodes, max_edge, shots, hamming_prob, max_edge, J_eff, n_qubits, repulsion_base)
+        best_solution, best_value = sample_for_cut(G_func, nodes, max_edge, shots, hamming_prob, degrees_sum, J_eff, n_qubits, repulsion_base)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
