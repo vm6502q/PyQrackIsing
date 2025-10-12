@@ -78,7 +78,7 @@ def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
             val = G_data[col]
             energy += val if sample[u] == sample[v] else -val
 
-    return energy
+    return -energy
 
 
 @njit
@@ -94,7 +94,7 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(parallel=True)
-def sample_for_energy(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base):
+def sample_measurement(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
@@ -103,7 +103,7 @@ def sample_for_energy(max_edge, G_data, G_rows, G_cols, shots, thresholds, weigh
     energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
-    best_energy = float("inf")
+    best_energy = -float("inf")
 
     improved = True
     while improved:
@@ -115,50 +115,19 @@ def sample_for_energy(max_edge, G_data, G_rows, G_cols, shots, thresholds, weigh
             # Second dimension: permutation within Hamming weight
             sample = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
             solutions[s] = sample
-            energies[s] = compute_energy(sample, G_data, G_rows, G_cols, n)
+            energies[s] = compute_energy(sample, G_data, G_rows, G_cols, n) if is_spin_glass else compute_cut(sample, G_data, G_rows, G_cols, n)
 
-        best_index = np.argmin(energies)
+        best_index = np.argmax(energies)
         energy = energies[best_index]
-        if energy < best_energy:
+        if energy > best_energy:
             best_energy = energy
             best_solution = solutions[best_index].copy()
             improved = True
 
-    return best_solution, compute_cut(best_solution, G_data, G_rows, G_cols, n)
+    if is_spin_glass:
+        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n)
 
-
-@njit(parallel=True)
-def sample_for_cut(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base):
-    shots = max(1, shots >> 1)
-    n = G_rows.shape[0] - 1
-    tot_init_weight = weights.sum()
-
-    solutions = np.empty((shots, n), dtype=np.bool_)
-    cuts = np.empty(shots, dtype=dtype)
-
-    best_solution = solutions[0]
-    best_cut = -float("inf")
-
-    improved = True
-    while improved:
-        improved = False
-        for s in prange(shots):
-            # First dimension: Hamming weight
-            m = sample_mag(thresholds)
-
-            # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-            solutions[s] = sample
-            cuts[s] = compute_cut(sample, G_data, G_rows, G_cols, n)
-
-        best_index = np.argmax(cuts)
-        cut = cuts[best_index]
-        if cut > best_cut:
-            best_cut = cut
-            best_solution = solutions[best_index].copy()
-            improved = True
-
-    return best_solution, best_cut
+    return best_solution, best_energy
 
 
 @njit(parallel=True)
@@ -197,10 +166,7 @@ def cpu_footer(shots, quality, n_qubits, max_edge, G_data, G_rows, G_col, nodes,
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    if is_spin_glass:
-        best_solution, best_value = sample_for_energy(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base)
-    else:
-        best_solution, best_value = sample_for_cut(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base)
+    best_solution, best_value = sample_measurement(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
