@@ -274,3 +274,44 @@ def sample_mag(cum_prob):
             right = m - 1
 
     return m + 1
+
+@njit
+def init_bit_pick(weights, tot_init_weight, n):
+    r = np.random.rand()
+    cum = 0.0
+    node = 0
+    for i in range(n):
+        cum += weights[i]
+        if (tot_init_weight * r) < cum:
+            node = i
+            break
+
+    return node
+
+@njit
+def bit_pick(weights, used, n):
+    # Count available
+    total_w = 0.0
+    for i in range(n):
+        if used[i]:
+            continue
+        total_w += weights[i]
+
+    # Normalize & sample
+    r = np.random.rand()
+    cum = 0.0
+    node = -1
+    for i in range(n):
+        if used[i]:
+            continue
+        cum += weights[i]
+        if (total_w * r) < cum:
+            node = i
+            break
+
+    if node == -1:
+        node = 0
+        while used[node]:
+            node += 1
+
+    return node

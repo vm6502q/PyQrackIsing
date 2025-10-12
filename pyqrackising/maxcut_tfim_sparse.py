@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl_context, sample_mag, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
 
 
 epsilon = opencl_context.epsilon
@@ -48,14 +48,7 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_w
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
     # First bit:
-    r = np.random.rand()
-    cum = 0.0
-    node = 0
-    for i in range(n):
-        cum += weights[i]
-        if (tot_init_weight * r) < cum:
-            node = i
-            break
+    node = init_bit_pick(weights, tot_init_weight, n)
 
     if m == 1:
         used[node] = True
@@ -64,56 +57,12 @@ def local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_w
     update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, node, repulsion_base)
 
     for _ in range(1, m - 1):
-        # Count available
-        total_w = 0.0
-        for i in range(n):
-            if used[i]:
-                continue
-            total_w += weights[i]
-
-        # Normalize & sample
-        r = np.random.rand()
-        cum = 0.0
-        node = -1
-        for i in range(n):
-            if used[i]:
-                continue
-            cum += weights[i]
-            if (total_w * r) < cum:
-                node = i
-                break
-
-        if node == -1:
-            node = 0
-            while used[node]:
-                node += 1
+        node = bit_pick(weights, used, n)
 
         # Update answer and weights
         update_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, n, used, node, repulsion_base)
 
-    # Count available
-    total_w = 0.0
-    for i in range(n):
-        if used[i]:
-            continue
-        total_w += weights[i]
-
-    # Normalize & sample
-    r = np.random.rand()
-    cum = 0.0
-    node = -1
-    for i in range(n):
-        if used[i]:
-            continue
-        cum += weights[i]
-        if (total_w * r) < cum:
-            node = i
-            break
-
-    if node == -1:
-        node = 0
-        while used[node]:
-            node += 1
+    node = bit_pick(weights, used, n)
 
     used[node] = True
 
