@@ -18,7 +18,7 @@ From PyPi:
 pip3 install PyQrackIsing
 ```
 
-From Source: install `pybind11`, then
+From Source:
 ```
 pip3 install .
 ```
