@@ -274,7 +274,7 @@ for term, coeff in fermion_ham.terms.items():
 zx_qubits = list(zx_qubits)
 
 # Step 6: Bootstrap!
-def initial_energy(theta_bits, phi_bits, zx_hamiltonian):
+def compute_energy(theta_bits, phi_bits, zx_hamiltonian):
     energy = 0.0
     for qubits, bases, coeff in zx_hamiltonian:
         is_sat = True
@@ -294,31 +294,6 @@ def initial_energy(theta_bits, phi_bits, zx_hamiltonian):
     return energy
 
 
-def compute_energy(theta_bits, phi_bits, zx_hamiltonian, d_theta, d_phi, energy):
-    indices = set(d_theta) | set(d_phi)
-    for qubits, bases, coeff in zx_hamiltonian:
-        overlap = set(qubits) & indices
-        if (len(overlap) & 1) == 0:
-            continue
-
-        is_sat = True
-        for i in range(len(qubits)):
-            qubit = qubits[i]
-            if phi_bits[qubit] != bases[i]:
-                is_sat = False
-                break
-        if not is_sat:
-            continue
-
-        value = 2 * coeff
-        for qubit in qubits:
-            if theta_bits[qubit]:
-                value *= -1
-        energy += value
-
-    return energy
-
-
 def bootstrap_worker(theta, phi, zx_hamiltonian, d_theta, d_phi, energy):
     local_theta = theta.copy()
     for i in d_theta:
@@ -326,7 +301,7 @@ def bootstrap_worker(theta, phi, zx_hamiltonian, d_theta, d_phi, energy):
     local_phi = phi.copy()
     for i in d_phi:
         local_phi[i] = not local_phi[i]
-    energy = compute_energy(local_theta, local_phi, zx_hamiltonian, d_theta, d_phi, energy)
+    energy = compute_energy(local_theta, local_phi, zx_hamiltonian)
 
     return energy
 
@@ -346,10 +321,10 @@ def bootstrap(theta, phi, zx_hamiltonian, k, indices_array, energy):
 
 def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=0):
     best_theta = np.array(np.random.randint(2, size=n_qubits), dtype=np.bool_)
-    best_phi = np.zeros(n_qubits, dtype=np.bool_)
+    best_phi = np.array(np.random.randint(2, size=n_qubits), dtype=np.bool_)
     n_qubits = len(zx_qubits)
     print(f"Z/X qubits: {n_qubits}")
-    min_energy = initial_energy(best_theta, best_phi, zx_hamiltonian)
+    min_energy = compute_energy(best_theta, best_phi, zx_hamiltonian)
 
     combos_list = []
     reheat_theta = best_theta.copy()
@@ -420,12 +395,12 @@ def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=
             x_bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in x_bits_to_flip:
                 reheat_phi[bit] = not reheat_phi[bit]
-            reheat_min_energy = compute_energy(reheat_theta, reheat_phi, zx_hamiltonian, z_bits_to_flip, x_bits_to_flip, reheat_min_energy)
+            reheat_min_energy = compute_energy(reheat_theta, reheat_phi, zx_hamiltonian)
 
     return best_theta, best_phi, min_energy
 
 # Run threaded bootstrap
-theta, phi, min_energy = multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, 0)
+theta, phi, min_energy = multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, 2)
 
 print(f"\nFinal Bootstrap Ground State Energy: {min_energy} Ha")
 print("Final Bootstrap Parameters:")
