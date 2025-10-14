@@ -3,7 +3,7 @@
 # (Requires OpenFermion)
 
 import pennylane as qml
-from pennylane import numpy as np
+from pennylane import numpy as nppl
 from catalyst import qjit
 
 from pyscf import gto, scf, ao2mo
@@ -464,7 +464,7 @@ def fit_entanglement(hamiltonian, best_theta, n_qubits, min_energy):
         qml.CZ(wires=[n_qubits-1, 0])
         return qml.expval(hamiltonian)
 
-    best_delta = np.zeros(n_qubits, dtype=float, requires_grad=True)
+    best_delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
     delta = best_delta.copy()
     opt = qml.AdamOptimizer(stepsize=(np.pi / 1800)) #one tenth a degree
     num_steps = 100
