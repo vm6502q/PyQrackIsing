@@ -1,5 +1,5 @@
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
-from .maxcut_tfim import maxcut_tfim
+from .maxcut_tfim import maxcut_tfim_pure_numba
 from concurrent.futures import ProcessPoolExecutor
 import time
 import itertools
@@ -621,6 +621,47 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     return [nodes[x] for x in best_path], best_weight
 
 
+@njit
+def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
+    if (start_node is None) and not (end_node is None):
+        start_node = end_node
+        end_node = None
+
+    a, b, c = [0], [0], [0]
+    a.clear()
+    b.clear()
+    c.clear()
+    if (start_node is None) and (end_node is None):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_cut = -float("inf")
+            for _ in range(multi_start):
+                bits = ([0], [0])
+                bits[0].clear()
+                bits[1].clear()
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+                    _, cut_value, bits = maxcut_tfim_pure_numba(G_m, nodes, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                if cut_value > best_cut:
+                    best_cut = cut_value
+                    a, b = bits
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
+
+    G_a, G_b = init_G_a_b(G_m, a, b)
+
+    return a, b, c, G_a, G_b, is_cyclic
+
 def tsp_symmetric(
     G,
     start_node=None,
@@ -651,10 +692,6 @@ def tsp_symmetric(
         nodes = list(range(n_nodes))
         G_m = G
 
-    if is_cyclic:
-        start_node = None
-        end_node = None
-
     if n_nodes < 7:
         if n_nodes > 3:
             if is_cyclic:
@@ -666,35 +703,7 @@ def tsp_symmetric(
 
         return tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
 
-    if (start_node is None) and not (end_node is None):
-        start_node = end_node
-        end_node = None
-
-    a = []
-    b = []
-    c = []
-    if (start_node is None) and (end_node is None):
-        if monte_carlo:
-            a, b = monte_carlo_loop(n_nodes)
-        else:
-            best_cut = -float("inf")
-            for _ in range(multi_start):
-                bits = ([], [])
-                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim(G_m, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
-                if cut_value > best_cut:
-                    best_cut = cut_value
-                    a, b = bits
-    else:
-        is_cyclic = False
-        a.append(nodes.index(start_node))
-        b = list(range(n_nodes))
-        b.remove(a[0])
-        if end_node is not None:
-            c.append(nodes.index(end_node))
-            b.remove(c[0])
-
-    G_a, G_b = init_G_a_b(G_m, a, b)
+    a, b, c, G_a, G_b, is_cylic = tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start)
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 3) and (len(b) > 3):
         with ProcessPoolExecutor(max_workers=1) as executor:
@@ -827,6 +836,51 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     return [nodes[x] for x in final_path], best_weight
 
 
+@njit
+def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
+    if is_cyclic:
+        start_node = None
+        end_node = None
+
+    is_reversed = False
+    if (start_node is None) and not (end_node is None):
+        is_reversed = True
+        start_node = end_node
+        end_node = None
+        G_m = G_m.T
+
+    a, b, c = [0], [0], [0]
+    a.clear()
+    b.clear()
+    c.clear()
+    if (start_node is None) and (end_node is None):
+        if monte_carlo:
+            a, b = monte_carlo_loop(n_nodes)
+        else:
+            best_cut = -float("inf")
+            for _ in range(multi_start):
+                bits = ([0], [0])
+                bits[0].clear()
+                bits[1].clear()
+                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
+                    _, cut_value, bits = maxcut_tfim_pure_numba((G_m + G_m.T) / 2, nodes, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                if cut_value > best_cut:
+                    best_cut = cut_value
+                    a, b = bits
+    else:
+        is_cyclic = False
+        a.append(nodes.index(start_node))
+        b = list(range(n_nodes))
+        b.remove(a[0])
+        if end_node is not None:
+            c.append(nodes.index(end_node))
+            b.remove(c[0])
+
+    G_a, G_b = init_G_a_b(G_m, a, b)
+
+    return a, b, c, G_a, G_b, is_cyclic, is_reversed
+
+
 def tsp_asymmetric(
     G,
     start_node=None,
@@ -857,10 +911,6 @@ def tsp_asymmetric(
         nodes = list(range(n_nodes))
         G_m = G
 
-    if is_cyclic:
-        start_node = None
-        end_node = None
-
     if n_nodes < 7:
         if n_nodes > 2:
             if is_cyclic:
@@ -872,39 +922,7 @@ def tsp_asymmetric(
 
         return tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic)
 
-
-    is_reversed = False
-    if (start_node is None) and not (end_node is None):
-        is_reversed = True
-        start_node = end_node
-        end_node = None
-        G_m = G_m.T
-
-    a = []
-    b = []
-    c = []
-    if (start_node is None) and (end_node is None):
-        if monte_carlo:
-            a, b = monte_carlo_loop(n_nodes)
-        else:
-            best_cut = -float("inf")
-            for _ in range(multi_start):
-                bits = ([], [])
-                while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim((G_m + G_m.T) / 2, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
-                if cut_value > best_cut:
-                    best_cut = cut_value
-                    a, b = bits
-    else:
-        is_cyclic = False
-        a.append(nodes.index(start_node))
-        b = list(range(n_nodes))
-        b.remove(a[0])
-        if end_node is not None:
-            c.append(nodes.index(end_node))
-            b.remove(c[0])
-
-    G_a, G_b = init_G_a_b(G_m, a, b)
+    a, b, c, G_a, G_b, is_cyclic, is_reversed = tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start)
 
     if monte_carlo and is_parallel and (parallel_level < max_parallel_level) and (len(a) > 2) and (len(b) > 2):
         with ProcessPoolExecutor(max_workers=1) as executor:

@@ -158,8 +158,10 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     return bit_string, best_value, (l, r)
 
 
-def maxcut_tfim(
-    G,
+@njit
+def maxcut_tfim_pure_numba(
+    G_m,
+    nodes,
     quality=None,
     shots=None,
     is_spin_glass=False,
@@ -167,30 +169,22 @@ def maxcut_tfim(
     anneal_h=None,
     repulsion_base=None
 ):
-    wgs = opencl_context.work_group_size
-    nodes = None
-    n_qubits = 0
-    G_m = None
-    if isinstance(G, nx.Graph):
-        nodes = list(G.nodes())
-        n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
-    else:
-        n_qubits = len(G)
-        nodes = list(range(n_qubits))
-        G_m = G
+    n_qubits = len(G_m)
 
     if n_qubits < 3:
+        empty = [nodes[0]]
+        empty.clear()
+
         if n_qubits == 0:
-            return "", 0, ([], [])
+            return "", 0, (empty, empty.copy())
 
         if n_qubits == 1:
-            return "0", 0, (nodes, [])
+            return "0", 0, (nodes, empty)
 
         if n_qubits == 2:
             weight = G_m[0, 1]
             if weight < 0.0:
-                return "00", 0, (nodes, [])
+                return "00", 0, (nodes, empty)
 
             return "01", weight, ([nodes[0]], [nodes[1]])
 
@@ -214,6 +208,29 @@ def maxcut_tfim(
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty
-        return '0' * n_qubits, 0.0, (nodes, [])
+        empty = [nodes[0]]
+        empty.clear()
+
+        return '0' * n_qubits, 0.0, (nodes, empty)
 
     return bit_string, best_value, partition
+
+def maxcut_tfim(
+    G,
+    quality=None,
+    shots=None,
+    is_spin_glass=False,
+    anneal_t=None,
+    anneal_h=None,
+    repulsion_base=None
+):
+    nodes = None
+    G_m = None
+    if isinstance(G, nx.Graph):
+        nodes = list(G.nodes())
+        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
+    else:
+        nodes = list(range(len(G)))
+        G_m = G
+
+    return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
