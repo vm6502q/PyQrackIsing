@@ -312,13 +312,8 @@ def bootstrap(theta, k, indices_array):
     return energies
 
 
-def occupancy_penalty(n_electrons, theta, lam=1.0):
-    return lam * (((sum(theta) - n_electrons) / n_electrons) ** 2)
-
-
 def multiprocessing_bootstrap(n_qubits, n_electrons, lam=1.0):
     best_theta = np.random.randint(2, size=n_qubits)
-    min_occ_penalty = occupancy_penalty(n_electrons, best_theta, lam)
     min_energy, z_qubits = initial_energy(best_theta)
     n_qubits = len(z_qubits)
     print(f"Z qubits: {n_qubits}")
@@ -341,11 +336,9 @@ def multiprocessing_bootstrap(n_qubits, n_electrons, lam=1.0):
             energy = min(energies)
             index_match = energies.index(energy)
             indices = combos[(index_match * k) : ((index_match + 1) * k)]
-            occ_penalty = occupancy_penalty(n_electrons, indices, lam)
 
-            if (energy + occ_penalty) < (min_energy + min_occ_penalty):
+            if energy < min_energy:
                 min_energy = energy
-                min_occ_penalty = occ_penalty
                 for i in indices:
                     best_theta[i] = not best_theta[i]
                 improved = True
