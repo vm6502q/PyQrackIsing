@@ -13,6 +13,7 @@ from openfermionpyscf import run_pyscf
 import itertools
 import multiprocessing
 import os
+import random
 
 
 # Step 0: Set environment variables (before running script)
@@ -35,7 +36,7 @@ charge = 0  # Excess +/- elementary charge, beyond multiplicity
 
 # Hydrogen (and lighter):
 
-# geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
+geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
 # Helium (and lighter):
 
@@ -61,12 +62,12 @@ charge = 0  # Excess +/- elementary charge, beyond multiplicity
 # geometry = [('N', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 1.10))]  # N2 Molecule
 
 # Ammonia:
-geometry = [
-    ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
-    ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
-]
+# geometry = [
+#     ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+#     ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+#     ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
+#     ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
+# ]
 
 # Oxygen (and lighter):
 
@@ -361,47 +362,71 @@ def bootstrap(theta, z_hamiltonian, k, indices_array, energy):
     return energies
 
 
-def multiprocessing_bootstrap(hamiltonian, z_hamiltonian, z_qubits, n_qubits):
+def multiprocessing_bootstrap(hamiltonian, z_hamiltonian, z_qubits, n_qubits, reheat_tries=0):
     best_theta = np.random.randint(2, size=n_qubits)
     n_qubits = len(z_qubits)
     print(f"Z qubits: {n_qubits}")
-    min_occ_penalty = occupancy_penalty(n_electrons, best_theta, lam)
     min_energy = initial_energy(best_theta, z_hamiltonian)
-    improved = True
-    quality = 1
-    while improved:
-        improved = False
-        k = 1
-        while k <= quality:
-            if n_qubits < k:
-                break
 
-            theta = best_theta.copy()
+    combos_list = []
+    reheat_theta = best_theta.copy()
+    reheat_min_energy = min_energy
+    for reheat_round in range(reheat_tries + 1):
+        improved = True
+        quality = 1
+        while improved:
+            improved = False
+            k = 1
+            while k <= quality:
+                if n_qubits < k:
+                    break
 
-            combos = list(
-                item for sublist in itertools.combinations(z_qubits, k) for item in sublist
-            )
-            energies = bootstrap(theta, z_hamiltonian, k, combos, min_energy)
+                if len(combos_list) < k:
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
+                    ))
+                    combos_list.append(combos)
+                else:
+                    combos = combos_list[k - 1]
 
-            energy = min(energies)
-            index_match = energies.index(energy)
-            indices = combos[(index_match * k) : ((index_match + 1) * k)]
-            occ_penalty = occupancy_penalty(n_electrons, indices, lam)
+                energies = bootstrap(reheat_theta, z_hamiltonian, k, combos, reheat_min_energy)
 
-            if (energy + occ_penalty) < (min_energy + min_occ_penalty):
-                min_energy = energy
-                min_occ_penalty = occ_penalty
-                for i in indices:
-                    best_theta[i] = not best_theta[i]
-                improved = True
-                if quality < (k + 1):
-                    quality = k + 1
-                print(f"  Qubits {indices} flip accepted. New energy: {min_energy}")
-                print(f"  {best_theta}")
-                break
+                energy = min(energies)
+                index_match = energies.index(energy)
+                indices = combos[(index_match * k) : ((index_match + 1) * k)]
 
-            k = k + 1
-            print("  Qubit flips all rejected.")
+                if energy < reheat_min_energy:
+                    reheat_min_energy = energy
+                    for i in indices:
+                        reheat_theta[i] = not reheat_theta[i]
+                    improved = True
+                    if quality < (k + 1):
+                        quality = k + 1
+                    if reheat_min_energy < min_energy:
+                        print(f"  Qubits {indices} flip accepted. New energy: {reheat_min_energy}")
+                        print(f"  {reheat_theta}")
+                    break
+
+                k = k + 1
+                print("  Qubit flips all rejected.")
+
+        if min_energy < reheat_min_energy:
+            reheat_theta = best_theta.copy()
+            reheat_min_energy = min_energy
+        else:
+            best_theta = reheat_theta.copy()
+            min_energy = reheat_min_energy
+
+        if reheat_round < reheat_tries:
+            print("  Reheating...")
+            num_to_flip = int(np.round(np.log2(len(reheat_theta))))
+            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
+            for bit in bits_to_flip:
+                reheat_theta[bit] = not reheat_theta[bit]
+            reheat_min_energy = compute_energy(reheat_theta, z_hamiltonian, bits_to_flip, reheat_min_energy)
+
+    print("Final Boostrap Parameters:")
+    print(best_theta)
 
     # Fast low-width simulation:
     dev = qml.device("lightning.qubit", wires=n_qubits)
@@ -441,7 +466,7 @@ def multiprocessing_bootstrap(hamiltonian, z_hamiltonian, z_qubits, n_qubits):
     return best_theta, best_delta, min_energy
 
 # Run threaded bootstrap
-theta, delta, min_energy = multiprocessing_bootstrap(hamiltonian, z_hamiltonian, z_qubits, n_qubits)
+theta, delta, min_energy = multiprocessing_bootstrap(hamiltonian, z_hamiltonian, z_qubits, n_qubits, 1)
 
 print(f"\nFinal Ground State Energy: {min_energy} Ha")
 print("Final Parameters:")
