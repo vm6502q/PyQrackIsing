@@ -623,6 +623,8 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
 
 @njit
 def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
+    n_x = nodes[0]
+
     if is_cyclic:
         start_node = None
         end_node = None
@@ -631,7 +633,7 @@ def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsi
         start_node = end_node
         end_node = None
 
-    a, b, c = [0], [0], [0]
+    a, b, c = [n_x], [n_x], [n_x]
     a.clear()
     b.clear()
     c.clear()
@@ -641,7 +643,7 @@ def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsi
         else:
             best_cut = -float("inf")
             for _ in range(multi_start):
-                bits = ([0], [0])
+                bits = ([n_x], [n_x])
                 bits[0].clear()
                 bits[1].clear()
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
@@ -838,6 +840,8 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
 
 @njit
 def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
+    n_x = nodes[0]
+
     if is_cyclic:
         start_node = None
         end_node = None
@@ -849,7 +853,7 @@ def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repuls
         end_node = None
         G_m = G_m.T
 
-    a, b, c = [0], [0], [0]
+    a, b, c = [n_x], [n_x], [n_x]
     a.clear()
     b.clear()
     c.clear()
@@ -859,7 +863,7 @@ def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repuls
         else:
             best_cut = -float("inf")
             for _ in range(multi_start):
-                bits = ([0], [0])
+                bits = ([n_x], [n_x])
                 bits[0].clear()
                 bits[1].clear()
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
