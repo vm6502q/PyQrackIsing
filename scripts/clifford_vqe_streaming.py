@@ -367,9 +367,9 @@ def multiprocessing_bootstrap(n_qubits, n_electrons, reheat_tries=0):
             best_theta = reheat_theta.copy()
             min_energy = reheat_min_energy
 
-        if reheat_round <= reheat_tries:
+        if reheat_round < reheat_tries:
             print("  Reheating...")
-            num_to_flip = int(np.round(np.log2(n_qubits)))
+            num_to_flip = int(np.round(np.log2(len(reheat_theta))))
             bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]

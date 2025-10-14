@@ -327,7 +327,7 @@ def spin_glass_solver_sparse(
             best_theta = reheat_theta.copy()
             min_energy = reheat_min_energy
 
-        if reheat_round <= reheat_tries:
+        if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
             bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in bits_to_flip:
