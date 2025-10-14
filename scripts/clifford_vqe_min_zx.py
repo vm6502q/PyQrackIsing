@@ -320,8 +320,8 @@ def bootstrap(theta, phi, zx_hamiltonian, k, indices_array, energy):
 
 
 def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=0):
-    best_theta = np.array(np.random.randint(2, size=n_qubits), dtype=np.bool_)
-    best_phi = np.array(np.random.randint(2, size=n_qubits), dtype=np.bool_)
+    best_theta = np.random.randint(2, size=n_qubits)
+    best_phi = np.random.randint(2, size=n_qubits)
     n_qubits = len(zx_qubits)
     print(f"Z/X qubits: {n_qubits}")
     min_energy = compute_energy(best_theta, best_phi, zx_hamiltonian)
