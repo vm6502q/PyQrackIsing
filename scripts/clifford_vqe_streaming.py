@@ -10,6 +10,7 @@ import itertools
 import multiprocessing
 import numpy as np
 import os
+import random
 
 
 # Step 1: Define the molecule (Hydrogen, Helium, Lithium, Carbon, Nitrogen, Oxygen)
@@ -312,49 +313,72 @@ def bootstrap(theta, k, indices_array):
     return energies
 
 
-def multiprocessing_bootstrap(n_qubits, n_electrons, lam=1.0):
+def multiprocessing_bootstrap(n_qubits, n_electrons, reheat_tries=0):
     best_theta = np.random.randint(2, size=n_qubits)
     min_energy, z_qubits = initial_energy(best_theta)
     n_qubits = len(z_qubits)
     print(f"Z qubits: {n_qubits}")
-    improved = True
-    quality = 1
-    while improved:
-        improved = False
-        k = 1
-        while k <= quality:
-            if n_qubits < k:
-                break
 
-            theta = best_theta.copy()
+    combos_list = []
+    reheat_theta = best_theta.copy()
+    reheat_min_energy = min_energy
+    for reheat_round in range(reheat_tries + 1):
+        improved = True
+        quality = 1
+        while improved:
+            improved = False
+            k = 1
+            while k <= quality:
+                if n_qubits < k:
+                    break
 
-            combos = list(
-                item for sublist in itertools.combinations(z_qubits, k) for item in sublist
-            )
-            energies = bootstrap(theta, k, combos)
+                if len(combos_list) < k:
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
+                    ))
+                    combos_list.append(combos)
+                else:
+                    combos = combos_list[k - 1]
 
-            energy = min(energies)
-            index_match = energies.index(energy)
-            indices = combos[(index_match * k) : ((index_match + 1) * k)]
+                energies = bootstrap(reheat_theta, k, combos)
 
-            if energy < min_energy:
-                min_energy = energy
-                for i in indices:
-                    best_theta[i] = not best_theta[i]
-                improved = True
-                if quality < (k + 1):
-                    quality = k + 1
-                print(f"  Qubits {indices} flip accepted. New energy: {min_energy}")
-                print(f"  {best_theta}")
-                break
+                energy = min(energies)
+                index_match = energies.index(energy)
+                indices = combos[(index_match * k) : ((index_match + 1) * k)]
 
-            k = k + 1
-            print("  Qubit flips all rejected.")
+                if energy < reheat_min_energy:
+                    reheat_min_energy = energy
+                    for i in indices:
+                        reheat_theta[i] = not reheat_theta[i]
+                    improved = True
+                    if quality < (k + 1):
+                        quality = k + 1
+                    if reheat_min_energy < min_energy:
+                        print(f"  Qubits {indices} flip accepted. New energy: {reheat_min_energy}")
+                        print(f"  {reheat_theta}")
+                    break
+
+                k = k + 1
+                print("  Qubit flips all rejected.")
+
+        if min_energy < reheat_min_energy:
+            reheat_theta = best_theta.copy()
+        else:
+            best_theta = reheat_theta.copy()
+            min_energy = reheat_min_energy
+
+        if reheat_round <= reheat_tries:
+            print("  Reheating...")
+            num_to_flip = int(np.round(np.log2(n_qubits)))
+            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
+            for bit in bits_to_flip:
+                reheat_theta[bit] = not reheat_theta[bit]
+            reheat_min_energy = compute_energy(reheat_theta)
 
     return best_theta, min_energy
 
 # Run threaded bootstrap
-theta, min_energy = multiprocessing_bootstrap(n_qubits, n_electrons)
+theta, min_energy = multiprocessing_bootstrap(n_qubits, n_electrons, 1)
 
 print(f"\nFinal Bootstrap Ground State Energy: {min_energy} Ha")
 print("Final Bootstrap Parameters:")
