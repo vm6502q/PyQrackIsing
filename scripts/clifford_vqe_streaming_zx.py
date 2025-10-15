@@ -216,13 +216,6 @@ geometry = [
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
 # Step 2: Compute the Molecular Hamiltonian
-molecule = MolecularData(geometry, basis, multiplicity, charge)
-molecule = run_pyscf(molecule, run_scf=True, run_fci=True)
-fermionic_hamiltonian = molecule.get_molecular_hamiltonian()
-n_qubits = molecule.n_qubits  # Auto-detect qubit count
-print(str(n_qubits) + " qubits...")
-
-# Step 3: Convert to Qubit Hamiltonian (Jordan-Wigner)
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
     return "; ".join(
@@ -240,7 +233,7 @@ mol = gto.M(
 
 mf = scf.RHF(mol).run()
 
-# Step 4: Create OpenFermion molecule
+# Step 3: Create OpenFermion molecule
 molecule_of = MolecularData(geometry, basis, multiplicity=1, charge=0)
 molecule_of = run_pyscf(molecule_of, run_scf=True, run_mp2=False, run_cisd=False, run_ccsd=False, run_fci=False)
 fermion_ham = get_fermion_operator(molecule_of.get_molecular_hamiltonian())
@@ -248,88 +241,71 @@ fermion_ham = get_fermion_operator(molecule_of.get_molecular_hamiltonian())
 n_qubits = mol.nao << 1
 print(f"{n_qubits} qubits...")
 
-# Step 5: Iterate JW terms without materializing full op
-zx_hamiltonian = []
-zx_qubits = set()
-for term, coeff in fermion_ham.terms.items():
-    jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
-
-    for pauli_string, jw_coeff in jw_term.terms.items():
-        # Skip terms with X or Y
-        if any(p in ('Y') for _, p in pauli_string):
-            continue
-
-        q = []
-        b = []
-        for qubit, op in pauli_string:
-            # Z/I terms: keep only Z
-            if op == 'I':
-                continue
-            q.append(qubit)
-            b.append(op == 'X')
-            zx_qubits.add(qubit)
-
-        zx_hamiltonian.append((q, b, jw_coeff.real))
-
-zx_qubits = list(zx_qubits)
-
-# Step 6: Bootstrap!
-def compute_energy(theta_bits, phi_bits, zx_hamiltonian):
+# Step 4: Bootstrap!
+def compute_energy(theta_bits, phi_bits):
     energy = 0.0
-    for qubits, bases, coeff in zx_hamiltonian:
-        is_sat = True
-        for i in range(len(qubits)):
-            qubit = qubits[i]
-            if phi_bits[qubit] != bases[i]:
-                is_sat = False
-                break
-        if not is_sat:
-            continue
+    for term, coeff in fermion_ham.terms.items():
+        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
 
-        for qubit in qubits:
-            if theta_bits[qubit]:
-                coeff *= -1
-        energy += coeff
+        for pauli_string, jw_coeff in jw_term.terms.items():
+            # Skip terms with X or Y
+            if any(p in ('Y') for _, p in pauli_string):
+                continue
+
+            is_sat = True
+            for qubit, op in pauli_string:
+                if (op == 'X') != phi_bits[qubit]:
+                    is_sat = False
+                    break
+            if not is_sat:
+                continue
+
+            term_value = jw_coeff.real
+            for qubit, op in pauli_string:
+                # Z/I terms: keep only Z
+                if op == 'I':
+                    continue
+                if theta_bits[qubit]:
+                    term_value *= -1
+            energy += term_value
 
     return energy
 
 
-def bootstrap_worker(theta, phi, zx_hamiltonian, d_theta, d_phi, energy):
+def bootstrap_worker(theta, phi, d_theta, d_phi):
     local_theta = theta.copy()
     for i in d_theta:
         local_theta[i] = not local_theta[i]
     local_phi = phi.copy()
     for i in d_phi:
         local_phi[i] = not local_phi[i]
-    energy = compute_energy(local_theta, local_phi, zx_hamiltonian)
+    energy = compute_energy(local_theta, local_phi)
 
     return energy
 
 
-def bootstrap(theta, phi, zx_hamiltonian, k, indices_array, energy):
+def bootstrap(theta, phi, k, indices_array):
     n = len(indices_array) // k
     with multiprocessing.Pool(processes=os.cpu_count()) as pool:
         args = []
         for i in range(n):
             j = i * k
-            args.append((theta, phi, zx_hamiltonian, indices_array[j : j + k], [], energy))
+            args.append((theta, phi, indices_array[j : j + k], []))
         for i in range(n):
             j = i * k
-            args.append((theta, phi, zx_hamiltonian, [], indices_array[j : j + k], energy))
+            args.append((theta, phi, [], indices_array[j : j + k]))
         for i in range(n):
             j = i * k
-            args.append((theta, phi, zx_hamiltonian, indices_array[j : j + k], indices_array[j : j + k], energy))
+            args.append((theta, phi, indices_array[j : j + k], indices_array[j : j + k]))
         energies = pool.starmap(bootstrap_worker, args)
 
     return energies
 
 
-def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=0):
+def multiprocessing_bootstrap(n_qubits, reheat_tries=0):
     best_theta = np.random.randint(2, size=n_qubits)
     best_phi = np.random.randint(2, size=n_qubits)
-    n_qubits = len(zx_qubits)
-    print(f"Z/X qubits: {n_qubits}")
-    min_energy = compute_energy(best_theta, best_phi, zx_hamiltonian)
+    min_energy = compute_energy(best_theta, best_phi)
 
     combos_list = []
     reheat_theta = best_theta.copy()
@@ -347,13 +323,13 @@ def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=
 
                 if len(combos_list) < k:
                     combos = np.array(list(
-                        item for sublist in itertools.combinations(zx_qubits, k) for item in sublist
+                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
                     ))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
 
-                energies = bootstrap(reheat_theta, reheat_phi, zx_hamiltonian, k, combos, reheat_min_energy)
+                energies = bootstrap(reheat_theta, reheat_phi, k, combos)
 
                 energy = min(energies)
 
@@ -403,12 +379,13 @@ def multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, reheat_tries=
             x_bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
             for bit in x_bits_to_flip:
                 reheat_phi[bit] = not reheat_phi[bit]
-            reheat_min_energy = compute_energy(reheat_theta, reheat_phi, zx_hamiltonian)
+            reheat_min_energy = compute_energy(reheat_theta, reheat_phi)
 
     return best_theta, best_phi, min_energy
 
+
 # Run threaded bootstrap
-theta, phi, min_energy = multiprocessing_bootstrap(zx_hamiltonian, zx_qubits, n_qubits, 1)
+theta, phi, min_energy = multiprocessing_bootstrap(n_qubits, 2)
 
 print(f"\nFinal Bootstrap Ground State Energy: {min_energy} Ha")
 print("Final Bootstrap Parameters:")
