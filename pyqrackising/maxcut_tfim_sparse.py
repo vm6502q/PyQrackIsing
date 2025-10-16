@@ -130,46 +130,42 @@ def sample_measurement(max_edge, G_data, G_rows, G_cols, shots, thresholds, weig
     return best_solution, best_energy
 
 
-@njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols, G_min):
-    n_qubits = G_rows.shape[0] - 1
-    degrees = np.zeros(n_qubits, dtype=np.uint32)
-    J_eff = np.zeros(n_qubits, dtype=np.float64)
-    for r in prange(n_qubits):
-        # Row sum
-        start = G_rows[r]
-        end = G_rows[r + 1]
-        degree = end - start
-        val = G_data[start:end].sum() - (G_min * degree)
+def init_J_and_z(G_m):
+    G_min = G_m.min()
+    n_qubits = G_m.shape[0]
+    degrees = np.empty(n_qubits, dtype=np.uint32)
+    J_eff = np.empty(n_qubits, dtype=np.float64)
+    G_max = -float("inf")
+    for n in prange(n_qubits):
+        degree = 0
+        J = 0.0
+        for m in range(n_qubits):
+            val = G_m[n, m]
+            if val > G_max:
+                G_max = val
+            val -= G_min
+            if val != 0.0:
+                degree += 1
+                J += val
+                val = abs(val)
+        J = -J / degree if degree > 0 else 0
+        degrees[n] = degree
+        J_eff[n] = J
 
-        degrees[r] += degree
-        J_eff[r] += val
+    G_min = abs(G_min)
+    G_max = abs(G_max)
+    if G_min > G_max:
+        G_max = G_min
 
-        # Column sum
-        for idx in range(start, end):
-            c = G_cols[idx]
-            degrees[c] += 1
-            J_eff[c] += G_data[idx]
-
-    for r in prange(n_qubits):
-        degree = degrees[r]
-        J_eff[r] = -J_eff[r] / degree if degree > 0 else 0
-
-    return J_eff, degrees
+    return J_eff, degrees, G_max
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_max, G_min, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, G_min)
+def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
-
-    G_max = abs(G_max)
-    G_min = abs(G_min)
-    if G_min > G_max:
-        G_max = G_min
 
     best_solution, best_value = sample_measurement(G_max, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
@@ -230,10 +226,9 @@ def maxcut_tfim_sparse(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    G_max = G_m.max()
-    G_min = G_m.min()
+    J_eff, degrees, G_max = init_J_and_z(G_m)
 
-    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_max, G_min, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty
