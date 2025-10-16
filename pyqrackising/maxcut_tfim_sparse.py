@@ -131,7 +131,7 @@ def sample_measurement(max_edge, G_data, G_rows, G_cols, shots, thresholds, weig
 
 
 @njit(parallel=True)
-def init_J_and_z(G_data, G_rows, G_cols):
+def init_J_and_z(G_data, G_rows, G_cols, G_min):
     n_qubits = G_rows.shape[0] - 1
     degrees = np.zeros(n_qubits, dtype=np.uint32)
     J_eff = np.zeros(n_qubits, dtype=np.float64)
@@ -140,7 +140,7 @@ def init_J_and_z(G_data, G_rows, G_cols):
         start = G_rows[r]
         end = G_rows[r + 1]
         degree = end - start
-        val = G_data[start:end].sum()
+        val = G_data[start:end].sum() - (G_min * degree)
 
         degrees[r] += degree
         J_eff[r] += val
@@ -159,14 +159,19 @@ def init_J_and_z(G_data, G_rows, G_cols):
 
 
 @njit
-def cpu_footer(shots, quality, n_qubits, max_edge, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col)
+def cpu_footer(shots, quality, n_qubits, G_max, G_min, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
+    J_eff, degrees = init_J_and_z(G_data, G_rows, G_col, G_min)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_measurement(max_edge, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
+    G_max = abs(G_max)
+    G_min = abs(G_min)
+    if G_min > G_max:
+        G_max = G_min
+
+    best_solution, best_value = sample_measurement(G_max, G_data, G_rows, G_col, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
@@ -225,12 +230,10 @@ def maxcut_tfim_sparse(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    max_edge = abs(G_m.max())
-    min_edge = abs(G_m.min())
-    if min_edge > max_edge:
-        max_edge = min_edge
+    G_max = G_m.max()
+    G_min = G_m.min()
 
-    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, max_edge, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_max, G_min, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty

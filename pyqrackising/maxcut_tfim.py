@@ -121,6 +121,7 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
 
 @njit(parallel=True)
 def init_J_and_z(G_m):
+    G_min = G_m.min()
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
@@ -130,15 +131,21 @@ def init_J_and_z(G_m):
         J = 0.0
         for m in range(n_qubits):
             val = G_m[n, m]
+            if val > G_max:
+                G_max = val
+            val -= G_min
             if val != 0.0:
                 degree += 1
                 J += val
                 val = abs(val)
-            if val > G_max:
-                G_max = val
         J = -J / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
+
+    G_min = abs(G_min)
+    G_max = abs(G_max)
+    if G_min > G_max:
+        G_max = G_min
 
     return J_eff, degrees, G_max
 

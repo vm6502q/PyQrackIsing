@@ -119,7 +119,7 @@ def sample_measurement(G_func, nodes, max_edge, shots, thresholds, degrees_sum, 
 
 
 @njit(parallel=True)
-def init_J_and_z(G_func, nodes):
+def init_J_and_z(G_func, nodes, G_min):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
@@ -129,22 +129,36 @@ def init_J_and_z(G_func, nodes):
         J = 0.0
         for m in range(n_qubits):
             val = G_func(nodes[n], nodes[m])
+            if val > G_max:
+                G_max = val
+            val -= G_min
             if val != 0.0:
                 degree += 1
                 J += val
                 val = abs(val)
-            if val > G_max:
-                G_max = val
         J = -J / degree if degree > 0 else 0
         degrees[n] = degree
         J_eff[n] = J
 
     return J_eff, degrees, G_max
 
+@njit
+def find_G_min(G_func, nodes, n_nodes):
+    G_min = float("inf")
+    for i in range(n_nodes):
+        u = nodes[i]
+        for j in range(i + 1, n_nodes):
+            v = nodes[j]
+            val = G_func(u, v)
+            if val < G_min:
+                G_min = val
+
+    return G_min
+
 
 @njit
-def cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, max_edge = init_J_and_z(G_func, nodes)
+def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
+    J_eff, degrees, max_edge = init_J_and_z(G_func, nodes, G_min)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
     degrees_sum = degrees.sum()
 
@@ -201,7 +215,9 @@ def maxcut_tfim_streaming(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    G_min = find_G_min(G_func, nodes, n_qubits)
+
+    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty
