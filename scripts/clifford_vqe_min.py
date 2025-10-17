@@ -398,14 +398,14 @@ while is_charge_update:
     print(theta)
 
     r_electrons = theta.sum()
-    if n_electrons != r_electrons:
-        d_electrons = r_electrons - n_electrons
-        r_charge = charge - d_electrons
-        r_multiplicity = 1
-        for i in range(0, len(theta), 2):
-            if theta[i] != theta[i + 1]:
-                r_multiplicity += 1
+    d_electrons = r_electrons - n_electrons
+    r_charge = charge - d_electrons
+    r_multiplicity = 1
+    for i in range(0, len(theta), 2):
+        if theta[i] != theta[i + 1]:
+            r_multiplicity += 1
 
+    if n_electrons != r_electrons or multiplicity != r_multiplicity:
         print()
         print("Regresssed electron count doesn't match the assumptions!")
         print("Running again with the natural parameters replacing your assumptions:")
