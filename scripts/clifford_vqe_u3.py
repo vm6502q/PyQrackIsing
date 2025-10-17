@@ -413,9 +413,10 @@ while is_charge_update:
     if n_electrons != r_electrons:
         d_electrons = r_electrons - n_electrons
         r_charge = charge - d_electrons
-        r_multiplicity = abs(multiplicity - abs(d_electrons)) & 1
-        if r_multiplicity == 0:
-            r_multiplicity = 2
+        r_multiplicity = 1
+        for i in range(0, len(theta), 2):
+            if theta[i] != theta[i + 1]:
+                r_multiplicity += 1
 
         print()
         print("Regresssed electron count doesn't match the assumptions!")
