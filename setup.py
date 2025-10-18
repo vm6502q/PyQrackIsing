@@ -7,7 +7,7 @@ with open(README_PATH) as readme_file:
 
 setup(
     name='pyqrackising',
-    version='8.11.0',
+    version='8.12.0',
     author='Dan Strano',
     author_email='stranoj@gmail.com',
     description='Fast MAXCUT, TSP, and sampling heuristics from near-ideal transverse field Ising model (TFIM)',
