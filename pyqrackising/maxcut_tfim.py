@@ -95,11 +95,13 @@ def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_gla
     beam_energies = np.zeros(beam_width)
 
     n_bias = len(cum_prob)
-    hamming_prob = np.empty(n_bias, dtype=np.float64)
+    hamming_prob = np.zeros(n_bias, dtype=np.float64)
     tot_prob = 0.0
     for i in range(n_bias):
-        hamming_prob[i] = max(0.0, cum_prob[i] - tot_prob)
+        hamming_prob[i] = cum_prob[i] - tot_prob
         tot_prob += hamming_prob[i]
+        if (1.0 - cum_prob[i]) <= epsilon:
+            break
 
     cum_prob[-1] = 2.0
     repulsion_coeff = 1 / repulsion_base
