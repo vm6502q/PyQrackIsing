@@ -85,49 +85,27 @@ def compute_cut(sample, G_m, n_qubits):
 # Implemented by Elara (the custom OpenAI GPT) and Dan Strano,
 # combining her help on beam search with Dan's TFIM heuristic
 @njit(parallel=True)
-def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, cum_prob, shots, beam_width=32):
+def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, hamming_prob, shots, beam_width=32):
     tot_init_weight = weights.sum()
 
     best_solution = np.zeros(n, dtype=np.bool_)
     best_energy = -float("inf")
 
-    beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
-    beam_energies = np.zeros(beam_width)
-
-    n_bias = len(cum_prob)
-    hamming_prob = np.zeros(n_bias, dtype=np.float64)
-    tot_prob = 0.0
-    for i in range(n_bias):
-        hamming_prob[i] = cum_prob[i] - tot_prob
-        tot_prob += hamming_prob[i]
-        if (1.0 - cum_prob[i]) <= epsilon:
-            break
-
-    cum_prob[-1] = 2.0
-    repulsion_coeff = 1 / repulsion_base
-
     for _ in range(shots):
-        # Normalize & sample
-        hamming_tot = hamming_prob.sum()
-        r = np.random.rand()
-        cum = 0.0
-        m = 0
-        for i in range(n):
-            cum += hamming_prob[i]
-            if (hamming_tot * r) < cum:
-                m = i
-                break
-        hamming_prob[m] *= repulsion_coeff
-        m += 1
+        beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
+        beam_energies = np.zeros(beam_width)
+        m = sample_mag(hamming_prob)
+        m = min(n, m << 1)
 
-        new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
-        new_beam_energies = np.zeros(beam_width << 2)
+        for step in range(m):
+            new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
+            new_beam_energies = np.zeros(beam_width << 2)
 
-        idx = 0
-        for b in prange(beam_width):
-            for _ in range(4):
+            idx = 0
+            for _b in prange(beam_width << 4):
+                b = _b >> 2
                 new_mask = beam_masks[b].copy()
-                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, step + 1)
                 new_mask |= node_mask
                 new_energy = compute_energy(new_mask, G_m, n) if is_spin_glass else compute_cut(new_mask, G_m, n)
 
@@ -135,10 +113,10 @@ def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_gla
                 new_beam_energies[idx] = new_energy
                 idx += 1
 
-        sort_idx = np.argsort(new_beam_energies)[::-1][:beam_width]
-        for i in range(beam_width):
-            beam_masks[i] = new_beam_masks[sort_idx[i]]
-            beam_energies[i] = new_beam_energies[sort_idx[i]]
+            sort_idx = np.argsort(new_beam_energies)[::-1][:beam_width]
+            for i in range(beam_width):
+                beam_masks[i] = new_beam_masks[sort_idx[i]]
+                beam_energies[i] = new_beam_energies[sort_idx[i]]
 
         if beam_energies[0] > best_energy:
             best_energy = beam_energies[0]
