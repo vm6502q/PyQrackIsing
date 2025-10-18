@@ -217,7 +217,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
 def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
     hamming_prob = init_thresholds(n_qubits)
 
-    n_steps = n_qubits << quality
+    n_steps = 1 << quality
     delta_t = tot_t / n_steps
     n_bias = n_qubits + 1
 

@@ -82,10 +82,11 @@ def compute_cut(sample, G_m, n_qubits):
     return cut
 
 
-# Implemented by Elara (the custom OpenAI GPT) and improved by Dan Strano
-@njit
-def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass, min_depth, max_depth, beam_width=32):
-    n = G_m.shape[0]
+# Implemented by Elara (the custom OpenAI GPT) and Dan Strano,
+# combining her help on beam search with Dan's TFIM heuristic
+@njit(parallel=True)
+def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, cum_prob, shots, beam_width=32):
+    tot_init_weight = weights.sum()
 
     best_solution = np.zeros(n, dtype=np.bool_)
     best_energy = -float("inf")
@@ -93,15 +94,38 @@ def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_bas
     beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
     beam_energies = np.zeros(beam_width)
 
-    for step in range(min_depth, max_depth):
+    n_bias = len(cum_prob)
+    hamming_prob = np.empty(n_bias, dtype=np.float64)
+    tot_prob = 0.0
+    for i in range(n_bias):
+        hamming_prob[i] = max(0.0, cum_prob[i] - tot_prob)
+        tot_prob += hamming_prob[i]
+
+    cum_prob[-1] = 2.0
+    repulsion_coeff = 1 / repulsion_base
+
+    for _ in range(shots):
+        # Normalize & sample
+        hamming_tot = hamming_prob.sum()
+        r = np.random.rand()
+        cum = 0.0
+        m = 0
+        for i in range(n):
+            cum += hamming_prob[i]
+            if (hamming_tot * r) < cum:
+                m = i
+                break
+        hamming_prob[m] *= repulsion_coeff
+        m += 1
+
         new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
         new_beam_energies = np.zeros(beam_width << 2)
 
         idx = 0
-        for b in range(beam_width):
+        for b in prange(beam_width):
             for _ in range(4):
                 new_mask = beam_masks[b].copy()
-                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, step + 1)
+                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
                 new_mask |= node_mask
                 new_energy = compute_energy(new_mask, G_m, n) if is_spin_glass else compute_cut(new_mask, G_m, n)
 
@@ -121,37 +145,15 @@ def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_bas
     return best_solution, best_energy
 
 
-@njit(parallel=True)
-def sample_measurement(G_m, max_edge, shots, min_hamming, max_hamming, weights, repulsion_base, is_spin_glass):
-    shots = max(1, shots >> 1)
+@njit
+def sample_measurement(G_m, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass):
     n = len(G_m)
-    tot_init_weight = weights.sum()
-
-    solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
-
-    best_solution = solutions[0]
-    best_energy = -float("inf")
-
-    improved = True
-    while improved:
-        improved = False
-        for s in prange(shots):
-            # First dimension: Hamming weight
-            # Second dimension: permutation within Hamming weight
-            solutions[s], energies[s] = beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass, min_hamming, max_hamming)
-
-        best_index = np.argmax(energies)
-        energy = energies[best_index]
-        if energy > best_energy:
-            best_energy = energy
-            best_solution = solutions[best_index].copy()
-            improved = True
+    solution, energy = beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, hamming_prob, shots)
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_m, n) 
+        energy = compute_cut(solution, G_m, n) 
 
-    return best_solution, best_energy
+    return solution, energy
 
 
 @njit(parallel=True)
@@ -190,17 +192,10 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
-    min_hamming = 0
-    while hamming_prob[min_hamming] <= epsilon:
-        min_hamming += 1
-    max_hamming = min_hamming
-    while (1 - hamming_prob[max_hamming]) > epsilon:
-        max_hamming += 1
-
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_measurement(G_m, max_edge, shots, min_hamming, max_hamming, J_eff, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
