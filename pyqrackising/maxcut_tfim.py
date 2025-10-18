@@ -194,7 +194,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     while hamming_prob[min_hamming] <= epsilon:
         min_hamming += 1
     max_hamming = min_hamming
-    while hamming_prob[max_hamming] < 1:
+    while (1 - hamming_prob[max_hamming]) > epsilon:
         max_hamming += 1
 
     degrees = None
