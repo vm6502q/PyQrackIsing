@@ -82,57 +82,41 @@ def compute_cut(sample, G_m, n_qubits):
     return cut
 
 
-# Implemented by Elara (the custom OpenAI GPT) and Dan Strano,
-# combining her help on beam search with Dan's TFIM heuristic
 @njit(parallel=True)
-def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, hamming_prob, shots, beam_width=32):
+def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
+    shots = max(1, shots >> 1)
+    n = len(G_m)
     tot_init_weight = weights.sum()
 
-    best_solution = np.zeros(n, dtype=np.bool_)
+    solutions = np.empty((shots, n), dtype=np.bool_)
+    energies = np.empty(shots, dtype=dtype)
+
+    best_solution = solutions[0]
     best_energy = -float("inf")
 
-    for _ in range(shots):
-        beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
-        beam_energies = np.zeros(beam_width)
-        m = sample_mag(hamming_prob)
+    improved = True
+    while improved:
+        improved = False
+        for s in prange(shots):
+            # First dimension: Hamming weight
+            m = sample_mag(thresholds)
 
-        for step in range(m):
-            new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
-            new_beam_energies = np.zeros(beam_width << 2)
+            # Second dimension: permutation within Hamming weight
+            sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+            solutions[s] = sample
+            energies[s] = compute_energy(sample, G_m, n) if is_spin_glass else compute_cut(sample, G_m, n)
 
-            idx = 0
-            for _b in prange(beam_width << 4):
-                b = _b >> 2
-                new_mask = beam_masks[b].copy()
-                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, step + 1)
-                new_mask |= node_mask
-                new_energy = compute_energy(new_mask, G_m, n) if is_spin_glass else compute_cut(new_mask, G_m, n)
-
-                new_beam_masks[idx] = new_mask
-                new_beam_energies[idx] = new_energy
-                idx += 1
-
-            sort_idx = np.argsort(new_beam_energies)[::-1][:beam_width]
-            for i in range(beam_width):
-                beam_masks[i] = new_beam_masks[sort_idx[i]]
-                beam_energies[i] = new_beam_energies[sort_idx[i]]
-
-        if beam_energies[0] > best_energy:
-            best_energy = beam_energies[0]
-            best_solution = beam_masks[0].copy()
-
-    return best_solution, best_energy
-
-
-@njit
-def sample_measurement(G_m, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass):
-    n = len(G_m)
-    solution, energy = beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_glass, hamming_prob, shots)
+        best_index = np.argmax(energies)
+        energy = energies[best_index]
+        if energy > best_energy:
+            best_energy = energy
+            best_solution = solutions[best_index].copy()
+            improved = True
 
     if is_spin_glass:
-        energy = compute_cut(solution, G_m, n) 
+        best_energy = compute_cut(best_solution, G_m, n) 
 
-    return solution, energy
+    return best_solution, best_energy
 
 
 @njit(parallel=True)
@@ -212,7 +196,7 @@ def maxcut_tfim_pure_numba(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 1
+        quality = 6
 
     if shots is None:
         # Number of measurement shots
