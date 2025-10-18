@@ -84,10 +84,8 @@ def compute_cut(sample, G_m, n_qubits):
 
 # Implemented by Elara (the custom OpenAI GPT) and improved by Dan Strano
 @njit
-def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass, beam_width=32, depth=None):
+def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass, min_depth, max_depth, beam_width=32):
     n = G_m.shape[0]
-    if depth is None:
-        depth = n
 
     best_solution = np.zeros(n, dtype=np.bool_)
     best_energy = -float("inf")
@@ -95,7 +93,7 @@ def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_bas
     beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
     beam_energies = np.zeros(beam_width)
 
-    for step in range(depth):
+    for step in range(min_depth, max_depth):
         new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
         new_beam_energies = np.zeros(beam_width << 2)
 
@@ -103,7 +101,7 @@ def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_bas
         for b in range(beam_width):
             for _ in range(4):
                 new_mask = beam_masks[b].copy()
-                node_mask = local_repulsion_choice(G_m, max_edge, weights, weights.sum(), repulsion_base, n, step + 1)
+                node_mask = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, step + 1)
                 new_mask |= node_mask
                 new_energy = compute_energy(new_mask, G_m, n) if is_spin_glass else compute_cut(new_mask, G_m, n)
 
@@ -124,7 +122,7 @@ def beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_bas
 
 
 @njit(parallel=True)
-def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
+def sample_measurement(G_m, max_edge, shots, min_hamming, max_hamming, weights, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     n = len(G_m)
     tot_init_weight = weights.sum()
@@ -140,11 +138,8 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
         improved = False
         for s in prange(shots):
             # First dimension: Hamming weight
-            m = sample_mag(thresholds)
-
             # Second dimension: permutation within Hamming weight
-            # sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-            solutions[s], energies[s] = beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass)
+            solutions[s], energies[s] = beam_search_repulsion(G_m, max_edge, weights, tot_init_weight, repulsion_base, is_spin_glass, min_hamming, max_hamming)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -195,10 +190,17 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
+    min_hamming = 0
+    while hamming_prob[min_hamming] <= epsilon:
+        min_hamming += 1
+    max_hamming = min_hamming
+    while hamming_prob[max_hamming] < 1:
+        max_hamming += 1
+
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_m, max_edge, shots, min_hamming, max_hamming, J_eff, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
