@@ -95,7 +95,6 @@ def beam_search_repulsion(n, G_m, max_edge, weights, repulsion_base, is_spin_gla
         beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
         beam_energies = np.zeros(beam_width)
         m = sample_mag(hamming_prob)
-        m = min(n, m << 1)
 
         for step in range(m):
             new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
