@@ -199,7 +199,7 @@ def spin_glass_solver_sparse(
     anneal_h=None,
     repulsion_base=None,
     min_order=1,
-    max_order=None,
+    max_order=3,
     is_log=False,
     reheat_tries=0
 ):
