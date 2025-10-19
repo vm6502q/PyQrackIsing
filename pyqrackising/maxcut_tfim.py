@@ -208,6 +208,20 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     return bit_string, best_value, (l, r)
 
 
+@njit(parallel=True)
+def convert_bool_to_uint(shots, samples):
+    n32 = samples.shape[1]
+    theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
+    for i in prange(shots):
+        i_offset = i * n32
+        for j in range(n32):
+            if samples[i, j]:
+                b_index = i_offset + j
+                theta[b_index >> 5] |= 1 << (b_index & 31)
+
+    return theta
+
+
 def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
@@ -219,18 +233,9 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
     args_np = np.array([n, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
 
-    n32 = samples.shape[1]
-    theta = np.zeros((shots * n32) >> 5, dtype=np.uint32)
-    for i in range(shots):
-        i_offset = i * n32
-        for j in range(n32):
-            if samples[i, j]:
-                b_index = i_offset + j
-                theta[b_index >> 5] |= 1 << (b_index & 31)
-
     # Buffers
     mf = cl.mem_flags
-    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
+    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=convert_bool_to_uint(shots, samples))
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Local memory allocation (1 float per work item)
