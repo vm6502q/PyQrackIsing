@@ -4,7 +4,7 @@ import time
 
 from networkx.algorithms.approximation import maxcut as nx_maxcut
 
-from pyqrackising import maxcut_tfim_sparse
+from pyqrackising import spin_glass_solver_sparse
 
 # Try to import cvxpy for GW SDP implementation
 try:
@@ -182,7 +182,7 @@ def benchmark_maxcut(generator, n=64, seed=None, trials=10, **kwargs):
 
         # --- Qrack solver ---
         start = time.perf_counter()
-        _, cut_value, partition = maxcut_tfim_sparse(G)
+        _, cut_value, partition, _ = spin_glass_solver_sparse(G)
         verified = evaluate_cut_value(G, partition)
         assert np.isclose(cut_value, verified)
         qrack.append(cut_value)
