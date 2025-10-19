@@ -127,11 +127,12 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
 
 @njit(parallel=True)
 def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
+    n32 = ((n + 31) >> 5) << 5
     for s in prange(shots):
         # First dimension: Hamming weight
         m = sample_mag(thresholds)
         # Second dimension: permutation within Hamming weight
-        solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+        solutions[s] = np.resize(local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m), n32)
 
 
 def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
@@ -158,7 +159,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     if is_spin_glass:
         best_energy = compute_cut(best_solution, G_m, n) 
 
-    return best_solution, best_energy
+    return np.resize(best_solution, n), float(best_energy)
 
 
 @njit(parallel=True)
@@ -224,7 +225,7 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Local memory allocation (1 float per work item)
-    local_size = min(wgs, n)
+    local_size = min(wgs, shots)
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((shots + local_size - 1) // local_size) * local_size, max_global_size)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
