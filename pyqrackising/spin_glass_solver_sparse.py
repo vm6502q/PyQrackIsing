@@ -1,5 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
-from .maxcut_tfim_util import opencl_context
+from .maxcut_tfim_util import get_cut_base, opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -19,9 +19,9 @@ except ImportError:
 
 @njit
 def evaluate_cut_edges(theta_bits, G_data, G_rows, G_cols):
-    n = G_rows.shape[0] - 1
-    cut = 0.0
-    for u in range(n):
+    l, _ = get_cut_base(theta_bits)
+    cut = 0
+    for u in l:
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
             if theta_bits[u] != theta_bits[v]:

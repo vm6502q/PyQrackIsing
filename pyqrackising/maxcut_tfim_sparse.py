@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, get_cut, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
 
 
 epsilon = opencl_context.epsilon
@@ -83,8 +83,9 @@ def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
 
 @njit
 def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
+    l, _ = get_cut_base(sample)
     cut = 0
-    for u in range(n_qubits):
+    for u in l:
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
             if sample[u] != sample[v]:

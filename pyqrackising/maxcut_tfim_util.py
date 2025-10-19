@@ -121,6 +121,18 @@ def get_cut(solution, nodes):
 
 
 @njit
+def get_cut_base(solution):
+    l, r = [], []
+    for i in range(len(solution)):
+        if solution[i]:
+            r.append(i)
+        else:
+            l.append(i)
+
+    return l, r
+
+
+@njit
 def binary_search(l, t):
     left = 0
     right = len(l) - 1
