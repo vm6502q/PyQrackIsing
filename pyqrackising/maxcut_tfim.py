@@ -12,34 +12,14 @@ dtype = opencl_context.dtype
 
 
 @njit
-def compute_energy(sample, G_m, n_qubits):
-    energy = 0
-    for u in range(n_qubits):
-        for v in range(u + 1, n_qubits):
-            val = G_m[u, v]
-            energy += val if sample[u] == sample[v] else -val
-
-    return -energy
-
-
-@njit
-def compute_cut(sample, G_m, n_qubits):
-    cut = 0
-    for u in range(n_qubits):
-        for v in range(u + 1, n_qubits):
-            if sample[u] != sample[v]:
-                cut += G_m[u, v]
-
-    return cut
-
-
-@njit
 def update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
 
     # Repulsion: penalize neighbors
     for nbr in range(n):
+        if used[nbr]:
+            continue
         weights[nbr] *= repulsion_base ** (-G_m[node, nbr] / max_edge)
 
 
@@ -62,7 +42,7 @@ def local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_ba
 
     if m == 1:
         used[node] = True
-        return used, weights.sum()
+        return used
 
     update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_base)
 
@@ -77,46 +57,29 @@ def local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_ba
 
     used[node] = True
 
-    return used, weights.sum()
+    return used
 
 
-@njit(parallel=True)
-def beam_search_repulsion(G_m, max_edge, weights, repulsion_base, tot_init_weight, min_depth, max_depth, beam_width=32):
-    n = G_m.shape[0]
-    if depth is None:
-        depth = n
+@njit
+def compute_energy(sample, G_m, n_qubits):
+    energy = 0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            val = G_m[u, v]
+            energy += val if sample[u] == sample[v] else -val
 
-    best_solution = np.zeros(n, dtype=np.bool_)
-    best_energy = -float("inf")
+    return -energy
 
-    beam_masks = np.zeros((beam_width, n), dtype=np.bool_)
-    beam_energies = np.zeros(beam_width)
 
-    for step in range(min_depth, max_depth):
-        new_beam_masks = np.zeros((beam_width << 2, n), dtype=np.bool_)
-        new_beam_energies = np.zeros(beam_width  << 2)
+@njit
+def compute_cut(sample, G_m, n_qubits):
+    cut = 0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            if sample[u] != sample[v]:
+                cut += G_m[u, v]
 
-        idx = 0
-        for b in range(beam_width):
-            for _ in range(4):
-                new_mask = beam_masks[b].copy()
-                node_mask, new_energy = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, step + 1)
-                new_mask |= node_mask
-
-                new_beam_masks[idx] = new_mask
-                new_beam_energies[idx] = new_energy
-                idx += 1
-
-        sort_idx = np.argsort(new_beam_energies)[::-1][:beam_width]
-        for i in range(beam_width):
-            beam_masks[i] = new_beam_masks[sort_idx[i]]
-            beam_energies[i] = new_beam_energies[sort_idx[i]]
-
-        if beam_energies[0] > best_energy:
-            best_energy = beam_energies[0]
-            best_solution = beam_masks[0].copy()
-
-    return best_solution, best_energy
+    return cut
 
 
 @njit(parallel=True)
@@ -124,13 +87,6 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
     shots = max(1, shots >> 1)
     n = len(G_m)
     tot_init_weight = weights.sum()
-
-    min_depth = 0
-    while thresholds[min_depth] <= epsilon:
-        min_depth += 1
-    max_depth = min_depth
-    while (1.0 - thresholds[max_depth]) > epsilon:
-        max_depth += 1
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
@@ -142,8 +98,13 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
     while improved:
         improved = False
         for s in prange(shots):
+            # First dimension: Hamming weight
+            m = sample_mag(thresholds)
+
             # Second dimension: permutation within Hamming weight
-            solutions[s], energies[s] = beam_search_repulsion(G_m, max_edge, weights, repulsion_base, tot_init_weight, min_depth, max_depth)
+            sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+            solutions[s] = sample
+            energies[s] = compute_energy(sample, G_m, n) if is_spin_glass else compute_cut(sample, G_m, n)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -152,7 +113,8 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
             best_solution = solutions[best_index].copy()
             improved = True
 
-    best_energy = compute_cut(best_solution, G_m, n)
+    if is_spin_glass:
+        best_energy = compute_cut(best_solution, G_m, n) 
 
     return best_solution, best_energy
 
@@ -238,7 +200,7 @@ def maxcut_tfim_pure_numba(
 
     if shots is None:
         # Number of measurement shots
-        shots = n_qubits
+        shots = n_qubits << quality
 
     if anneal_t is None:
         anneal_t = 8.0
