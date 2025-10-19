@@ -153,7 +153,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
         solution, energy = run_cut_opencl(shots, n, solutions, G_m_buf, is_segmented, segment_size, is_spin_glass)
         if energy > best_energy:
             best_energy = energy
-            best_solution = solution.copy()
+            best_solution = solution
             improved = True
 
     if is_spin_glass:
@@ -235,8 +235,8 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     max_energy_host = np.empty(global_size, dtype=dtype)
     min_index_host = np.empty(global_size, dtype=np.int32)
 
-    min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
-    min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
+    max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
+    max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
 
     # Set kernel args
     if is_segmented:
@@ -247,8 +247,8 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
             G_m_buf[3],
             theta_buf,
             args_buf,
-            min_energy_buf,
-            min_index_buf,
+            max_energy_buf,
+            max_index_buf,
             local_energy_buf,
             local_index_buf
         )
@@ -257,8 +257,8 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
             G_m_buf,
             theta_buf,
             args_buf,
-            min_energy_buf,
-            min_index_buf,
+            max_energy_buf,
+            max_index_buf,
             local_energy_buf,
             local_index_buf
         )
@@ -266,17 +266,12 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     cl.enqueue_nd_range_kernel(queue, calculate_cut_kernel, (global_size,), (local_size,))
 
     # Read results
-    cl.enqueue_copy(queue, max_energy_host, min_energy_buf)
-    cl.enqueue_copy(queue, min_index_host, min_index_buf)
+    cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
+    cl.enqueue_copy(queue, min_index_host, max_index_buf)
     queue.finish()
 
     # Find global maximum
-    energy = max_energy_host.max()
-
-    atol = dtype(epsilon)
-    rtol = dtype(0)
-    choices = np.where(np.isclose(max_energy_host, energy, atol=atol, rtol=rtol))[0]
-    best_i = np.random.choice(choices) if len(choices) else np.argmin(max_energy_host)
+    best_i = np.argmax(max_energy_host)
 
     return samples[best_i], max_energy_host[best_i]
 
