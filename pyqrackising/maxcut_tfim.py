@@ -217,7 +217,7 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     wgs = opencl_context.work_group_size
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([n, samples.shape[0], is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32)
+    args_np = np.array([n, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags

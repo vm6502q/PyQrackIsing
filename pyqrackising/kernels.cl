@@ -474,11 +474,7 @@ __kernel void calculate_cut(
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
-    uint prng_seed = (uint)args[3];
     int i = get_global_id(0);
-
-    // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
-    prng_seed ^= (uint)i;
 
     real1 best_energy = -INFINITY;
     int best_i = i;
@@ -488,8 +484,6 @@ __kernel void calculate_cut(
         const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -508,8 +502,6 @@ __kernel void calculate_cut(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -556,10 +548,7 @@ __kernel void calculate_cut_sparse(
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
-    uint prng_seed = (uint)args[3];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = -INFINITY;
     int best_i = i;
@@ -569,8 +558,6 @@ __kernel void calculate_cut_sparse(
         const real1 energy = cut_worker_sparse(theta + j, G_data, G_rows, G_cols, n, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -589,8 +576,6 @@ __kernel void calculate_cut_sparse(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -649,11 +634,8 @@ __kernel void calculate_cut_segmented(
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
-    uint prng_seed = (uint)args[3];
-    const int segment_size = args[4];
+    const int segment_size = args[3];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = -INFINITY;
     int best_i = i;
@@ -663,8 +645,6 @@ __kernel void calculate_cut_segmented(
         const real1 energy = cut_worker_segmented(theta + j, G_m, n, segment_size, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -680,10 +660,8 @@ __kernel void calculate_cut_segmented(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -745,11 +723,8 @@ __kernel void calculate_cut_sparse_segmented(
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
-    uint prng_seed = (uint)args[3];
-    const int segment_size = args[4];
+    const int segment_size = args[3];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = -INFINITY;
     int best_i = i;
@@ -759,8 +734,6 @@ __kernel void calculate_cut_sparse_segmented(
         const real1 energy = cut_worker_sparse_segmented(theta + j, G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -778,8 +751,6 @@ __kernel void calculate_cut_sparse_segmented(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
