@@ -88,7 +88,7 @@ def spin_glass_solver_streaming(
     anneal_h=None,
     repulsion_base=None,
     min_order=1,
-    max_order=3,
+    max_order=2,
     is_log=False,
     reheat_tries=0
 ):
