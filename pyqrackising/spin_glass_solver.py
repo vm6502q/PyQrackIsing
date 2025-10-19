@@ -179,7 +179,7 @@ def spin_glass_solver(
     anneal_t=None,
     anneal_h=None,
     repulsion_base=None,
-    min_order=1,
+    min_order=2,
     max_order=2,
     is_log=False,
     reheat_tries=0
