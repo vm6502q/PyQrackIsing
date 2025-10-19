@@ -472,6 +472,7 @@ __kernel void calculate_cut(
     __local int* loc_index              // local memory buffer
 ) {
     const int n = args[0];
+    const int n32 = (n + 31) >> 5U;
     const int shots = args[1];
     const bool is_spin_glass = args[2];
     int i = get_global_id(0);
@@ -480,7 +481,7 @@ __kernel void calculate_cut(
     int best_i = i;
 
     for (; i < shots; i += MAX_PROC_ELEM) {
-        const int j = (i * n + 31U) >> 5U;
+        const int j = i * n32;
         const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;

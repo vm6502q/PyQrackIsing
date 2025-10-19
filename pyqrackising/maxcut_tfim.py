@@ -140,7 +140,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     n = len(G_m)
     tot_init_weight = weights.sum()
 
-    solutions = np.empty((shots, ((n + 31) >> 5) << 5), dtype=np.bool_)
+    solutions = np.zeros((shots, ((n + 31) >> 5) << 5), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
@@ -219,9 +219,18 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
     args_np = np.array([n, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
 
+    n32 = samples.shape[1]
+    theta = np.zeros((shots * n32) >> 5, dtype=np.uint32)
+    for i in range(shots):
+        i_offset = i * n32
+        for j in range(n32):
+            if samples[i, j]:
+                b_index = i_offset + j
+                theta[b_index >> 5] |= 1 << (b_index & 31)
+
     # Buffers
     mf = cl.mem_flags
-    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=np.packbits(samples).astype(np.uint32))
+    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Local memory allocation (1 float per work item)
