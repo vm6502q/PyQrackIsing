@@ -7,7 +7,7 @@ from scipy.sparse import lil_matrix
 
 
 class OpenCLContext:
-    def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y):
+    def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y, i, j, k, l):
         self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.work_group_size = w
@@ -20,6 +20,10 @@ class OpenCLContext:
         self.bootstrap_sparse_kernel = s
         self.bootstrap_segmented_kernel = x
         self.bootstrap_sparse_segmented_kernel = y
+        self.calculate_cut_kernel = i
+        self.calculate_cut_sparse_kernel = j
+        self.calculate_cut_segmented_kernel = k
+        self.calculate_cut_sparse_segmented_kernel = l
         self.G_m_buf = None
         self.G_data_buf = None
         self.G_rows_buf = None
@@ -37,6 +41,10 @@ bootstrap_kernel = None
 bootstrap_sparse_kernel = None
 bootstrap_segmented_kernel = None
 bootstrap_sparse_segmented_kernel = None
+calculate_cut_kernel = None
+calculate_cut_sparse_kernel = None
+calculate_cut_segmented_kernel = None
+calculate_cut_sparse_segmented_kernel = None
 
 dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
 kernel_src = ''
@@ -91,6 +99,10 @@ try:
     bootstrap_sparse_kernel = program.bootstrap_sparse
     bootstrap_segmented_kernel = program.bootstrap_segmented
     bootstrap_sparse_segmented_kernel = program.bootstrap_sparse_segmented
+    calculate_cut_kernel = program.calculate_cut
+    calculate_cut_sparse_kernel = program.calculate_cut_sparse
+    calculate_cut_segmented_kernel = program.calculate_cut_segmented
+    calculate_cut_sparse_segmented_kernel = program.calculate_cut_sparse_segmented
 
     work_group_size = bootstrap_kernel.get_work_group_info(
         cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
@@ -102,7 +114,28 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
+
+
+def make_G_m_buf(G_m, is_segmented, segment_size):
+    mf = cl.mem_flags
+    ctx = opencl_context.ctx
+    if is_segmented:
+        o_shape = segment_size
+        segment_size = (segment_size + 3) >> 2
+        n_shape = segment_size << 2
+        _G_m = np.reshape(G_m, (o_shape,))
+        if n_shape != o_shape:
+            np.resize(_G_m, (n_shape,))
+        _G_m_segments = np.split(_G_m, 4)
+        G_m_buf = [
+            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+            for seg in _G_m_segments
+        ]
+    else:
+        G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
+
+    return G_m_buf
 
 
 @njit

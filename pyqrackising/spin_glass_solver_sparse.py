@@ -84,7 +84,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k, combo_count, segment_size]
+    # Args: [n, k, combo_count, is_spin_glass, prng_seed, segment_size]
     args_np = np.array([n, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32)
 
     # Buffers

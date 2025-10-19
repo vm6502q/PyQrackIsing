@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import get_cut_base, opencl_context
+from .maxcut_tfim_util import get_cut_base, make_G_m_buf, opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -80,7 +80,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k, combo_count, segment_size]
+    # Args: [n, k, combo_count, is_spin_glass, prng_seed, segment_size]
     args_np = np.array([n, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32)
 
     # Buffers
@@ -194,12 +194,6 @@ def spin_glass_solver(
         nodes = list(range(n_qubits))
         G_m = G
 
-    segment_size = G_m.shape[0] ** 2
-    is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
-    if is_segmented and is_alt_gpu_sampling:
-        print("[WARN] Using segmented solver, so disabling is_alt_gpu_sampling.")
-        is_alt_gpu_sampling = False
-
     if n_qubits < 3:
         if n_qubits == 0:
             return "", 0, ([], []), 0
@@ -222,31 +216,17 @@ def spin_glass_solver(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_combo_maxcut_gpu, is_nested=True)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+
+    segment_size = G_m.shape[0] ** 2
+    is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
         if not (opencl_context.G_m_buf is None):
             G_m_buf = opencl_context.G_m_buf
         else:
-            mf = cl.mem_flags
-            ctx = opencl_context.ctx
-            if is_segmented:
-                o_shape = segment_size
-                segment_size = (segment_size + 3) >> 2
-                n_shape = segment_size << 2
-                _G_m = np.reshape(G_m, (o_shape,))
-                if n_shape != o_shape:
-                    np.resize(_G_m, (n_shape,))
-                _G_m_segments = np.split(_G_m, 4)
-                G_m_buf = [
-                    cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-                    for seg in _G_m_segments
-                ]
-                _G_m = None
-                _G_m_segments = None
-            else:
-                G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
+            G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
     if max_order is None:
         max_order = n_qubits

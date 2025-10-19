@@ -452,9 +452,9 @@ real1 cut_worker(__constant uint* theta, __global const real1* G_m, const int n,
             const real1 val = G_m[u_offset + v];
             const bool v_bit = get_bit(theta, v);
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -466,8 +466,8 @@ __kernel void calculate_cut(
     __global const real1* G_m,
     __constant uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* min_energy_ptr,     // output: per-group min energy
-    __global int* min_index_ptr,        // output: per-group best index (i)
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
 ) {
@@ -480,13 +480,13 @@ __kernel void calculate_cut(
     // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
     prng_seed ^= (uint)i;
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
         const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
-        if (energy < best_energy) {
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -506,7 +506,7 @@ __kernel void calculate_cut(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -517,8 +517,8 @@ __kernel void calculate_cut(
 
     // Write out per-group result
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
@@ -532,9 +532,9 @@ real1 cut_worker_sparse(__constant uint* theta, __global const real1* G_data, __
             const real1 val = G_data[col];
             const bool v_bit = get_bit(theta, v);
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -542,14 +542,14 @@ real1 cut_worker_sparse(__constant uint* theta, __global const real1* G_data, __
     return energy;
 }
 
-__kernel void cut_sparse(
+__kernel void calculate_cut_sparse(
     __global const real1* G_data,
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* min_energy_ptr,     // output: per-group min energy
-    __global int* min_index_ptr,        // output: per-group best index (i)
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
 ) {
@@ -561,13 +561,13 @@ __kernel void cut_sparse(
 
     prng_seed ^= (uint)i;
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
         const real1 energy = cut_worker_sparse(theta + j, G_data, G_rows, G_cols, n, is_spin_glass);
-        if (energy < best_energy) {
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -587,7 +587,7 @@ __kernel void cut_sparse(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -598,8 +598,8 @@ __kernel void cut_sparse(
 
     // Write out per-group result
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
@@ -621,9 +621,9 @@ real1 cut_worker_segmented(
             const real1 val = get_G_m(G_m, flat_idx, segment_size);
             const bool v_bit = get_bit(theta, v);
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -632,15 +632,15 @@ real1 cut_worker_segmented(
 }
 
 
-__kernel void cut_segmented(
+__kernel void calculate_cut_segmented(
     __global const real1* G_m0,
     __global const real1* G_m1,
     __global const real1* G_m2,
     __global const real1* G_m3,
     __constant uint* theta,
     __constant int* args,               // args[0]=n, args[1]=k, args[2]=combo_count, args[3]=segment_size
-    __global real1* min_energy_ptr,
-    __global int* min_index_ptr,
+    __global real1* max_energy_ptr,
+    __global int* max_index_ptr,
     __local real1* loc_energy,
     __local int* loc_index
 ) {
@@ -655,13 +655,13 @@ __kernel void cut_segmented(
 
     prng_seed ^= (uint)i;
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
         const real1 energy = cut_worker_segmented(theta + j, G_m, n, segment_size, is_spin_glass);
-        if (energy < best_energy) {
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -690,8 +690,8 @@ __kernel void cut_segmented(
     }
 
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
@@ -716,9 +716,9 @@ real1 cut_worker_sparse_segmented(
             const real1 val = get_G_m(G_data, col, segment_size);
             const bool v_bit = get_bit(theta, v);
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -726,7 +726,7 @@ real1 cut_worker_sparse_segmented(
     return energy;
 }
 
-__kernel void cut_sparse_segmented(
+__kernel void calculate_cut_sparse_segmented(
     __global const real1* G_data0,
     __global const real1* G_data1,
     __global const real1* G_data2,
@@ -735,8 +735,8 @@ __kernel void cut_sparse_segmented(
     __global const uint* G_cols,
     __constant uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k, args[2] = combo_count, args[3] = segment_size
-    __global real1* min_energy_ptr,
-    __global int* min_index_ptr,
+    __global real1* max_energy_ptr,
+    __global int* max_index_ptr,
     __local real1* loc_energy,
     __local int* loc_index
 ) {
@@ -751,13 +751,13 @@ __kernel void cut_sparse_segmented(
 
     prng_seed ^= (uint)i;
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
         const real1 energy = cut_worker_sparse_segmented(theta + j, G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
-        if (energy < best_energy) {
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -776,7 +776,7 @@ __kernel void cut_sparse_segmented(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
@@ -786,7 +786,7 @@ __kernel void cut_sparse_segmented(
     }
 
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
