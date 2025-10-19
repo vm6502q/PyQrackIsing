@@ -81,7 +81,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
     # Args: [n, k, combo_count, segment_size]
-    args_np = np.array([n, k, combo_count, is_spin_glass, segment_size], dtype=np.int32)
+    args_np = np.array([n, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
@@ -106,7 +106,6 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
     # Set kernel args
     if is_segmented:
         bootstrap_kernel.set_args(
-            np.random.randint(1<<32, dtype='uint32'),
             G_m_buf[0],
             G_m_buf[1],
             G_m_buf[2],
@@ -121,7 +120,6 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
         )
     else:
         bootstrap_kernel.set_args(
-            np.random.randint(1<<32, dtype='uint32'),
             G_m_buf,
             best_theta_buf,
             indices_buf,
