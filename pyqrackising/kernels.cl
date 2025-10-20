@@ -6,15 +6,6 @@
 #define fwrapper2(f, a, b) f(a, b)
 #endif
 
-inline uint xorshift32(uint *state) {
-    uint x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
-
 real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
@@ -61,11 +52,7 @@ __kernel void bootstrap(
     const int k = args[1];
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
-    uint prng_seed = (uint)args[4];
     int i = get_global_id(0);
-
-    // The inputs are chaotic, and this doesn't need to be high-quality, just uniform.
-    prng_seed ^= (uint)i;
 
     real1 best_energy = INFINITY;
     int best_i = i;
@@ -75,8 +62,6 @@ __kernel void bootstrap(
         const real1 energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -95,8 +80,6 @@ __kernel void bootstrap(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -157,10 +140,7 @@ __kernel void bootstrap_sparse(
     const int k = args[1];
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
-    uint prng_seed = (uint)args[4];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = INFINITY;
     int best_i = i;
@@ -170,8 +150,6 @@ __kernel void bootstrap_sparse(
         const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -190,8 +168,6 @@ __kernel void bootstrap_sparse(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -277,11 +253,8 @@ __kernel void bootstrap_segmented(
     const int k = args[1];
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
-    uint prng_seed = (uint)args[4];
-    const int segment_size = args[5];
+    const int segment_size = args[4];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = INFINITY;
     int best_i = i;
@@ -291,8 +264,6 @@ __kernel void bootstrap_segmented(
         const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices_array + j, k, n, segment_size, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -310,8 +281,6 @@ __kernel void bootstrap_segmented(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }
@@ -392,11 +361,8 @@ __kernel void bootstrap_sparse_segmented(
     const int k = args[1];
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
-    uint prng_seed = (uint)args[4];
-    const int segment_size = args[5];
+    const int segment_size = args[4];
     int i = get_global_id(0);
-
-    prng_seed ^= (uint)i;
 
     real1 best_energy = INFINITY;
     int best_i = i;
@@ -406,8 +372,6 @@ __kernel void bootstrap_sparse_segmented(
         const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, segment_size, is_spin_glass);
         if (energy < best_energy) {
             best_energy = energy;
-            best_i = i;
-        } else if (((energy - best_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
             best_i = i;
         }
     }
@@ -425,8 +389,6 @@ __kernel void bootstrap_sparse_segmented(
             real1 lid_energy = loc_energy[lt_id];
             if (hid_energy < lid_energy) {
                 loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            } else if (((hid_energy - lid_energy) <= EPSILON) && ((xorshift32(&prng_seed) >> 31) & 1)) {
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
         }

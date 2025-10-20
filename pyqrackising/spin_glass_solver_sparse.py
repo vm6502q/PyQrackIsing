@@ -81,9 +81,6 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     dtype = opencl_context.dtype
     epsilon = opencl_context.epsilon
 
-    n = best_theta.shape[0]
-    combo_count = len(indices_array_np) // k
-
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
     # Buffers
@@ -262,7 +259,7 @@ def spin_glass_solver_sparse(
 
                 if is_opencl:
                     combo_count = len(combos) // k
-                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
+                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, segment_size], dtype=np.int32))
                     energy = run_bootstrap_opencl(reheat_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, reheat_min_energy, is_segmented, *opencl_args)
                 else:
                     energy = bootstrap(reheat_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, reheat_min_energy, dtype, is_spin_glass)

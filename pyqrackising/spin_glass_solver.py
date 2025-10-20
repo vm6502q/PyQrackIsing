@@ -76,9 +76,6 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
     dtype = opencl_context.dtype
     epsilon = opencl_context.epsilon
 
-    n = best_theta.shape[0]
-    combo_count = len(indices_array_np) // k
-
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
     # Buffers
@@ -202,7 +199,7 @@ def spin_glass_solver(
         bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_combo_maxcut_gpu, is_nested=True)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
-    segment_size = G_m.shape[0] ** 2
+    segment_size = G_m.shape[0] * G_m.shape[1]
     is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
 
     is_opencl = is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE
@@ -241,7 +238,7 @@ def spin_glass_solver(
 
                 if is_opencl:
                     combo_count = len(combos) // k
-                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
+                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, segment_size], dtype=np.int32))
                     energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_min_energy, is_segmented, *opencl_args)
                 else:
                     energy = bootstrap(reheat_theta, G_m, combos, k, reheat_min_energy, dtype, is_spin_glass)
