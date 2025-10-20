@@ -162,6 +162,39 @@ def make_G_m_csr_buf(G_m, is_segmented, segment_size):
 
     return G_data_buf, G_rows_buf, G_cols_buf
 
+
+def make_theta_buf(theta, is_segmented, shots, n):
+    mf = cl.mem_flags
+    ctx = opencl_context.ctx
+    if is_segmented:
+        n_shape = (((shots + 3) >> 2) << 2) * ((n + 31) >> 5)
+        theta = np.reshape(theta, (n_shape,))
+        _theta_segments = np.split(theta, 4)
+        theta_buf = [
+            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+            for seg in _theta_segments
+        ]
+    else:
+        theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
+
+    return theta_buf
+
+
+@njit(parallel=True)
+def convert_bool_to_uint(samples):
+    shots = samples.shape[0]
+    n32 = ((samples.shape[1] + 31) >> 5) << 5
+    theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
+    for i in prange(shots):
+        i_offset = i * n32
+        for j in range(n32):
+            if samples[i, j]:
+                b_index = i_offset + j
+                theta[b_index >> 5] |= 1 << (b_index & 31)
+
+    return theta
+
+
 @njit
 def get_cut(solution, nodes):
     bit_string = ""

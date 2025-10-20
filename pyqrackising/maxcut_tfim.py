@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import get_cut, get_cut_base, make_G_m_buf, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick
+from .maxcut_tfim_util import convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -125,23 +125,6 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
     return best_solution, best_energy
 
 
-def make_theta_buf(theta, is_segmented, shots, n):
-    mf = cl.mem_flags
-    ctx = opencl_context.ctx
-    if is_segmented:
-        n_shape = (((shots + 3) >> 2) << 2) * ((n + 31) >> 5)
-        theta = np.reshape(theta, (n_shape,))
-        _theta_segments = np.split(theta, 4)
-        theta_buf = [
-            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in _theta_segments
-        ]
-    else:
-        theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
-
-    return theta_buf
-
-
 @njit(parallel=True)
 def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
     for s in prange(shots):
@@ -222,21 +205,6 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     bit_string, l, r = get_cut(best_solution, nodes)
 
     return bit_string, best_value, (l, r)
-
-
-@njit(parallel=True)
-def convert_bool_to_uint(samples):
-    shots = samples.shape[0]
-    n32 = ((samples.shape[1] + 31) >> 5) << 5
-    theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
-    for i in prange(shots):
-        i_offset = i * n32
-        for j in range(n32):
-            if samples[i, j]:
-                b_index = i_offset + j
-                theta[b_index >> 5] |= 1 << (b_index & 31)
-
-    return theta
 
 
 def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
@@ -431,7 +399,7 @@ def maxcut_tfim(
         repulsion_base = 8.0
 
     segment_size = G_m.shape[0] ** 2
-    is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
+    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((((((n_qubits + 31) >> 5) << 5) * (shots >> 1)) >> 3) > opencl_context.max_alloc)
 
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
     if is_nested:

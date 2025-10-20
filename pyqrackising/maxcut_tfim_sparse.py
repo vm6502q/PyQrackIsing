@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, get_cut, get_cut_base, make_G_m_csr_buf, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -243,12 +243,13 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
     shots = samples.shape[1]
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([shots, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
+    n = samples.shape[0]
+    args_np = np.array([shots, n, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
-    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=convert_bool_to_uint(samples))
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
+    theta_buf = make_theta_buf(convert_bool_to_uint(samples), is_segmented, shots, n)
 
     # Local memory allocation (1 float per work item)
     local_size = min(wgs, shots)
@@ -273,7 +274,10 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
             G_data_buf[3],
             G_rows_buf,
             G_cols_buf,
-            theta_buf,
+            theta_buf[0],
+            theta_buf[1],
+            theta_buf[2],
+            theta_buf[3],
             args_buf,
             max_energy_buf,
             max_index_buf,
@@ -376,7 +380,7 @@ def maxcut_tfim_sparse(
         return bit_string, best_value, partition
 
     segment_size = G_m.data.shape[0]
-    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
+    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((((((n_qubits + 31) >> 5) << 5) * (shots >> 1)) >> 3) > opencl_context.max_alloc)
 
     G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
     if is_nested:
