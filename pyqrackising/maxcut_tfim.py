@@ -371,6 +371,7 @@ def maxcut_tfim(
     if not is_opencl:
         return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
+    n_qubits = len(G_m)
     if n_qubits < 3:
         empty = [nodes[0]]
         empty.clear()
