@@ -247,6 +247,7 @@ def spin_glass_solver_sparse(
             G_data_buf = opencl_context.G_data_buf
             G_rows_buf = opencl_context.G_rows_buf
             G_cols_buf = opencl_context.G_cols_buf
+            is_segmented = isinstance(G_data_buf, list)
         else:
             mf = cl.mem_flags
             ctx = opencl_context.ctx

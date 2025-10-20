@@ -225,6 +225,7 @@ def spin_glass_solver(
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
         if not (opencl_context.G_m_buf is None):
             G_m_buf = opencl_context.G_m_buf
+            is_segmented = isinstance(G_m_buf, list)
         else:
             G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
