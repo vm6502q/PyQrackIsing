@@ -90,7 +90,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 @njit(parallel=True)
 def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
-    shots = max(1, shots >> 1)
+    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
     n = len(G_m)
     tot_init_weight = weights.sum()
 
@@ -123,6 +123,23 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
         best_energy = compute_cut(best_solution, G_m, n) 
 
     return best_solution, best_energy
+
+
+def make_theta_buf(theta, is_segmented, shots, n):
+    mf = cl.mem_flags
+    ctx = opencl_context.ctx
+    if is_segmented:
+        n_shape = (((shots + 3) >> 2) << 2) * ((n + 31) >> 5)
+        theta = np.reshape(theta, (n_shape,))
+        _theta_segments = np.split(theta, 4)
+        theta_buf = [
+            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+            for seg in _theta_segments
+        ]
+    else:
+        theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
+
+    return theta_buf
 
 
 @njit(parallel=True)
@@ -233,12 +250,13 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
     shots = samples.shape[1]
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([shots, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
+    n = samples.shape[0]
+    args_np = np.array([shots, n, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
-    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=convert_bool_to_uint(samples))
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
+    theta_buf = make_theta_buf(convert_bool_to_uint(samples), is_segmented, shots, n)
 
     # Local memory allocation (1 float per work item)
     local_size = min(wgs, shots)
@@ -261,7 +279,10 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
             G_m_buf[1],
             G_m_buf[2],
             G_m_buf[3],
-            theta_buf,
+            theta_buf[0],
+            theta_buf[1],
+            theta_buf[2],
+            theta_buf[3],
             args_buf,
             max_energy_buf,
             max_index_buf,

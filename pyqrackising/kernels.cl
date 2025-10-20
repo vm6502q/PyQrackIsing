@@ -438,11 +438,11 @@ __kernel void bootstrap_sparse_segmented(
     }
 }
 
-inline bool get_bit(__global uint* theta, const size_t u) {
+inline bool get_bit(__global const uint* theta, const size_t u) {
     return (theta[u >> 5U] >> (u & 31U)) & 1U;
 }
 
-real1 cut_worker(__global uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass) {
+real1 cut_worker(__global const uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
     for (int u = 0; u < n; ++u) {
@@ -464,7 +464,7 @@ real1 cut_worker(__global uint* theta, __global const real1* G_m, const int n, c
 
 __kernel void calculate_cut(
     __global const real1* G_m,
-    __global uint* theta,
+    __global const uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k
     __global real1* max_energy_ptr,     // output: per-group min energy
     __global int* max_index_ptr,        // output: per-group best index (i)
@@ -515,7 +515,7 @@ __kernel void calculate_cut(
     }
 }
 
-real1 cut_worker_sparse(__global uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass) {
+real1 cut_worker_sparse(__global const uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     for (int u = 0; u < n; ++u) {
         const bool u_bit = get_bit(theta, u);
@@ -539,7 +539,7 @@ __kernel void calculate_cut_sparse(
     __global const real1* G_data,
     __global const uint* G_rows,
     __global const uint* G_cols,
-    __global uint* theta,
+    __global const uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k
     __global real1* max_energy_ptr,     // output: per-group min energy
     __global int* max_index_ptr,        // output: per-group best index (i)
@@ -590,7 +590,7 @@ __kernel void calculate_cut_sparse(
 }
 
 real1 cut_worker_segmented(
-    __global uint* theta,
+    __global const uint* theta,
     __global const real1** G_m,
     const int n,
     const int segment_size,
@@ -623,7 +623,10 @@ __kernel void calculate_cut_segmented(
     __global const real1* G_m1,
     __global const real1* G_m2,
     __global const real1* G_m3,
-    __global uint* theta,
+    __global const uint* theta0,
+    __global const uint* theta1,
+    __global const uint* theta2,
+    __global const uint* theta3,
     __constant int* args,               // args[0]=n, args[1]=k, args[2]=combo_count, args[3]=segment_size
     __global real1* max_energy_ptr,
     __global int* max_index_ptr,
@@ -631,11 +634,13 @@ __kernel void calculate_cut_segmented(
     __local int* loc_index
 ) {
     __global const real1* G_m[4] = { G_m0, G_m1, G_m2, G_m3 };
+    __global const uint* theta[4] = { theta0, theta1, theta2, theta3 };
 
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
     const int segment_size = args[3];
+    const int theta_segment_size = args[4];
     int i = get_global_id(0);
 
     real1 best_energy = -INFINITY;
@@ -643,7 +648,7 @@ __kernel void calculate_cut_segmented(
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
-        const real1 energy = cut_worker_segmented(theta + j, G_m, n, segment_size, is_spin_glass);
+        const real1 energy = cut_worker_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_m, n, segment_size, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
@@ -675,7 +680,7 @@ __kernel void calculate_cut_segmented(
 }
 
 real1 cut_worker_sparse_segmented(
-    __global uint* theta,
+    __global const uint* theta,
     __global const real1** G_data,
     __global const uint* G_rows,
     __global const uint* G_cols,
@@ -712,7 +717,10 @@ __kernel void calculate_cut_sparse_segmented(
     __global const real1* G_data3,
     __global const uint* G_rows,
     __global const uint* G_cols,
-    __global uint* theta,
+    __global const uint* theta0,
+    __global const uint* theta1,
+    __global const uint* theta2,
+    __global const uint* theta3,
     __constant int* args,               // args[0] = n, args[1] = k, args[2] = combo_count, args[3] = segment_size
     __global real1* max_energy_ptr,
     __global int* max_index_ptr,
@@ -720,11 +728,13 @@ __kernel void calculate_cut_sparse_segmented(
     __local int* loc_index
 ) {
     __global const real1* G_data[4] = { G_data0, G_data1, G_data2, G_data3 };
+    __global const uint* theta[4] = { theta0, theta1, theta2, theta3 };
 
     const int n = args[0];
     const int shots = args[1];
     const bool is_spin_glass = args[2];
     const int segment_size = args[3];
+    const int theta_segment_size = args[4];
     int i = get_global_id(0);
 
     real1 best_energy = -INFINITY;
@@ -732,7 +742,7 @@ __kernel void calculate_cut_sparse_segmented(
 
     for (; i < shots; i += MAX_PROC_ELEM) {
         const int j = (i * n + 31U) >> 5U;
-        const real1 energy = cut_worker_sparse_segmented(theta + j, G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
+        const real1 energy = cut_worker_sparse_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
         if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
