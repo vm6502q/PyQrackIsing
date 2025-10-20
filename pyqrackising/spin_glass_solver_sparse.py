@@ -228,12 +228,6 @@ def spin_glass_solver_sparse(
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
-    segment_size = G_m.data.shape[0]
-    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
-    if is_segmented and is_alt_gpu_sampling:
-        print("[WARN] Using segmented solver, so disabling is_alt_gpu_sampling.")
-        is_alt_gpu_sampling = False
-
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
@@ -244,6 +238,9 @@ def spin_glass_solver_sparse(
     else:
         bitstring, _, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+
+    segment_size = G_m.data.shape[0]
+    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
         if not (opencl_context.G_data_buf is None):

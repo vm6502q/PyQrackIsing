@@ -247,12 +247,12 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
-    # Allocate min_energy and min_index result buffers per workgroup
+    # Allocate max_energy and max_index result buffers per workgroup
     max_energy_host = np.empty(global_size, dtype=dtype)
-    min_index_host = np.empty(global_size, dtype=np.int32)
+    max_index_host = np.empty(global_size, dtype=np.int32)
 
     max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
-    max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
+    max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_index_host.nbytes)
 
     # Set kernel args
     if is_segmented:
@@ -283,7 +283,7 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
 
     # Read results
     cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
-    cl.enqueue_copy(queue, min_index_host, max_index_buf)
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
 
     # Find global maximum
@@ -427,9 +427,6 @@ def maxcut_tfim(
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty
-        empty = [nodes[0]]
-        empty.clear()
-
-        return '0' * n_qubits, 0.0, (nodes, empty)
+        return '0' * n_qubits, 0.0, (nodes, [])
 
     return bit_string, best_value, (l, r)

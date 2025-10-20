@@ -138,6 +138,30 @@ def make_G_m_buf(G_m, is_segmented, segment_size):
     return G_m_buf
 
 
+def make_G_m_csr_buf(G_m, is_segmented, segment_size):
+    mf = cl.mem_flags
+    ctx = opencl_context.ctx
+    G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
+    G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
+    if is_segmented:
+        o_shape = segment_size
+        segment_size = (segment_size + 3) >> 2
+        n_shape = segment_size << 2
+        _G_data = np.reshape(G_m.data, (o_shape,))
+        if n_shape != o_shape:
+            np.resize(_G_data, (n_shape,))
+        _G_data_segments = np.split(_G_data, 4)
+        G_data_buf = [
+            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
+            for seg in _G_data_segments
+        ]
+        _G_data = None
+        _G_data_segments = None
+    else:
+        G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
+
+    return G_data_buf, G_rows_buf, G_cols_buf
+
 @njit
 def get_cut(solution, nodes):
     bit_string = ""
