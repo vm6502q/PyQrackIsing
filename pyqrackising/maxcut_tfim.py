@@ -371,7 +371,7 @@ def maxcut_tfim(
 
     n_qubits = len(G_m)
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= 32)
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= max(32, opencl_context.work_group_size))
 
     if not is_opencl:
         return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
