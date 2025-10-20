@@ -101,43 +101,6 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base, is_spin_glass):
-    shots = max(1, shots >> 1)
-    n = G_rows.shape[0] - 1
-    tot_init_weight = weights.sum()
-
-    solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
-
-    best_solution = solutions[0]
-    best_energy = -float("inf")
-
-    improved = True
-    while improved:
-        improved = False
-        for s in prange(shots):
-            # First dimension: Hamming weight
-            m = sample_mag(thresholds)
-
-            # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-            solutions[s] = sample
-            energies[s] = compute_energy(sample, G_data, G_rows, G_cols, n) if is_spin_glass else compute_cut(sample, G_data, G_rows, G_cols, n)
-
-        best_index = np.argmax(energies)
-        energy = energies[best_index]
-        if energy > best_energy:
-            best_energy = energy
-            best_solution = solutions[best_index].copy()
-            improved = True
-
-    if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n)
-
-    return best_solution, best_energy
-
-
-@njit(parallel=True)
 def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -146,13 +109,57 @@ def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_we
         solutions[s] = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
 
 
+@njit(parallel=True)
+def cut_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, is_spin_glass, solutions, energies):
+    shots = solutions.shape[0]
+    if is_spin_glass:
+        for s in prange(shots):
+            energies[s] = compute_energy(solutions[s], G_data, G_rows, G_cols, n)
+    else:
+        for s in prange(shots):
+            energies[s] = compute_cut(solutions[s], G_data, G_rows, G_cols, n)
+
+
+def sample_measurement(max_edge, G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base, is_spin_glass):
+    shots = max(1, shots >> 1)
+    n = G_rows.shape[0] - 1
+    tot_init_weight = weights.sum()
+
+    solutions = np.empty((shots, n), dtype=np.bool_)
+    
+    best_solution = solutions[0]
+    best_energy = -float("inf")
+
+    improved = True
+    while improved:
+        improved = False
+        shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
+
+        u_solutions = np.unique(solutions, axis=0, sorted=False)
+        np.random.shuffle(u_solutions)
+
+        energies = np.empty(u_solutions.shape[0], dtype=dtype)
+        cut_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, is_spin_glass, u_solutions, energies)
+
+        best_index = np.argmax(energies)
+        energy = energies[best_index]
+        if energy > best_energy:
+            best_energy = energy
+            best_solution = u_solutions[best_index].copy()
+            improved = True
+
+    if is_spin_glass:
+        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n)
+
+    return best_solution, best_energy
+
+
 def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_energy = -float("inf")
@@ -161,7 +168,9 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     while improved:
         improved = False
         shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass)
+        u_solutions = np.unique(solutions, axis=0, sorted=False)
+        np.random.shuffle(u_solutions)
+        solution, energy = run_cut_opencl(u_solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution
@@ -203,7 +212,6 @@ def init_J_and_z(G_m):
     return J_eff, degrees, G_max
 
 
-@njit
 def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, G_col, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
@@ -240,11 +248,11 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
     epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
 
-    shots = samples.shape[1]
+    shots = samples.shape[0]
+    n = samples.shape[1]
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    n = samples.shape[0]
-    args_np = np.array([shots, n, is_spin_glass, segment_size], dtype=np.int32)
+    args_np = np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags

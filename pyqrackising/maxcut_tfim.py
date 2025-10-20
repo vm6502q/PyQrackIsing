@@ -89,41 +89,57 @@ def compute_cut(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
+def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
+    for s in prange(shots):
+        # First dimension: Hamming weight
+        m = sample_mag(thresholds)
+        # Second dimension: permutation within Hamming weight
+        solutions[s] = local_repulsion_choice(G_cols, G_data, G_rows, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+
+
+@njit(parallel=True)
+def cut_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, is_spin_glass, solutions, energies):
+    shots = solutions.shape[0]
+    if is_spin_glass:
+        for s in prange(shots):
+            energies[s] = compute_energy(solutions[s], G_m, n)
+    else:
+        for s in prange(shots):
+            energies[s] = compute_cut(solutions[s], G_m, n)
+
+
 def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
     shots = ((max(1, shots >> 1) + 3) >> 2) << 2
     n = len(G_m)
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
-
+    
     best_solution = solutions[0]
     best_energy = -float("inf")
 
     improved = True
     while improved:
         improved = False
-        for s in prange(shots):
-            # First dimension: Hamming weight
-            m = sample_mag(thresholds)
+        shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
 
-            # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-            solutions[s] = sample
-            energies[s] = compute_energy(sample, G_m, n) if is_spin_glass else compute_cut(sample, G_m, n)
+        u_solutions = np.unique(solutions, axis=0, sorted=False)
+        np.random.shuffle(u_solutions)
+
+        energies = np.empty(u_solutions.shape[0], dtype=dtype)
+        cut_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, is_spin_glass, u_solutions, energies)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
         if energy > best_energy:
             best_energy = energy
-            best_solution = solutions[best_index].copy()
+            best_solution = u_solutions[best_index].copy()
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_m, n) 
+        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n)
 
     return best_solution, best_energy
-
 
 @njit(parallel=True)
 def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
@@ -140,7 +156,6 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
     best_energy = -float("inf")
@@ -149,7 +164,9 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     while improved:
         improved = False
         shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(solutions, G_m_buf, is_segmented, segment_size, is_spin_glass)
+        u_solutions = np.unique(solutions, axis=0, sorted=False)
+        np.random.shuffle(u_solutions)
+        solution, energy = run_cut_opencl(u_solutions, G_m_buf, is_segmented, segment_size, is_spin_glass)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution
@@ -192,7 +209,6 @@ def init_J_and_z(G_m):
     return J_eff, degrees, G_max
 
 
-@njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
@@ -215,11 +231,11 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
     epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
 
-    shots = samples.shape[1]
+    shots = samples.shape[0]
+    n = samples.shape[1]
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    n = samples.shape[0]
-    args_np = np.array([shots, n, is_spin_glass, segment_size], dtype=np.int32)
+    args_np = np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
@@ -280,64 +296,6 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
 
     return samples[best_i], max_energy_host[best_i]
 
-
-@njit
-def maxcut_tfim_pure_numba(
-    G_m,
-    nodes,
-    quality=None,
-    shots=None,
-    is_spin_glass=False,
-    anneal_t=None,
-    anneal_h=None,
-    repulsion_base=None
-):
-    n_qubits = len(G_m)
-
-    if n_qubits < 3:
-        empty = [nodes[0]]
-        empty.clear()
-
-        if n_qubits == 0:
-            return "", 0, (empty, empty.copy())
-
-        if n_qubits == 1:
-            return "0", 0, (nodes, empty)
-
-        if n_qubits == 2:
-            weight = G_m[0, 1]
-            if weight < 0.0:
-                return "00", 0, (nodes, empty)
-
-            return "01", weight, ([nodes[0]], [nodes[1]])
-
-    if quality is None:
-        quality = 6
-
-    if shots is None:
-        # Number of measurement shots
-        shots = n_qubits << quality
-
-    if anneal_t is None:
-        anneal_t = 8.0
-
-    if anneal_h is None:
-        anneal_h = 8.0
-
-    if repulsion_base is None:
-        repulsion_base = 8.0
-
-    bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
-
-    if best_value < 0.0:
-        # Best cut is trivial partition, all/empty
-        empty = [nodes[0]]
-        empty.clear()
-
-        return '0' * n_qubits, 0.0, (nodes, empty)
-
-    return bit_string, best_value, partition
-
 def maxcut_tfim(
     G,
     quality=None,
@@ -360,11 +318,6 @@ def maxcut_tfim(
 
     n_qubits = len(G_m)
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= max(32, opencl_context.work_group_size))
-
-    if not is_opencl:
-        return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
-
     if n_qubits < 3:
         empty = [nodes[0]]
         empty.clear()
@@ -397,6 +350,17 @@ def maxcut_tfim(
 
     if repulsion_base is None:
         repulsion_base = 8.0
+
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= max(32, opencl_context.work_group_size))
+
+    if not is_opencl:
+        bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+
+        if best_value < 0.0:
+            # Best cut is trivial partition, all/empty
+            return '0' * n_qubits, 0.0, (nodes, [])
+
+        return bit_string, best_value, partition
 
     segment_size = G_m.shape[0] ** 2
     is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((((((((n_qubits + 31) >> 5) << 5) * ((shots + 1) >> 1)) + 7) >> 3) << 1) > opencl_context.max_alloc)

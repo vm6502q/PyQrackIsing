@@ -1,5 +1,5 @@
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
-from .maxcut_tfim import maxcut_tfim_pure_numba
+from .maxcut_tfim import maxcut_tfim
 from concurrent.futures import ProcessPoolExecutor
 import time
 import itertools
@@ -621,10 +621,7 @@ def tsp_symmetric_driver(G_m, is_cyclic, is_top_level, start_node, end_node, k_n
     return [nodes[x] for x in best_path], best_weight
 
 
-@njit
 def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
-    n_x = nodes[0]
-
     if is_cyclic:
         start_node = None
         end_node = None
@@ -633,21 +630,16 @@ def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsi
         start_node = end_node
         end_node = None
 
-    a, b, c = [n_x], [n_x], [n_x]
-    a.clear()
-    b.clear()
-    c.clear()
+    a, b, c = [], [], []
     if (start_node is None) and (end_node is None):
         if monte_carlo:
             a, b = monte_carlo_loop(n_nodes)
         else:
             best_cut = -float("inf")
             for _ in range(multi_start):
-                bits = ([n_x], [n_x])
-                bits[0].clear()
-                bits[1].clear()
+                bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim_pure_numba(G_m, nodes, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                    _, cut_value, bits = maxcut_tfim(G_m, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
@@ -838,10 +830,7 @@ def tsp_asymmetric_driver(G_m, is_reversed, is_cyclic, is_top_level, start_node,
     return [nodes[x] for x in final_path], best_weight
 
 
-@njit
 def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsion_base, start_node, end_node, monte_carlo, is_cyclic, n_nodes, multi_start):
-    n_x = nodes[0]
-
     if is_cyclic:
         start_node = None
         end_node = None
@@ -853,21 +842,16 @@ def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repuls
         end_node = None
         G_m = G_m.T
 
-    a, b, c = [n_x], [n_x], [n_x]
-    a.clear()
-    b.clear()
-    c.clear()
+    a, b, c = [], [], []
     if (start_node is None) and (end_node is None):
         if monte_carlo:
             a, b = monte_carlo_loop(n_nodes)
         else:
             best_cut = -float("inf")
             for _ in range(multi_start):
-                bits = ([n_x], [n_x])
-                bits[0].clear()
-                bits[1].clear()
+                bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim_pure_numba((G_m + G_m.T) / 2, nodes, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                    _, cut_value, bits = maxcut_tfim((G_m + G_m.T) / 2, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
