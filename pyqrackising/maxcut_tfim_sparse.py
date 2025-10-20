@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_cut_opencl, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -164,13 +164,13 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     best_solution = solutions[0]
     best_energy = -float("inf")
 
+    opencl_args = setup_cut_opencl(shots, n, segment_size, is_spin_glass)
+
     improved = True
     while improved:
         improved = False
         shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        u_solutions = np.unique(solutions, axis=0, sorted=False)
-        np.random.shuffle(u_solutions)
-        solution, energy = run_cut_opencl(u_solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass)
+        solution, energy = run_cut_opencl(solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution
@@ -240,16 +240,11 @@ def convert_bool_to_uint(samples):
     return theta
 
 
-def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass):
+def setup_cut_opencl(shots, n, segment_size, is_spin_glass):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
-    calculate_cut_kernel = opencl_context.calculate_cut_sparse_segmented_kernel if is_segmented else opencl_context.calculate_cut_sparse_kernel
     dtype = opencl_context.dtype
-    epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
-
-    shots = samples.shape[0]
-    n = samples.shape[1]
 
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
     args_np = np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32)
@@ -257,7 +252,6 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
     # Buffers
     mf = cl.mem_flags
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
-    theta_buf = make_theta_buf(convert_bool_to_uint(samples), is_segmented, shots, n)
 
     # Local memory allocation (1 float per work item)
     local_size = min(wgs, shots)
@@ -272,6 +266,20 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
 
     max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
     max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_index_host.nbytes)
+
+    return local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf
+
+
+def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+    queue = opencl_context.queue
+    calculate_cut_kernel = opencl_context.calculate_cut_sparse_segmented_kernel if is_segmented else opencl_context.calculate_cut_sparse_kernel
+
+    shots = samples.shape[0]
+    n = samples.shape[1]
+
+    # Buffers
+    mf = cl.mem_flags
+    theta_buf = make_theta_buf(convert_bool_to_uint(samples), is_segmented, shots, n)
 
     # Set kernel args
     if is_segmented:
