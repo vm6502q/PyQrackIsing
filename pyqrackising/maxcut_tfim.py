@@ -107,16 +107,20 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
             for s in prange(shots):
                 # First dimension: Hamming weight
                 m = sample_mag(thresholds)
+
                 # Second dimension: permutation within Hamming weight
-                solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-                energies[s] = compute_energy(solutions[s], G_m, n)
+                sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                solutions[s] = sample
+                energies[s] = compute_energy(sample, G_m, n)
         else:
             for s in prange(shots):
                 # First dimension: Hamming weight
                 m = sample_mag(thresholds)
+
                 # Second dimension: permutation within Hamming weight
-                solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-                energies[s] = compute_cut(solutions[s], G_m, n)
+                sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                solutions[s] = sample
+                energies[s] = compute_cut(sample, G_m, n)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
