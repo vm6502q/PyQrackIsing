@@ -340,8 +340,6 @@ def maxcut_tfim(
     is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((((((((n_qubits + 31) >> 5) << 5) * ((shots + 1) >> 1)) + 7) >> 3) << 1) > opencl_context.max_alloc)
 
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
-    if is_nested:
-        opencl_context.G_m_buf = G_m_buf
 
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)

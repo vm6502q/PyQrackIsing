@@ -224,11 +224,7 @@ def spin_glass_solver(
     is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-        if not (opencl_context.G_m_buf is None):
-            G_m_buf = opencl_context.G_m_buf
-            is_segmented = isinstance(G_m_buf, list)
-        else:
-            G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
+        G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
     if max_order is None:
         max_order = n_qubits

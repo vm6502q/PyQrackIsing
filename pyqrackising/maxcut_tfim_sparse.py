@@ -406,10 +406,6 @@ def maxcut_tfim_sparse(
     is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((((((((n_qubits + 31) >> 5) << 5) * ((shots + 1) >> 1)) + 7) >> 3) << 1) > opencl_context.max_alloc)
 
     G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
-    if is_nested:
-        opencl_context.G_data_buf = G_data_buf
-        opencl_context.G_rows_buf = G_rows_buf
-        opencl_context.G_cols_buf = G_cols_buf
 
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 

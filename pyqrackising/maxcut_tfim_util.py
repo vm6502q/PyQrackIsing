@@ -24,10 +24,6 @@ class OpenCLContext:
         self.calculate_cut_sparse_kernel = j
         self.calculate_cut_segmented_kernel = k
         self.calculate_cut_sparse_segmented_kernel = l
-        self.G_m_buf = None
-        self.G_data_buf = None
-        self.G_rows_buf = None
-        self.G_cols_buf = None
 
 IS_OPENCL_AVAILABLE = True
 ctx = None

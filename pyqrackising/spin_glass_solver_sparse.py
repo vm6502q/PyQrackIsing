@@ -1,5 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
-from .maxcut_tfim_util import get_cut_base, opencl_context
+from .maxcut_tfim_util import get_cut_base, make_G_m_csr_buf, opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -245,32 +245,7 @@ def spin_glass_solver_sparse(
     is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
 
     if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-        if not (opencl_context.G_data_buf is None):
-            G_data_buf = opencl_context.G_data_buf
-            G_rows_buf = opencl_context.G_rows_buf
-            G_cols_buf = opencl_context.G_cols_buf
-            is_segmented = isinstance(G_data_buf, list)
-        else:
-            mf = cl.mem_flags
-            ctx = opencl_context.ctx
-            G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
-            G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
-            if is_segmented:
-                o_shape = segment_size
-                segment_size = (segment_size + 3) >> 2
-                n_shape = segment_size << 2
-                _G_data = np.reshape(G_m.data, (o_shape,))
-                if n_shape != o_shape:
-                    np.resize(_G_data, (n_shape,))
-                _G_data_segments = np.split(_G_data, 4)
-                G_data_buf = [
-                    cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-                    for seg in _G_data_segments
-                ]
-                _G_data = None
-                _G_data_segments = None
-            else:
-                G_data_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.data)
+        G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
 
     if max_order is None:
         max_order = n_qubits
