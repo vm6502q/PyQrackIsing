@@ -1,3 +1,34 @@
+void reduce_energy_index(real1 energy, int i, __local real1* loc_energy, __local int* loc_index, __global real1* max_energy_ptr, __global int* max_index_ptr) {
+    const int lt_id = get_local_id(0);
+    const int lt_size = get_local_size(0);
+
+    loc_energy[lt_id] = energy;
+    loc_index[lt_id] = i;
+
+    // Reduce within workgroup
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        real1 hid_energy, lid_energy;
+        if (lt_id < offset) {
+            hid_energy = loc_energy[lt_id + offset];
+            lid_energy = loc_energy[lt_id];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if ((lt_id < offset) && (hid_energy > lid_energy)) {
+            loc_energy[lt_id] = hid_energy;
+            loc_index[lt_id] = loc_index[lt_id + offset];
+        }
+    }
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // Write out per-group result
+    if (lt_id == 0) {
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
+    }
+}
+
 real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __global int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
@@ -49,30 +80,7 @@ __kernel void bootstrap(
     const int j = i * k;
     const real1 energy = bootstrap_worker(best_theta, G_m, indices + j, k, n, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    // Reduce within workgroup
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    // Write out per-group result
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __global int* indices, const int k, const int n, const bool is_spin_glass) {
@@ -128,30 +136,7 @@ __kernel void bootstrap_sparse(
     const int j = i * k;
     const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices + j, k, n, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    // Reduce within workgroup
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    // Write out per-group result
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 // Helper to read from segmented G_m
@@ -233,28 +218,7 @@ __kernel void bootstrap_segmented(
     const int j = i * k;
     const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices + j, k, n, segment_size, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 bootstrap_worker_sparse_segmented(
@@ -332,28 +296,7 @@ __kernel void bootstrap_sparse_segmented(
     const int j = i * k;
     const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices + j, k, n, segment_size, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 inline bool get_bit(__global const uint* theta, const size_t u) {
@@ -395,33 +338,10 @@ __kernel void calculate_cut(
     const bool is_spin_glass = args[2];
 
     const int i = get_global_id(0);
-    const int j = (i * n + 31U) >> 5U;
+    const int j = i * n32;
     const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    // Reduce within workgroup
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    // Write out per-group result
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_sparse(__global const uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass) {
@@ -461,33 +381,10 @@ __kernel void calculate_cut_sparse(
     const bool is_spin_glass = args[2];
 
     const int i = get_global_id(0);
-    const int j = (i * n + 31U) >> 5U;
+    const int j = i * n32;
     const real1 energy = cut_worker_sparse(theta + j, G_data, G_rows, G_cols, n, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    // Reduce within workgroup
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    // Write out per-group result
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_segmented(
@@ -545,31 +442,10 @@ __kernel void calculate_cut_segmented(
     const int theta_segment_size = args[4];
 
     const int i = get_global_id(0);
-    const int j = (i * n + 31U) >> 5U;
+    const int j = i * n32;
     const real1 energy = cut_worker_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_m, n, segment_size, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_sparse_segmented(
@@ -631,29 +507,8 @@ __kernel void calculate_cut_sparse_segmented(
     const int theta_segment_size = args[4];
 
     const int i = get_global_id(0);
-    const int j = (i * n + 31U) >> 5U;
+    const int j = i * n32;
     const real1 energy = cut_worker_sparse_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
 
-    const int lt_id = get_local_id(0);
-    const int lt_size = get_local_size(0);
-
-    loc_energy[lt_id] = energy;
-    loc_index[lt_id] = i;
-
-    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (lt_id < offset) {
-            real1 hid_energy = loc_energy[lt_id + offset];
-            real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy > lid_energy) {
-                loc_energy[lt_id] = hid_energy;
-                loc_index[lt_id] = loc_index[lt_id + offset];
-            }
-        }
-    }
-
-    if (lt_id == 0) {
-        max_energy_ptr[get_group_id(0)] = loc_energy[0];
-        max_index_ptr[get_group_id(0)] = loc_index[0];
-    }
+    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }

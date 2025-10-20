@@ -167,7 +167,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_m, n) 
+        best_energy = compute_cut(best_solution, G_m, n)
 
     return best_solution, float(best_energy)
 
