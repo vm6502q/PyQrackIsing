@@ -369,12 +369,13 @@ def maxcut_tfim(
         nodes = list(range(len(G)))
         G_m = G
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
+    n_qubits = len(G_m)
+
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= 32)
 
     if not is_opencl:
         return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
-    n_qubits = len(G_m)
     if n_qubits < 3:
         empty = [nodes[0]]
         empty.clear()

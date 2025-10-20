@@ -362,7 +362,9 @@ def maxcut_tfim_sparse(
 
     J_eff, degrees, G_max = init_J_and_z(G_m)
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
+    n_qubits = G_m.shape[0]
+
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= 32)
 
     if not is_opencl:
         bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
