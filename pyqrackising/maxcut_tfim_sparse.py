@@ -160,7 +160,7 @@ def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_we
 
 
 def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
-    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
+    shots = ((max(1, shots >> 1) + 31) >> 5) << 5
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
 
@@ -326,10 +326,12 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
     cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
 
-    # Find global maximum
-    best_i = np.argmax(max_energy_host)
+    # Find global minimum
+    best_x = np.argmax(max_energy_host)
+    best_i = max_index_host[best_x]
 
-    return samples[best_i], max_energy_host[best_i]
+    return samples[best_i], max_energy_host[best_x]
+
 
 
 def maxcut_tfim_sparse(
