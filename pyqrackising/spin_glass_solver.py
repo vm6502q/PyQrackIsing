@@ -119,6 +119,10 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
 
     # Find global minimum
     best_i = np.argmin(min_energy_host)
+    best_energy = min_energy_host[best_i]
+
+    if min_energy <= best_energy:
+        return min_energy
 
     flip_index_start = best_i * k
     indices_to_flip = indices_array_np[flip_index_start : flip_index_start + k]
@@ -126,7 +130,7 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
     for i in indices_to_flip:
         best_theta[i] = not best_theta[i]
 
-    return min_energy_host[best_i]
+    return best_energy
 
 
 def log_intermediate(theta, G_m, nodes, min_energy, is_spin_glass):
