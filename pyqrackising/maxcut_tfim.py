@@ -399,7 +399,7 @@ def maxcut_tfim(
         repulsion_base = 8.0
 
     segment_size = G_m.shape[0] ** 2
-    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((((((n_qubits + 31) >> 5) << 5) * (shots >> 1)) >> 3) > opencl_context.max_alloc)
+    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or (((((((n_qubits + 31) >> 5) << 5) * (shots >> 1)) >> 3) << 1) > opencl_context.max_alloc)
 
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
     if is_nested:
