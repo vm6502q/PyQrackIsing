@@ -324,7 +324,8 @@ def maxcut_tfim(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= max(32, opencl_context.work_group_size))
+    wgs = max(32, opencl_context.work_group_size)
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= wgs) and (shots >= wgs)
 
     if not is_opencl:
         bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
