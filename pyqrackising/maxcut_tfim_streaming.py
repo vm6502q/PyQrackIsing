@@ -97,14 +97,24 @@ def sample_measurement(G_func, nodes, max_edge, shots, thresholds, degrees_sum, 
     improved = True
     while improved:
         improved = False
-        for s in prange(shots):
-            # First dimension: Hamming weight
-            m = sample_mag(thresholds)
+        if is_spin_glass:
+            for s in prange(shots):
+                # First dimension: Hamming weight
+                m = sample_mag(thresholds)
 
-            # Second dimension: permutation within Hamming weight
-            sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m)
-            solutions[s] = sample
-            energies[s] = compute_energy(sample, G_func, nodes, n) if is_spin_glass else compute_cut(sample, G_func, nodes, n)
+                # Second dimension: permutation within Hamming weight
+                sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                solutions[s] = sample
+                energies[s] = compute_energy(sample, G_func, nodes, n)
+        else:
+            for s in prange(shots):
+                # First dimension: Hamming weight
+                m = sample_mag(thresholds)
+
+                # Second dimension: permutation within Hamming weight
+                sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                solutions[s] = sample
+                energies[s] = compute_cut(sample, G_func, nodes, n)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
