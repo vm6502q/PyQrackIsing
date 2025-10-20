@@ -1,11 +1,3 @@
-#if FP16
-#define fwrapper(f, a) (half)f((float)(a))
-#define fwrapper2(f, a, b) (half)f((float)(a), (float)(b))
-#else
-#define fwrapper(f, a) f(a)
-#define fwrapper2(f, a, b) f(a, b)
-#endif
-
 real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
