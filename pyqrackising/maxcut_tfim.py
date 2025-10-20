@@ -149,7 +149,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     while improved:
         improved = False
         shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(shots, n, solutions, G_m_buf, is_segmented, segment_size, is_spin_glass)
+        solution, energy = run_cut_opencl(solutions, G_m_buf, is_segmented, segment_size, is_spin_glass)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution
@@ -208,7 +208,8 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
 
 
 @njit(parallel=True)
-def convert_bool_to_uint(shots, samples):
+def convert_bool_to_uint(samples):
+    shots = samples.shape[0]
     n32 = ((samples.shape[1] + 31) >> 5) << 5
     theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
     for i in prange(shots):
@@ -221,7 +222,7 @@ def convert_bool_to_uint(shots, samples):
     return theta
 
 
-def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
+def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_segmented_kernel if is_segmented else opencl_context.calculate_cut_kernel
@@ -229,12 +230,14 @@ def run_cut_opencl(shots, n, samples, G_m_buf, is_segmented, segment_size, is_sp
     epsilon = opencl_context.epsilon
     wgs = opencl_context.work_group_size
 
+    shots = samples.shape[1]
+
     # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([n, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
+    args_np = np.array([shots, samples.shape[0], is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
-    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=convert_bool_to_uint(shots, samples))
+    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=convert_bool_to_uint(samples))
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Local memory allocation (1 float per work item)
