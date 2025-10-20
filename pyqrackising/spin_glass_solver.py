@@ -227,7 +227,6 @@ def spin_glass_solver(
         while improved:
             improved = False
             k = 1
-            opencl_args = setup_opencl(n_qubits, n_qubits, np.array([n_qubits, k, n_qubits, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
             while (k <= correction_quality) and (k <= max_order):
                 if n_qubits < k:
                     break
@@ -241,6 +240,8 @@ def spin_glass_solver(
                     combos = combos_list[k - 1]
 
                 if is_opencl:
+                    combo_count = len(combos) // k
+                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
                     energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_min_energy, is_segmented, *opencl_args)
                 else:
                     energy = bootstrap(reheat_theta, G_m, combos, k, reheat_min_energy, dtype, is_spin_glass)
@@ -256,8 +257,6 @@ def spin_glass_solver(
                     break
 
                 k = k + 1
-                combo_count = math.comb(n_qubits, k)
-                opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
 
         if min_energy < reheat_min_energy:
             reheat_theta = best_theta.copy()
