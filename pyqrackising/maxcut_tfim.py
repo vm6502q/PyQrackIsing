@@ -90,7 +90,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 @njit(parallel=True)
 def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
-    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
+    shots = max(1, shots >> 1)
     n = len(G_m)
     tot_init_weight = weights.sum()
 
@@ -141,7 +141,7 @@ def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_bas
 
 
 def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
-    shots = max(1, shots >> 1)
+    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
     n = len(G_m)
     tot_init_weight = weights.sum()
 
@@ -199,6 +199,7 @@ def init_J_and_z(G_m):
     return J_eff, degrees, G_max
 
 
+@njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)

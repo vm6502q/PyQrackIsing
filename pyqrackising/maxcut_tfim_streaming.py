@@ -64,9 +64,10 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, re
 def compute_energy(sample, G_func, nodes, n_qubits):
     energy = 0
     for u in range(n_qubits):
+        u_bit = sample[u]
         for v in range(u + 1, n_qubits):
             val = G_func(nodes[u], nodes[v])
-            energy += val if sample[u] == sample[v] else -val
+            energy += val if u_bit == sample[v] else -val
 
     return -energy
 

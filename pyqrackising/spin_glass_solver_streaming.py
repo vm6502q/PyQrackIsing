@@ -28,9 +28,10 @@ def compute_energy(theta_bits, G_func, nodes):
     n_qubits = len(nodes)
     energy = 0
     for u in range(n_qubits):
+        u_bit = theta_bits[u]
         for v in range(u + 1, n_qubits):
             val = G_func(nodes[u], nodes[v])
-            energy += (val if theta_bits[u] == theta_bits[v] else -val)
+            energy += (val if u_bit == theta_bits[v] else -val)
 
     return energy
 

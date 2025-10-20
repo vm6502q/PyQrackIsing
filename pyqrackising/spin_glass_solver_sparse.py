@@ -19,12 +19,14 @@ except ImportError:
 
 @njit
 def evaluate_cut_edges(theta_bits, G_data, G_rows, G_cols):
-    l, _ = get_cut_base(theta_bits)
+    l, r = get_cut_base(theta_bits)
+    s = l if len(l) < len(r) else r
     cut = 0
-    for u in l:
+    for u in s:
+        u_bit = theta_bits[u]
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if theta_bits[u] != theta_bits[v]:
+            if u_bit != theta_bits[v]:
                 cut += G_data[col]
 
     return cut

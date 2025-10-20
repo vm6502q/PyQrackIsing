@@ -79,22 +79,25 @@ def local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_w
 def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
     energy = 0
     for u in range(n_qubits):
+        u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
             val = G_data[col]
-            energy += val if sample[u] == sample[v] else -val
+            energy += val if u_bit == sample[v] else -val
 
     return -energy
 
 
 @njit
 def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
-    l, _ = get_cut_base(sample)
+    l, r = get_cut_base(sample)
+    s = l if len(l) < len(r) else r
     cut = 0
-    for u in l:
+    for u in s:
+        u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
             v = G_cols[col]
-            if sample[u] != sample[v]:
+            if u_bit != sample[v]:
                 cut += G_data[col]
 
     return cut
@@ -102,7 +105,7 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 @njit(parallel=True)
 def sample_measurement(G_data, G_rows, G_cols, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
-    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
+    shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
 
@@ -153,7 +156,7 @@ def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_we
 
 
 def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
-    shots = max(1, shots >> 1)
+    shots = ((max(1, shots >> 1) + 3) >> 2) << 2
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
 
@@ -210,6 +213,7 @@ def init_J_and_z(G_m):
     return J_eff, degrees, G_max
 
 
+@njit
 def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
