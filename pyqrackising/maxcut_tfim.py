@@ -127,12 +127,11 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
 
 @njit(parallel=True)
 def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
-    n32 = ((n + 31) >> 5) << 5
     for s in prange(shots):
         # First dimension: Hamming weight
         m = sample_mag(thresholds)
         # Second dimension: permutation within Hamming weight
-        solutions[s] = np.resize(local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m), n32)
+        solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
 
 
 def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
@@ -140,7 +139,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     n = len(G_m)
     tot_init_weight = weights.sum()
 
-    solutions = np.zeros((shots, ((n + 31) >> 5) << 5), dtype=np.bool_)
+    solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
 
     best_solution = solutions[0]
@@ -210,7 +209,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
 
 @njit(parallel=True)
 def convert_bool_to_uint(shots, samples):
-    n32 = samples.shape[1]
+    n32 = ((samples.shape[1] + 31) >> 5) << 5
     theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
     for i in prange(shots):
         i_offset = i * n32
@@ -367,10 +366,10 @@ def maxcut_tfim(
         nodes = list(range(len(G)))
         G_m = G
 
-    if not is_maxcut_gpu:
-        return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
-    n_qubits = len(G_m)
+    if not is_opencl:
+        return maxcut_tfim_pure_numba(G_m, nodes, quality, shots, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
     if n_qubits < 3:
         empty = [nodes[0]]
@@ -408,10 +407,9 @@ def maxcut_tfim(
     segment_size = G_m.shape[0] ** 2
     is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
 
-    if is_maxcut_gpu and IS_OPENCL_AVAILABLE:
-        G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
-        if is_nested:
-            opencl_context.G_m_buf = G_m_buf
+    G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
+    if is_nested:
+        opencl_context.G_m_buf = G_m_buf
 
     J_eff, degrees, max_edge = init_J_and_z(G_m)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
