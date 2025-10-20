@@ -113,23 +113,20 @@ except ImportError:
 opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
 
 
-def setup_cut_opencl(shots, n, segment_size, is_spin_glass):
+def setup_opencl(l, g, args_np):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     dtype = opencl_context.dtype
     wgs = opencl_context.work_group_size
-
-    # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32)
 
     # Buffers
     mf = cl.mem_flags
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
     # Local memory allocation (1 float per work item)
-    local_size = min(wgs, shots)
+    local_size = min(wgs, l)
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
-    global_size = min(((shots + local_size - 1) // local_size) * local_size, max_global_size)
+    global_size = min(((g + local_size - 1) // local_size) * local_size, max_global_size)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 

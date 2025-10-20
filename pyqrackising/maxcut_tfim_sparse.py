@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_cut_opencl, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, init_bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -169,7 +169,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     best_solution = solutions[0]
     best_energy = -float("inf")
 
-    opencl_args = setup_cut_opencl(shots, n, segment_size, is_spin_glass)
+    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32))
 
     improved = True
     while improved:

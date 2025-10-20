@@ -4,7 +4,7 @@ import numpy as np
 import os
 from numba import njit, prange
 
-from .maxcut_tfim_util import convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_cut_opencl, bit_pick, init_bit_pick
+from .maxcut_tfim_util import convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, init_bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -154,7 +154,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     best_solution = solutions[0]
     best_energy = -float("inf")
 
-    opencl_args = setup_cut_opencl(shots, n, segment_size, is_spin_glass)
+    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32))
 
     improved = True
     while improved:

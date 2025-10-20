@@ -1,7 +1,8 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import get_cut_base, make_G_m_buf, opencl_context
+from .maxcut_tfim_util import get_cut_base, make_G_m_buf, opencl_context, setup_opencl
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
+import math
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -68,41 +69,22 @@ def bootstrap(best_theta, G_m, indices_array, k, min_energy, dtype, is_spin_glas
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, is_segmented, segment_size, is_spin_glass):
+def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, min_energy_host, min_index_host, min_energy_buf, min_index_buf):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_segmented_kernel if is_segmented else opencl_context.bootstrap_kernel
     dtype = opencl_context.dtype
     epsilon = opencl_context.epsilon
-    wgs = opencl_context.work_group_size
 
     n = best_theta.shape[0]
     combo_count = len(indices_array_np) // k
 
     best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
 
-    # Args: [n, k, combo_count, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([n, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32)
-
     # Buffers
     mf = cl.mem_flags
     best_theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=best_theta_np)
     indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
-    args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
-
-    # Local memory allocation (1 float per work item)
-    local_size = min(wgs, n)
-    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
-    global_size = min(((combo_count + local_size - 1) // local_size) * local_size, max_global_size)
-    local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
-    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
-
-    # Allocate min_energy and min_index result buffers per workgroup
-    min_energy_host = np.empty(global_size, dtype=dtype)
-    min_index_host = np.empty(global_size, dtype=np.int32)
-
-    min_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_energy_host.nbytes)
-    min_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, min_index_host.nbytes)
 
     # Set kernel args
     if is_segmented:
@@ -223,7 +205,9 @@ def spin_glass_solver(
     segment_size = G_m.shape[0] ** 2
     is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
 
-    if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
+    is_opencl = is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE
+
+    if is_opencl:
         G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
     if max_order is None:
@@ -243,6 +227,7 @@ def spin_glass_solver(
         while improved:
             improved = False
             k = 1
+            opencl_args = setup_opencl(n_qubits, n_qubits, np.array([n_qubits, k, n_qubits, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
             while (k <= correction_quality) and (k <= max_order):
                 if n_qubits < k:
                     break
@@ -255,8 +240,8 @@ def spin_glass_solver(
                 else:
                     combos = combos_list[k - 1]
 
-                if is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE:
-                    energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_min_energy, is_segmented, segment_size, is_spin_glass)
+                if is_opencl:
+                    energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_min_energy, is_segmented, *opencl_args)
                 else:
                     energy = bootstrap(reheat_theta, G_m, combos, k, reheat_min_energy, dtype, is_spin_glass)
 
@@ -271,6 +256,8 @@ def spin_glass_solver(
                     break
 
                 k = k + 1
+                combo_count = math.comb(n_qubits, k)
+                opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, np.random.randint(-(1<<31), (1<<31) - 1), segment_size], dtype=np.int32))
 
         if min_energy < reheat_min_energy:
             reheat_theta = best_theta.copy()
