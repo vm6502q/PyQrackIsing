@@ -213,14 +213,14 @@ def make_theta_buf(theta, is_segmented, shots, n):
 @njit(parallel=True)
 def convert_bool_to_uint(samples):
     shots = samples.shape[0]
-    n32 = ((samples.shape[1] + 31) >> 5) << 5
-    theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
+    n = samples.shape[1]
+    n32 = (n + 31) >> 5
+    theta = np.zeros(shots * n32, dtype=np.uint32)
     for i in prange(shots):
         i_offset = i * n32
-        for j in range(n32):
+        for j in range(n):
             if samples[i, j]:
-                b_index = i_offset + j
-                theta[b_index >> 5] |= 1 << (b_index & 31)
+                theta[i_offset + (j >> 5)] |= 1 << (j & 31)
 
     return theta
 
