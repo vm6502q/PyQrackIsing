@@ -69,7 +69,7 @@ def bootstrap(best_theta, G_m, indices_array, k, min_energy, dtype, is_spin_glas
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, min_energy_host, min_index_host, min_energy_buf, min_index_buf):
+def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_segmented_kernel if is_segmented else opencl_context.bootstrap_kernel
@@ -93,8 +93,8 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
             best_theta_buf,
             indices_buf,
             args_buf,
-            min_energy_buf,
-            min_index_buf,
+            max_energy_buf,
+            max_index_buf,
             local_energy_buf,
             local_index_buf
         )
@@ -104,8 +104,8 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
             best_theta_buf,
             indices_buf,
             args_buf,
-            min_energy_buf,
-            min_index_buf,
+            max_energy_buf,
+            max_index_buf,
             local_energy_buf,
             local_index_buf
         )
@@ -113,13 +113,13 @@ def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, min_energy, i
     cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
 
     # Read results
-    cl.enqueue_copy(queue, min_energy_host, min_energy_buf)
-    cl.enqueue_copy(queue, min_index_host, min_index_buf)
+    cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
 
     # Find global minimum
-    best_i = np.argmin(min_energy_host)
-    best_energy = min_energy_host[best_i]
+    best_i = np.argmax(max_energy_host)
+    best_energy = -max_energy_host[best_i]
 
     if min_energy <= best_energy:
         return min_energy

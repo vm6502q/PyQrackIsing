@@ -1,4 +1,4 @@
-real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
+real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __global int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     const size_t n_st = (size_t)n;
     for (int u = 0; u < n; ++u) {
@@ -20,9 +20,9 @@ real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __cons
                 }
             }
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -33,10 +33,10 @@ real1 bootstrap_worker(__constant char* theta, __global const real1* G_m, __cons
 __kernel void bootstrap(
     __global const real1* G_m,
     __constant char* best_theta,
-    __constant int* indices_array,
+    __global int* indices,
     __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* min_energy_ptr,     // output: per-group min energy
-    __global int* min_index_ptr,        // output: per-group best index (i)
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
 ) {
@@ -46,13 +46,13 @@ __kernel void bootstrap(
     const bool is_spin_glass = args[3];
     int i = get_global_id(0);
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker(best_theta, G_m, indices_array + j, k, n, is_spin_glass);
-        if (energy < best_energy) {
+        const real1 energy = bootstrap_worker(best_theta, G_m, indices + j, k, n, is_spin_glass);
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         }
@@ -70,7 +70,7 @@ __kernel void bootstrap(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
@@ -79,12 +79,12 @@ __kernel void bootstrap(
 
     // Write out per-group result
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
-real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __constant int* indices, const int k, const int n, const bool is_spin_glass) {
+real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __global int* indices, const int k, const int n, const bool is_spin_glass) {
     real1 energy = ZERO_R1;
     for (int u = 0; u < n; ++u) {
         bool u_bit = theta[u];
@@ -106,9 +106,9 @@ real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_da
                 }
             }
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -121,10 +121,10 @@ __kernel void bootstrap_sparse(
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant char* best_theta,
-    __constant int* indices_array,
+    __global int* indices,
     __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* min_energy_ptr,     // output: per-group min energy
-    __global int* min_index_ptr,        // output: per-group best index (i)
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
 ) {
@@ -134,13 +134,13 @@ __kernel void bootstrap_sparse(
     const bool is_spin_glass = args[3];
     int i = get_global_id(0);
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, is_spin_glass);
-        if (energy < best_energy) {
+        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices + j, k, n, is_spin_glass);
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         }
@@ -158,7 +158,7 @@ __kernel void bootstrap_sparse(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
@@ -167,8 +167,8 @@ __kernel void bootstrap_sparse(
 
     // Write out per-group result
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
@@ -184,7 +184,7 @@ inline real1 get_G_m(
 real1 bootstrap_worker_segmented(
     __constant char* theta,
     __global const real1** G_m,
-    __constant int* indices,
+    __global int* indices,
     const int k,
     const int n,
     const int segment_size,
@@ -215,9 +215,9 @@ real1 bootstrap_worker_segmented(
             }
 
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -232,10 +232,10 @@ __kernel void bootstrap_segmented(
     __global const real1* G_m2,
     __global const real1* G_m3,
     __constant char* best_theta,
-    __constant int* indices_array,
+    __global int* indices,
     __constant int* args,               // args[0]=n, args[1]=k, args[2]=combo_count, args[3]=segment_size
-    __global real1* min_energy_ptr,
-    __global int* min_index_ptr,
+    __global real1* max_energy_ptr,
+    __global int* max_index_ptr,
     __local real1* loc_energy,
     __local int* loc_index
 ) {
@@ -248,13 +248,13 @@ __kernel void bootstrap_segmented(
     const int segment_size = args[4];
     int i = get_global_id(0);
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices_array + j, k, n, segment_size, is_spin_glass);
-        if (energy < best_energy) {
+        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices + j, k, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         }
@@ -271,7 +271,7 @@ __kernel void bootstrap_segmented(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
@@ -279,8 +279,8 @@ __kernel void bootstrap_segmented(
     }
 
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
@@ -289,7 +289,7 @@ real1 bootstrap_worker_sparse_segmented(
     __global const real1** G_data,
     __global const uint* G_rows,
     __global const uint* G_cols,
-    __constant int* indices,
+    __global int* indices,
     const int k,
     const int n,
     const int segment_size,
@@ -322,9 +322,9 @@ real1 bootstrap_worker_sparse_segmented(
             }
 
             if (u_bit != v_bit) {
-                energy -= val;
-            } else if (is_spin_glass) {
                 energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
             }
         }
     }
@@ -340,10 +340,10 @@ __kernel void bootstrap_sparse_segmented(
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant char* best_theta,
-    __constant int* indices_array,
+    __global int* indices,
     __constant int* args,               // args[0] = n, args[1] = k, args[2] = combo_count, args[3] = segment_size
-    __global real1* min_energy_ptr,
-    __global int* min_index_ptr,
+    __global real1* max_energy_ptr,
+    __global int* max_index_ptr,
     __local real1* loc_energy,
     __local int* loc_index
 ) {
@@ -356,13 +356,13 @@ __kernel void bootstrap_sparse_segmented(
     const int segment_size = args[4];
     int i = get_global_id(0);
 
-    real1 best_energy = INFINITY;
+    real1 best_energy = -INFINITY;
     int best_i = i;
 
     for (; i < combo_count; i += MAX_PROC_ELEM) {
         const int j = i * k;
-        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices_array + j, k, n, segment_size, is_spin_glass);
-        if (energy < best_energy) {
+        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices + j, k, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
         }
@@ -379,7 +379,7 @@ __kernel void bootstrap_sparse_segmented(
         if (lt_id < offset) {
             real1 hid_energy = loc_energy[lt_id + offset];
             real1 lid_energy = loc_energy[lt_id];
-            if (hid_energy < lid_energy) {
+            if (hid_energy > lid_energy) {
                 loc_energy[lt_id] = hid_energy;
                 loc_index[lt_id] = loc_index[lt_id + offset];
             }
@@ -387,8 +387,8 @@ __kernel void bootstrap_sparse_segmented(
     }
 
     if (lt_id == 0) {
-        min_energy_ptr[get_group_id(0)] = loc_energy[0];
-        min_index_ptr[get_group_id(0)] = loc_index[0];
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
     }
 }
 
