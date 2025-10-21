@@ -7,7 +7,8 @@ from scipy.sparse import lil_matrix
 
 
 class OpenCLContext:
-    def __init__(self, a, w, d, e, r, c, q, b, s, x, y, i, j, k, l):
+    def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y, i, j, k, l):
+        self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.work_group_size = w
         self.dtype = d
@@ -27,6 +28,7 @@ class OpenCLContext:
 IS_OPENCL_AVAILABLE = True
 ctx = None
 queue = None
+compute_units = None
 dtype = np.float32
 epsilon = 2 ** -23
 work_group_size = 32
@@ -82,6 +84,7 @@ try:
     # Pick a device (GPU if available)
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
+    compute_units = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS))))
 
     # Load and build OpenCL kernels
     kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
@@ -105,7 +108,8 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
+
 
 
 def setup_opencl(l, g, args_np):
@@ -118,9 +122,12 @@ def setup_opencl(l, g, args_np):
     mf = cl.mem_flags
     args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
 
-    # Local memory allocation (1 float per work item)
+    # Group sizes
     local_size = min(wgs, l)
-    global_size = ((g + local_size - 1) // local_size) * local_size
+    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
+    global_size = min(((g + local_size - 1) // local_size) * local_size, max_global_size)
+
+    # Local memory allocation (1 float per work item)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 

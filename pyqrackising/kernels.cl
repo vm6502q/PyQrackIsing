@@ -75,11 +75,22 @@ __kernel void bootstrap(
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
 
-    const int i = get_global_id(0);
-    const int j = i * k;
-    const real1 energy = bootstrap_worker(best_theta, G_m, indices + j, k, n, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        const int j = i * k;
+        const real1 energy = bootstrap_worker(best_theta, G_m, indices + j, k, n, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 bootstrap_worker_sparse(__constant char* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, __global int* indices, const int k, const int n, const bool is_spin_glass) {
@@ -131,11 +142,22 @@ __kernel void bootstrap_sparse(
     const int combo_count = args[2];
     const bool is_spin_glass = args[3];
 
-    const int i = get_global_id(0);
-    const int j = i * k;
-    const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices + j, k, n, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        const int j = i * k;
+        const real1 energy = bootstrap_worker_sparse(best_theta, G_data, G_rows, G_cols, indices + j, k, n, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 // Helper to read from segmented G_m
@@ -213,11 +235,22 @@ __kernel void bootstrap_segmented(
     const bool is_spin_glass = args[3];
     const int segment_size = args[4];
 
-    const int i = get_global_id(0);
-    const int j = i * k;
-    const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices + j, k, n, segment_size, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        const int j = i * k;
+        const real1 energy = bootstrap_worker_segmented(best_theta, G_m, indices + j, k, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 bootstrap_worker_sparse_segmented(
@@ -291,11 +324,22 @@ __kernel void bootstrap_sparse_segmented(
     const bool is_spin_glass = args[3];
     const int segment_size = args[4];
 
-    const int i = get_global_id(0);
-    const int j = i * k;
-    const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices + j, k, n, segment_size, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        const int j = i * k;
+        const real1 energy = bootstrap_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, indices + j, k, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 inline bool get_bit(__global const uint* theta, const size_t u) {
@@ -336,11 +380,22 @@ __kernel void calculate_cut(
     const bool is_spin_glass = args[2];
     const int n32 = (n + 31) >> 5U;
 
-    const int i = get_global_id(0);
-    const int j = i * n32;
-    const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < shots; i += max_i) {
+        const int j = i * n32;
+        const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_sparse(__global const uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass) {
@@ -379,11 +434,22 @@ __kernel void calculate_cut_sparse(
     const bool is_spin_glass = args[2];
     const int n32 = (n + 31) >> 5U;
 
-    const int i = get_global_id(0);
-    const int j = i * n32;
-    const real1 energy = cut_worker_sparse(theta + j, G_data, G_rows, G_cols, n, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < shots; i += max_i) {
+        const int j = i * n32;
+        const real1 energy = cut_worker_sparse(theta + j, G_data, G_rows, G_cols, n, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_segmented(
@@ -440,11 +506,22 @@ __kernel void calculate_cut_segmented(
     const int theta_segment_size = args[4];
     const int n32 = (n + 31) >> 5U;
 
-    const int i = get_global_id(0);
-    const int j = i * n32;
-    const real1 energy = cut_worker_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_m, n, segment_size, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < shots; i += max_i) {
+        const int j = i * n32;
+        const real1 energy = cut_worker_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_m, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
 real1 cut_worker_sparse_segmented(
@@ -505,9 +582,20 @@ __kernel void calculate_cut_sparse_segmented(
     const int theta_segment_size = args[4];
     const int n32 = (n + 31) >> 5U;
 
-    const int i = get_global_id(0);
-    const int j = i * n32;
-    const real1 energy = cut_worker_sparse_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
 
-    reduce_energy_index(energy, i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < shots; i += max_i) {
+        const int j = i * n32;
+        const real1 energy = cut_worker_sparse_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_data, G_rows, G_cols, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
