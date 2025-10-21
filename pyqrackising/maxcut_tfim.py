@@ -174,17 +174,20 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
 
 
 @njit(parallel=True)
-def init_J_and_z(G_m):
+def init_J_and_z(G_m, repulsion_base):
     G_min = G_m.min()
     n_qubits = len(G_m)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
+    weights = np.empty(n_qubits, dtype=np.float64)
     G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
+        weight = 0.0
         for m in range(n_qubits):
             val = G_m[n, m]
+            weight += val
             if val > G_max:
                 G_max = val
             val -= G_min
@@ -192,27 +195,32 @@ def init_J_and_z(G_m):
                 degree += 1
                 J += val
                 val = abs(val)
-        J = -J / degree if degree > 0 else 0
+        if degree > 0:
+            J = -J / degree
+            weight = -weight / degree
         degrees[n] = degree
         J_eff[n] = J
+        weights[n] = weight
+
+    weights = repulsion_base ** weights
 
     G_min = abs(G_min)
     G_max = abs(G_max)
     if G_min > G_max:
         G_max = G_min
 
-    return J_eff, degrees, G_max
+    return J_eff, degrees, weights, G_max
 
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, max_edge = init_J_and_z(G_m)
+    J_eff, degrees, weights, max_edge = init_J_and_z(G_m, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = repulsion_base ** J_eff
+    J_eff = None
 
-    best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -342,13 +350,13 @@ def maxcut_tfim(
     is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((theta_segment_size << 3) > opencl_context.max_alloc)
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
-    J_eff, degrees, max_edge = init_J_and_z(G_m)
+    J_eff, degrees, weights, max_edge = init_J_and_z(G_m, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = repulsion_base ** J_eff
+    J_eff = None
 
-    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

@@ -130,16 +130,19 @@ def sample_measurement(G_func, nodes, max_edge, shots, thresholds, weights, n, r
 
 
 @njit(parallel=True)
-def init_J_and_z(G_func, nodes, G_min):
+def init_J_and_z(G_func, nodes, G_min, repulsion_base):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
+    weights = np.empty(n_qubits, dtype=np.float64)
     G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
+        weight = 0.0
         for m in range(n_qubits):
             val = G_func(nodes[n], nodes[m])
+            weight += val
             if val > G_max:
                 G_max = val
             val -= G_min
@@ -147,11 +150,16 @@ def init_J_and_z(G_func, nodes, G_min):
                 degree += 1
                 J += val
                 val = abs(val)
-        J = -J / degree if degree > 0 else 0
+        if degree > 0:
+            J = -J / degree
+            weight = -weight / degree
         degrees[n] = degree
         J_eff[n] = J
+        weights[n] = weight
 
-    return J_eff, degrees, G_max
+    weights = repulsion_base ** weights
+
+    return J_eff, degrees, weights, G_max
 
 @njit
 def find_G_min(G_func, nodes, n_nodes):
@@ -169,13 +177,13 @@ def find_G_min(G_func, nodes, n_nodes):
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, max_edge = init_J_and_z(G_func, nodes, G_min)
+    J_eff, degrees, weights, max_edge = init_J_and_z(G_func, nodes, G_min, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = repulsion_base ** J_eff
+    J_eff = None
 
-    best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, J_eff, n_qubits, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, weights, n_qubits, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

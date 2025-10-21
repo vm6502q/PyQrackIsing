@@ -188,17 +188,20 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     return best_solution, float(best_energy)
 
 
-def init_J_and_z(G_m):
+def init_J_and_z(G_m, repulsion_base):
     G_min = G_m.min()
     n_qubits = G_m.shape[0]
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
+    weights = np.empty(n_qubits, dtype=np.float64)
     G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
+        weight = 0.0
         for m in range(n_qubits):
             val = G_m[n, m]
+            weight += val
             if val > G_max:
                 G_max = val
             val -= G_min
@@ -206,25 +209,28 @@ def init_J_and_z(G_m):
                 degree += 1
                 J += val
                 val = abs(val)
-        J = -J / degree if degree > 0 else 0
+        if degree > 0:
+            J = -J / degree
+            weight = -weight / degree
         degrees[n] = degree
         J_eff[n] = J
+        weights[n] = weight
+
+    weights = repulsion_base ** weights
 
     G_min = abs(G_min)
     G_max = abs(G_max)
     if G_min > G_max:
         G_max = G_min
 
-    return J_eff, degrees, G_max
+    return J_eff, degrees, weights, G_max
 
 
 @njit
-def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
+def cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_max, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
-    J_eff = repulsion_base ** J_eff
-
-    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, G_max, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -388,14 +394,14 @@ def maxcut_tfim_sparse(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    J_eff, degrees, G_max = init_J_and_z(G_m)
+    J_eff, degrees, weights, G_max = init_J_and_z(G_m, repulsion_base)
 
     n_qubits = G_m.shape[0]
 
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if not is_opencl:
-        bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+        bit_string, best_value, partition = cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
         if best_value < 0.0:
             # Best cut is trivial partition, all/empty
