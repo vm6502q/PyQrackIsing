@@ -197,7 +197,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 5
+        quality = 6
 
     if shots is None:
         # Number of measurement shots
@@ -210,7 +210,7 @@ def maxcut_tfim_streaming(
         anneal_h = 8.0
 
     if repulsion_base is None:
-        repulsion_base = 2.0
+        repulsion_base = 5.0
 
     G_min = find_G_min(G_func, nodes, n_qubits)
 

@@ -301,7 +301,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 5
+        quality = 6
 
     if shots is None:
         # Number of measurement shots
@@ -314,7 +314,7 @@ def maxcut_tfim(
         anneal_h = 8.0
 
     if repulsion_base is None:
-        repulsion_base = 2.0
+        repulsion_base = 5.0
 
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
