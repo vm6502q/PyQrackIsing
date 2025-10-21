@@ -80,9 +80,8 @@ def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
     for u in range(n_qubits):
         u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
-            v = G_cols[col]
             val = G_data[col]
-            energy += val if u_bit == sample[v] else -val
+            energy += val if u_bit == sample[G_cols[col]] else -val
 
     return -energy
 
@@ -95,8 +94,7 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
     for u in s:
         u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
-            v = G_cols[col]
-            if u_bit != sample[v]:
+            if u_bit != sample[G_cols[col]]:
                 cut += G_data[col]
 
     return cut
@@ -224,51 +222,6 @@ def cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_data, G_rows
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
     return bit_string, best_value, (l, r)
-
-
-@njit(parallel=True)
-def convert_bool_to_uint(samples):
-    shots = samples.shape[0]
-    n32 = ((samples.shape[1] + 31) >> 5) << 5
-    theta = np.zeros(shots * (n32 >> 5), dtype=np.uint32)
-    for i in prange(shots):
-        i_offset = i * n32
-        for j in range(n32):
-            if samples[i, j]:
-                b_index = i_offset + j
-                theta[b_index >> 5] |= 1 << (b_index & 31)
-
-    return theta
-
-
-def setup_cut_opencl(shots, n, segment_size, is_spin_glass):
-    ctx = opencl_context.ctx
-    queue = opencl_context.queue
-    dtype = opencl_context.dtype
-    wgs = opencl_context.work_group_size
-
-    # Args: [n, shots, is_spin_glass, prng_seed, segment_size]
-    args_np = np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32)
-
-    # Buffers
-    mf = cl.mem_flags
-    args_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=args_np)
-
-    # Local memory allocation (1 float per work item)
-    local_size = min(wgs, shots)
-    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
-    global_size = min(((shots + local_size - 1) // local_size) * local_size, max_global_size)
-    local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
-    local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
-
-    # Allocate max_energy and max_index result buffers per workgroup
-    max_energy_host = np.empty(global_size, dtype=dtype)
-    max_index_host = np.empty(global_size, dtype=np.int32)
-
-    max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
-    max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_index_host.nbytes)
-
-    return local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf
 
 
 def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
