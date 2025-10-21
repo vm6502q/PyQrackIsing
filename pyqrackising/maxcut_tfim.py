@@ -164,7 +164,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
         solution, energy = run_cut_opencl(solutions, G_m_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
-            best_solution = solution
+            best_solution = solution.copy()
             improved = True
 
     if is_spin_glass:

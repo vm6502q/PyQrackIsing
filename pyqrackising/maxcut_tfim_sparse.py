@@ -179,7 +179,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
         solution, energy = run_cut_opencl(solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
-            best_solution = solution
+            best_solution = solution.copy()
             improved = True
 
     if is_spin_glass:
