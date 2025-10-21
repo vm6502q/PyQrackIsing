@@ -153,9 +153,7 @@ When `is_optimized=True`, the `spin_glass_solver(G)` is used as a final optimiza
 
 ## Environment Variables
 
-We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for when `is_alt_gpu_sampling=True`. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
-
-Similarly, for `is_alt_gpu_sampling=True`, define the "top-`n`" count of highest-weight direct neighbors to retain during sampling with environment variable "`PYQRACKISING_GPU_TOP_N`". The default is `32`. Increasing this might increase solution quality, but it will also increase time-to-solution and private memory usage.
+We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for OpenCL-based solvers. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
 
 By default, PyQrackIsing expects all `numpy` floating-point array inputs to be 32-bit. If you'd like to use 64-bit, you can set environment variable `PYQRACKISING_FPPOW=6` (meaning, 2^6=64, for the "floating-point (precision) power"). The default is `5`, for 32-bit. 16-bit is stubbed out and compiles for OpenCL, but the bigger hurdle is that `numpy` on `x86_64` doesn't provide a 16-bit floating point implementation. (As author of Qrack, I could suggest to the `numpy` maintainers that open-source, IEEE-compliant software-based implementations exist for `x86_64` and other architectures, but I'm sure they're aware and likely waiting for in-compiler support.) If you're on an ARM-based architecture, there's a good chance 16-bit floating-point will work, if `numpy` uses the native hardware support.
 
