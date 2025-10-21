@@ -17,7 +17,7 @@ wgs = opencl_context.work_group_size
 
 
 @njit
-def update_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, n, used, node, repulsion_base):
+def update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
 
@@ -26,7 +26,7 @@ def update_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, n, used, 
         nbr = G_cols[j]
         if used[nbr]:
             continue
-        weights[nbr] *= repulsion_base ** (-G_data[j] / max_edge)
+        weights[nbr] *= repulsion_base ** (-G_data[j])
 
     for nbr in range(node):
         if used[nbr]:
@@ -35,12 +35,12 @@ def update_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, n, used, 
         end = G_rows[nbr + 1]
         j = binary_search(G_cols[start:end], node) + start
         if j < end:
-            weights[nbr] *= repulsion_base ** (-G_data[j] / max_edge)
+            weights[nbr] *= repulsion_base ** (-G_data[j])
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_weight, repulsion_base, n, m):
+def local_repulsion_choice(G_data, G_rows, G_cols, weights, tot_init_weight, repulsion_base, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -59,13 +59,13 @@ def local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_w
         used[node] = True
         return used
 
-    update_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, n, used, node, repulsion_base)
+    update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base)
 
     for _ in range(1, m - 1):
         node = bit_pick(weights, used, n)
 
         # Update answer and weights
-        update_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, n, used, node, repulsion_base)
+        update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base)
 
     node = bit_pick(weights, used, n)
 
@@ -103,7 +103,7 @@ def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(G_data, G_rows, G_cols, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
+def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, weights, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
@@ -123,7 +123,7 @@ def sample_measurement(G_data, G_rows, G_cols, max_edge, shots, thresholds, weig
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_data, G_rows, G_cols, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_energy(sample, G_data, G_rows, G_cols, n)
         else:
@@ -132,7 +132,7 @@ def sample_measurement(G_data, G_rows, G_cols, max_edge, shots, thresholds, weig
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_data, G_rows, G_cols, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_cut(sample, G_data, G_rows, G_cols, n)
 
@@ -150,15 +150,15 @@ def sample_measurement(G_data, G_rows, G_cols, max_edge, shots, thresholds, weig
 
 
 @njit(parallel=True)
-def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
+def shot_loop(G_data, G_rows, G_cols, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
     for s in prange(shots):
         # First dimension: Hamming weight
         m = sample_mag(thresholds)
         # Second dimension: permutation within Hamming weight
-        solutions[s] = local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+        solutions[s] = local_repulsion_choice(G_data, G_rows, G_cols, weights, tot_init_weight, repulsion_base, n, m)
 
 
-def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
+def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
     shots = ((max(1, shots >> 1) + 31) >> 5) << 5
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
@@ -173,7 +173,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     improved = True
     while improved:
         improved = False
-        shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
+        shot_loop(G_data, G_rows, G_cols, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
         solution, energy = run_cut_opencl(solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
@@ -192,7 +192,6 @@ def init_J_and_z(G_m, repulsion_base):
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     weights = np.empty(n_qubits, dtype=np.float64)
-    G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
@@ -200,8 +199,6 @@ def init_J_and_z(G_m, repulsion_base):
         for m in range(n_qubits):
             val = G_m[n, m]
             weight += val
-            if val > G_max:
-                G_max = val
             val -= G_min
             if val != 0.0:
                 degree += 1
@@ -215,19 +212,14 @@ def init_J_and_z(G_m, repulsion_base):
 
     weights = repulsion_base ** weights
 
-    G_min = abs(G_min)
-    G_max = abs(G_max)
-    if G_min > G_max:
-        G_max = G_min
-
-    return J_eff, degrees, weights, G_max
+    return J_eff, degrees, weights
 
 
 @njit
-def cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_max, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
+def cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
-    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, G_max, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -391,14 +383,14 @@ def maxcut_tfim_sparse(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    J_eff, degrees, weights, G_max = init_J_and_z(G_m, repulsion_base)
+    J_eff, degrees, weights = init_J_and_z(G_m, repulsion_base)
 
     n_qubits = G_m.shape[0]
 
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if not is_opencl:
-        bit_string, best_value, partition = cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+        bit_string, best_value, partition = cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
         if best_value < 0.0:
             # Best cut is trivial partition, all/empty
@@ -417,7 +409,7 @@ def maxcut_tfim_sparse(
     degrees = None
     J_eff = repulsion_base ** J_eff
 
-    best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

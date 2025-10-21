@@ -17,7 +17,7 @@ wgs = opencl_context.work_group_size
 
 
 @njit
-def update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_base):
+def update_repulsion_choice(G_m, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
 
@@ -25,12 +25,12 @@ def update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_bas
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= repulsion_base ** (-G_m[node, nbr] / max_edge)
+        weights[nbr] *= repulsion_base ** (-G_m[node, nbr])
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m):
+def local_repulsion_choice(G_m, weights, tot_init_weight, repulsion_base, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -49,13 +49,13 @@ def local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_ba
         used[node] = True
         return used
 
-    update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_base)
+    update_repulsion_choice(G_m, weights, n, used, node, repulsion_base)
 
     for _ in range(1, m - 1):
         node = bit_pick(weights, used, n)
 
         # Update answer and weights
-        update_repulsion_choice(G_m, max_edge, weights, n, used, node, repulsion_base)
+        update_repulsion_choice(G_m, weights, n, used, node, repulsion_base)
 
     # Count available
     node = bit_pick(weights, used, n)
@@ -88,7 +88,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass):
+def sample_measurement(G_m, shots, thresholds, weights, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     n = len(G_m)
     tot_init_weight = weights.sum()
@@ -108,7 +108,7 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_m, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_energy(sample, G_m, n)
         else:
@@ -117,7 +117,7 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_m, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_cut(sample, G_m, n)
 
@@ -135,15 +135,15 @@ def sample_measurement(G_m, max_edge, shots, thresholds, weights, repulsion_base
 
 
 @njit(parallel=True)
-def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
+def shot_loop(G_m, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions):
     for s in prange(shots):
         # First dimension: Hamming weight
         m = sample_mag(thresholds)
         # Second dimension: permutation within Hamming weight
-        solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+        solutions[s] = local_repulsion_choice(G_m, weights, tot_init_weight, repulsion_base, n, m)
 
 
-def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
+def sample_for_opencl(G_m, G_m_buf, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
     shots = ((max(1, shots >> 1) + 31) >> 5) << 5
     n = len(G_m)
     tot_init_weight = weights.sum()
@@ -158,7 +158,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     improved = True
     while improved:
         improved = False
-        shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
+        shot_loop(G_m, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
         solution, energy = run_cut_opencl(solutions, G_m_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
@@ -178,7 +178,6 @@ def init_J_and_z(G_m, repulsion_base):
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     weights = np.empty(n_qubits, dtype=np.float64)
-    G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
@@ -186,8 +185,6 @@ def init_J_and_z(G_m, repulsion_base):
         for m in range(n_qubits):
             val = G_m[n, m]
             weight += val
-            if val > G_max:
-                G_max = val
             val -= G_min
             if val != 0.0:
                 degree += 1
@@ -201,23 +198,18 @@ def init_J_and_z(G_m, repulsion_base):
 
     weights = repulsion_base ** weights
 
-    G_min = abs(G_min)
-    G_max = abs(G_max)
-    if G_min > G_max:
-        G_max = G_min
-
-    return J_eff, degrees, weights, G_max
+    return J_eff, degrees, weights
 
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, weights, max_edge = init_J_and_z(G_m, repulsion_base)
+    J_eff, degrees, weights = init_J_and_z(G_m, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_m, shots, hamming_prob, weights, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -347,13 +339,13 @@ def maxcut_tfim(
     is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((theta_segment_size << 3) > opencl_context.max_alloc)
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
-    J_eff, degrees, weights, max_edge = init_J_and_z(G_m, repulsion_base)
+    J_eff, degrees, weights = init_J_and_z(G_m, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, shots, hamming_prob, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

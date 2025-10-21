@@ -10,7 +10,7 @@ dtype = opencl_context.dtype
 
 
 @njit
-def update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node, repulsion_base):
+def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
 
@@ -18,12 +18,12 @@ def update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node, rep
     for nbr in range(n):
         if used[nbr]:
             continue
-        weights[nbr] *= repulsion_base ** (-G_func(nodes[node], nodes[nbr]) / max_edge)
+        weights[nbr] *= repulsion_base ** (-G_func(nodes[node], nodes[nbr]))
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m):
+def local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
@@ -42,13 +42,13 @@ def local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, re
         used[node] = True
         return used
 
-    update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node, repulsion_base)
+    update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
 
     for _ in range(1, m - 1):
         node = bit_pick(weights, used, n)
 
         # Update answer and weights
-        update_repulsion_choice(G_func, nodes, max_edge, weights, n, used, node, repulsion_base)
+        update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
 
     node = bit_pick(weights, used, n)
 
@@ -82,7 +82,7 @@ def compute_cut(sample, G_func, nodes, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(G_func, nodes, max_edge, shots, thresholds, weights, n, repulsion_base, is_spin_glass):
+def sample_measurement(G_func, nodes, shots, thresholds, weights, n, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     tot_init_weight = weights.sum()
 
@@ -101,7 +101,7 @@ def sample_measurement(G_func, nodes, max_edge, shots, thresholds, weights, n, r
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_energy(sample, G_func, nodes, n)
         else:
@@ -110,7 +110,7 @@ def sample_measurement(G_func, nodes, max_edge, shots, thresholds, weights, n, r
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_func, nodes, max_edge, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m)
                 solutions[s] = sample
                 energies[s] = compute_cut(sample, G_func, nodes, n)
 
@@ -133,7 +133,6 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
     weights = np.empty(n_qubits, dtype=np.float64)
-    G_max = -float("inf")
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
@@ -141,8 +140,6 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
         for m in range(n_qubits):
             val = G_func(nodes[n], nodes[m])
             weight += val
-            if val > G_max:
-                G_max = val
             val -= G_min
             if val != 0.0:
                 degree += 1
@@ -156,7 +153,7 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
 
     weights = repulsion_base ** weights
 
-    return J_eff, degrees, weights, G_max
+    return J_eff, degrees, weights
 
 @njit
 def find_G_min(G_func, nodes, n_nodes):
@@ -174,13 +171,13 @@ def find_G_min(G_func, nodes, n_nodes):
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, weights, max_edge = init_J_and_z(G_func, nodes, G_min, repulsion_base)
+    J_eff, degrees, weights = init_J_and_z(G_func, nodes, G_min, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, weights, n_qubits, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_func, nodes, shots, hamming_prob, weights, n_qubits, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
