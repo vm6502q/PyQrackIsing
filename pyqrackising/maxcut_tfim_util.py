@@ -111,7 +111,6 @@ except ImportError:
 opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
 
 
-
 def setup_opencl(l, g, args_np):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
@@ -150,10 +149,10 @@ def make_G_m_buf(G_m, is_segmented, segment_size):
         _G_m = np.reshape(G_m, (o_shape,))
         if n_shape != o_shape:
             np.resize(_G_m, (n_shape,))
-        _G_m_segments = np.split(_G_m, 4)
+        G_m_segments = np.split(_G_m, 4)
         G_m_buf = [
             cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in _G_m_segments
+            for seg in G_m_segments
         ]
     else:
         G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
@@ -172,10 +171,10 @@ def make_G_m_csr_buf(G_m, is_segmented, segment_size):
         _G_data = np.reshape(G_m.data, (o_shape,))
         if n_shape != o_shape:
             np.resize(_G_data, (n_shape,))
-        _G_data_segments = np.split(_G_data, 4)
+        G_data_segments = np.split(_G_data, 4)
         G_data_buf = [
             cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in _G_data_segments
+            for seg in G_data_segments
         ]
         _G_data = None
         _G_data_segments = None
@@ -191,10 +190,10 @@ def make_theta_buf(theta, is_segmented, shots, n):
     if is_segmented:
         n_shape = (((shots + 3) >> 2) << 2) * ((n + 31) >> 5)
         theta = np.reshape(theta, (n_shape,))
-        _theta_segments = np.split(theta, 4)
+        theta_segments = np.split(theta, 4)
         theta_buf = [
             cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in _theta_segments
+            for seg in theta_segments
         ]
     else:
         theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
@@ -218,10 +217,10 @@ def convert_bool_to_uint(samples):
 
 
 @njit
-def get_cut(solution, nodes):
+def get_cut(solution, nodes, n):
     bit_string = ""
     l, r = [], []
-    for i in range(len(solution)):
+    for i in range(n):
         if solution[i]:
             bit_string += "1"
             r.append(nodes[i])
@@ -233,9 +232,9 @@ def get_cut(solution, nodes):
 
 
 @njit
-def get_cut_base(solution):
+def get_cut_base(solution, n):
     l, r = [], []
-    for i in range(len(solution)):
+    for i in range(n):
         if solution[i]:
             r.append(i)
         else:
@@ -363,22 +362,16 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
-    cum_prob = fix_cdf(hamming_prob)
-
-    return cum_prob
-
-@njit
-def fix_cdf(hamming_prob):
     hamming_prob /= hamming_prob.sum() - (hamming_prob[0] + hamming_prob[-1])
     tot_prob = 0.0
-    n_bias = len(hamming_prob) - 2
+    n_bias -= 2
     cum_prob = np.empty(n_bias, dtype=np.float64)
     for i in range(n_bias):
         tot_prob += hamming_prob[i + 1]
-        cum_prob[i] = tot_prob
-    cum_prob[-1] = 2.0
+        cum_prob[i] = 2.0 if (1.0 - tot_prob) <= epsilon else tot_prob
 
     return cum_prob
+
 
 @njit
 def sample_mag(cum_prob):
@@ -400,13 +393,13 @@ def sample_mag(cum_prob):
     return m + 1
 
 @njit
-def init_bit_pick(weights, tot_init_weight, n):
-    r = tot_init_weight * np.random.rand()
+def init_bit_pick(weights, p, n):
+    p *= np.random.rand()
     cum = 0.0
     node = 0
     for i in range(n):
         cum += weights[i]
-        if r < cum:
+        if p < cum:
             node = i
             break
 
@@ -415,27 +408,22 @@ def init_bit_pick(weights, tot_init_weight, n):
 @njit
 def bit_pick(weights, used, n):
     # Count available
-    total_w = 0.0
+    p = 0.0
     for i in range(n):
         if used[i]:
             continue
-        total_w += weights[i]
+        p += weights[i]
 
     # Normalize & sample
-    r = total_w * np.random.rand()
+    p *= np.random.rand()
     cum = 0.0
-    node = -1
+    node = 0
     for i in range(n):
         if used[i]:
             continue
         cum += weights[i]
-        if r < cum:
+        if p < cum:
             node = i
             break
-
-    if node == -1:
-        node = 0
-        while used[node]:
-            node += 1
 
     return node

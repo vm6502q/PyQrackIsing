@@ -91,7 +91,7 @@ def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
 
 @njit
 def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
-    l, r = get_cut_base(sample)
+    l, r = get_cut_base(sample, n_qubits)
     s = l if len(l) < len(r) else r
     cut = 0
     for u in s:
@@ -227,7 +227,7 @@ def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, 
 
     best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
-    bit_string, l, r = get_cut(best_solution, nodes)
+    bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
     return bit_string, best_value, (l, r)
 
@@ -417,7 +417,7 @@ def maxcut_tfim_sparse(
 
     best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
-    bit_string, l, r = get_cut(best_solution, nodes)
+    bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
     if best_value < 0.0:
         # Best cut is trivial partition, all/empty

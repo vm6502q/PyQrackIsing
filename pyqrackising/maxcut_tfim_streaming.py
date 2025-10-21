@@ -74,7 +74,7 @@ def compute_energy(sample, G_func, nodes, n_qubits):
 
 @njit
 def compute_cut(sample, G_func, nodes, n_qubits):
-    l, r = get_cut_base(sample)
+    l, r = get_cut_base(sample, n_qubits)
     cut = 0
     for u in l:
         for v in r:
@@ -178,7 +178,7 @@ def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, an
 
     best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, degrees_sum, J_eff, n_qubits, repulsion_base, is_spin_glass)
 
-    bit_string, l, r = get_cut(best_solution, nodes)
+    bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
     return bit_string, best_value, (l, r)
 
