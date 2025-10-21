@@ -368,7 +368,8 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
     cum_prob = np.empty(n_bias, dtype=np.float64)
     for i in range(n_bias):
         tot_prob += hamming_prob[i + 1]
-        cum_prob[i] = 2.0 if (1.0 - tot_prob) <= epsilon else tot_prob
+        cum_prob[i] = tot_prob
+    cum_prob[-1] = 1.0
 
     return cum_prob
 
