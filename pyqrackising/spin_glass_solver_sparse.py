@@ -70,7 +70,7 @@ def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, 
     return min_energy
 
 
-def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, min_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, best_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     bootstrap_kernel = opencl_context.bootstrap_sparse_segmented_kernel if is_segmented else opencl_context.bootstrap_sparse_kernel
@@ -119,15 +119,22 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
 
     # Read results
     cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
-    cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
 
-    # Find global minimum
-    best_i = np.argmax(max_energy_host)
-    best_energy = -max_energy_host[best_i]
+    # Queue read for results we might not need
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
 
-    if min_energy < best_energy:
-        return min_energy
+    # Find global minimum
+    best_x = np.argmax(max_energy_host)
+    energy = max_energy_host[best_x]
+
+    if energy <= best_energy:
+        # No improvement: we can exit early
+        return best_energy
+
+    # We need the best index
+    queue.finish()
+    best_i = max_index_host[best_x]
 
     flip_index_start = best_i * k
     indices_to_flip = indices_array_np[flip_index_start : flip_index_start + k]

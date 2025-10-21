@@ -266,7 +266,7 @@ def run_cut_opencl(best_energy, samples, G_data_buf, G_rows_buf, G_cols_buf, is_
     best_x = np.argmax(max_energy_host)
     energy = max_energy_host[best_x]
 
-    if energy < best_energy:
+    if energy <= best_energy:
         # No improvement: we can exit early
         return samples[0], max_energy_host[0]
 
