@@ -159,7 +159,7 @@ def sample_for_opencl(G_m, G_m_buf, shots, thresholds, weights, repulsion_base, 
     while improved:
         improved = False
         shot_loop(G_m, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(solutions, G_m_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
+        solution, energy = run_cut_opencl(best_energy, solutions, G_m_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution.copy()
@@ -216,7 +216,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     return bit_string, best_value, (l, r)
 
 
-def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_segmented_kernel if is_segmented else opencl_context.calculate_cut_kernel
 
@@ -259,14 +259,23 @@ def run_cut_opencl(samples, G_m_buf, is_segmented, segment_size, is_spin_glass, 
 
     # Read results
     cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
-    cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
+
+    # Queue read for results we might not need
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
 
     # Find global minimum
     best_x = np.argmax(max_energy_host)
-    best_i = max_index_host[best_x]
+    energy = max_energy_host[best_x]
 
-    return samples[best_i], max_energy_host[best_x]
+    if energy < best_energy:
+        # No improvement: we can exit early
+        return samples[0], max_energy_host[0]
+
+    # We need the best index
+    queue.finish()
+
+    return samples[max_index_host[best_x]], energy
 
 def maxcut_tfim(
     G,

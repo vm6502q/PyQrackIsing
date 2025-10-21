@@ -172,7 +172,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     while improved:
         improved = False
         shot_loop(G_data, G_rows, G_cols, thresholds, weights, tot_init_weight, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
+        solution, energy = run_cut_opencl(best_energy, solutions, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution.copy()
@@ -224,7 +224,7 @@ def cpu_footer(J_eff, degrees, weights, shots, quality, n_qubits, G_data, G_rows
     return bit_string, best_value, (l, r)
 
 
-def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_cut_opencl(best_energy, samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_sparse_segmented_kernel if is_segmented else opencl_context.calculate_cut_sparse_kernel
 
@@ -271,14 +271,23 @@ def run_cut_opencl(samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, se
 
     # Read results
     cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
-    cl.enqueue_copy(queue, max_index_host, max_index_buf)
     queue.finish()
+
+    # Queue read for results we might not need
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
 
     # Find global minimum
     best_x = np.argmax(max_energy_host)
-    best_i = max_index_host[best_x]
+    energy = max_energy_host[best_x]
 
-    return samples[best_i], max_energy_host[best_x]
+    if energy < best_energy:
+        # No improvement: we can exit early
+        return samples[0], max_energy_host[0]
+
+    # We need the best index
+    queue.finish()
+
+    return samples[max_index_host[best_x]], energy
 
 
 
