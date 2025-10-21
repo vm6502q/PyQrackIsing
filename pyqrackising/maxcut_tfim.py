@@ -197,7 +197,7 @@ def init_J_and_z(G_m, repulsion_base):
                 val = abs(val)
         if degree > 0:
             J = -J / degree
-            weight = -weight / degree
+        weight = -weight / n_qubits
         degrees[n] = degree
         J_eff[n] = J
         weights[n] = weight
