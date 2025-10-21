@@ -2,11 +2,9 @@ from .maxcut_tfim import maxcut_tfim
 from .maxcut_tfim_util import get_cut_base, make_G_m_buf, opencl_context, setup_opencl
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
-import math
 import networkx as nx
 import numpy as np
 from numba import njit, prange
-import os
 import random
 
 
@@ -258,7 +256,7 @@ def spin_glass_solver(
 
         if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
-            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
+            bits_to_flip = random.sample(range(n_qubits), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
             reheat_min_energy = compute_energy(reheat_theta, G_m, n_qubits) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_m, n_qubits)

@@ -5,7 +5,6 @@ import itertools
 import networkx as nx
 import numpy as np
 from numba import njit, prange
-import os
 import random
 
 
@@ -170,7 +169,7 @@ def spin_glass_solver_streaming(
 
         if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
-            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
+            bits_to_flip = random.sample(range(n_qubits), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
             reheat_min_energy = compute_energy(reheat_theta, G_func, nodes, n_qubits) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_func, nodes, n_qubits)

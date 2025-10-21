@@ -1,7 +1,5 @@
-import math
 import networkx as nx
 import numpy as np
-import os
 from numba import njit, prange
 
 from .maxcut_tfim_util import get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick
