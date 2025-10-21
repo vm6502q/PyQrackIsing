@@ -393,18 +393,6 @@ def sample_mag(cum_prob):
 
     return m + 1
 
-@njit
-def init_bit_pick(weights, p, n):
-    p *= np.random.rand()
-    cum = 0.0
-    node = 0
-    for i in range(n):
-        cum += weights[i]
-        if p < cum:
-            node = i
-            break
-
-    return node
 
 @njit
 def bit_pick(weights, used, n):

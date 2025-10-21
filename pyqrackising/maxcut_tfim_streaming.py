@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 
-from .maxcut_tfim_util import get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick, init_bit_pick
+from .maxcut_tfim_util import get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
 
 
 epsilon = opencl_context.epsilon
@@ -23,36 +23,29 @@ def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_bas
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
 @njit
-def local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m):
+def local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s):
     """
     Pick m nodes out of n with repulsion bias:
     - High-degree nodes are already less likely
     - After choosing a node, its neighbors' probabilities are further reduced
-    adjacency_data, adjacency_rows: CSR-format sparse adjacency data
-    weights: float array of shape (n,)
     """
 
-    weights = weights.copy()
     used = np.zeros(n, dtype=np.bool_) # False = available, True = used
 
     # First bit:
-    node = init_bit_pick(weights, tot_init_weight, n)
-
+    node = s % n
     if m == 1:
         used[node] = True
         return used
 
+    weights = np.ones(n, dtype=np.float64)
     update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
 
     for _ in range(1, m - 1):
         node = bit_pick(weights, used, n)
-
-        # Update answer and weights
         update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
 
     node = bit_pick(weights, used, n)
-
-    # Select node
     used[node] = True
 
     return used
@@ -82,9 +75,8 @@ def compute_cut(sample, G_func, nodes, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(G_func, nodes, shots, thresholds, weights, n, repulsion_base, is_spin_glass):
+def sample_measurement(G_func, nodes, shots, thresholds, n, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
-    tot_init_weight = weights.sum()
 
     solutions = np.empty((shots, n), dtype=np.bool_)
     energies = np.empty(shots, dtype=dtype)
@@ -101,7 +93,7 @@ def sample_measurement(G_func, nodes, shots, thresholds, weights, n, repulsion_b
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
                 solutions[s] = sample
                 energies[s] = compute_energy(sample, G_func, nodes, n)
         else:
@@ -110,7 +102,7 @@ def sample_measurement(G_func, nodes, shots, thresholds, weights, n, repulsion_b
                 m = sample_mag(thresholds)
 
                 # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_func, nodes, weights, tot_init_weight, repulsion_base, n, m)
+                sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
                 solutions[s] = sample
                 energies[s] = compute_cut(sample, G_func, nodes, n)
 
@@ -132,28 +124,21 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
     J_eff = np.empty(n_qubits, dtype=np.float64)
-    weights = np.empty(n_qubits, dtype=np.float64)
     for n in prange(n_qubits):
         degree = 0
         J = 0.0
-        weight = 0.0
         for m in range(n_qubits):
-            val = G_func(nodes[n], nodes[m])
-            weight += val
-            val -= G_min
-            if val != 0.0:
-                degree += 1
-                J += val
+            val = G_func(nodes[n], nodes[m]) - G_min
+            if val <= epsilon:
+                continue
+            degree += 1
+            J += val
         if degree > 0:
             J = -J / degree
-        weight = -weight / n_qubits
         degrees[n] = degree
         J_eff[n] = J
-        weights[n] = weight
 
-    weights = repulsion_base ** weights
-
-    return J_eff, degrees, weights
+    return J_eff, degrees
 
 @njit
 def find_G_min(G_func, nodes, n_nodes):
@@ -171,13 +156,13 @@ def find_G_min(G_func, nodes, n_nodes):
 
 @njit
 def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees, weights = init_J_and_z(G_func, nodes, G_min, repulsion_base)
+    J_eff, degrees = init_J_and_z(G_func, nodes, G_min, repulsion_base)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_measurement(G_func, nodes, shots, hamming_prob, weights, n_qubits, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_func, nodes, shots, hamming_prob, n_qubits, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -225,7 +210,7 @@ def maxcut_tfim_streaming(
         anneal_h = 8.0
 
     if repulsion_base is None:
-        repulsion_base = 8.0
+        repulsion_base = 2.0
 
     G_min = find_G_min(G_func, nodes, n_qubits)
 
