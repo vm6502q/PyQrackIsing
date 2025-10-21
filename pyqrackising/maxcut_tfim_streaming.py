@@ -149,7 +149,6 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
             if val != 0.0:
                 degree += 1
                 J += val
-                val = abs(val)
         if degree > 0:
             J = -J / degree
         weight = -weight / n_qubits
