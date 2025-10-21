@@ -15,6 +15,7 @@ except ImportError:
 
 epsilon = opencl_context.epsilon
 dtype = opencl_context.dtype
+wgs = opencl_context.work_group_size
 
 
 @njit
@@ -159,7 +160,7 @@ def shot_loop(G_data, G_rows, G_cols, max_edge, thresholds, weights, tot_init_we
         solutions[s] = local_repulsion_choice(G_data, G_rows, G_cols, max_edge, weights, tot_init_weight, repulsion_base, n, m)
 
 
-def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
+def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
     shots = ((max(1, shots >> 1) + 31) >> 5) << 5
     n = G_rows.shape[0] - 1
     tot_init_weight = weights.sum()
@@ -169,7 +170,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
     best_solution = solutions[0]
     best_energy = -float("inf")
 
-    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32))
+    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size, theta_segment_size], dtype=np.int32))
 
     improved = True
     while improved:
@@ -392,7 +393,6 @@ def maxcut_tfim_sparse(
 
     n_qubits = G_m.shape[0]
 
-    wgs = max(32, opencl_context.work_group_size)
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= wgs) and (shots >= wgs)
 
     if not is_opencl:
@@ -404,8 +404,9 @@ def maxcut_tfim_sparse(
 
         return bit_string, best_value, partition
 
-    segment_size = G_m.data.shape[0]
-    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((((((((n_qubits + 31) >> 5) << 5) * ((shots + 1) >> 1)) + 7) >> 3) << 1) > opencl_context.max_alloc)
+    segment_size = (G_m.data.shape[0] + 3) >> 2
+    theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
+    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((theta_segment_size << 3) > opencl_context.max_alloc)
 
     G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
 
@@ -414,7 +415,7 @@ def maxcut_tfim_sparse(
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size)
+    best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 

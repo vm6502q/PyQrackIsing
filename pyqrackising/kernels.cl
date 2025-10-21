@@ -12,11 +12,10 @@ void reduce_energy_index(real1 energy, int i, __local real1* loc_energy, __local
         if (lt_id < offset) {
             hid_energy = loc_energy[lt_id + offset];
             lid_energy = loc_energy[lt_id];
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if ((lt_id < offset) && (hid_energy > lid_energy)) {
-            loc_energy[lt_id] = hid_energy;
-            loc_index[lt_id] = loc_index[lt_id + offset];
+            if (hid_energy > lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+            }
         }
     }
 
@@ -333,9 +332,9 @@ __kernel void calculate_cut(
     __local int* loc_index              // local memory buffer
 ) {
     const int n = args[0];
-    const int n32 = (n + 31) >> 5U;
     const int shots = args[1];
     const bool is_spin_glass = args[2];
+    const int n32 = (n + 31) >> 5U;
 
     const int i = get_global_id(0);
     const int j = i * n32;
@@ -376,9 +375,9 @@ __kernel void calculate_cut_sparse(
     __local int* loc_index              // local memory buffer
 ) {
     const int n = args[0];
-    const int n32 = (n + 31) >> 5U;
     const int shots = args[1];
     const bool is_spin_glass = args[2];
+    const int n32 = (n + 31) >> 5U;
 
     const int i = get_global_id(0);
     const int j = i * n32;
@@ -435,11 +434,11 @@ __kernel void calculate_cut_segmented(
     __global const uint* theta[4] = { theta0, theta1, theta2, theta3 };
 
     const int n = args[0];
-    const int n32 = (n + 31) >> 5U;
     const int shots = args[1];
     const bool is_spin_glass = args[2];
     const int segment_size = args[3];
     const int theta_segment_size = args[4];
+    const int n32 = (n + 31) >> 5U;
 
     const int i = get_global_id(0);
     const int j = i * n32;
@@ -500,11 +499,11 @@ __kernel void calculate_cut_sparse_segmented(
     __global const uint* theta[4] = { theta0, theta1, theta2, theta3 };
 
     const int n = args[0];
-    const int n32 = (n + 31) >> 5U;
     const int shots = args[1];
     const bool is_spin_glass = args[2];
     const int segment_size = args[3];
     const int theta_segment_size = args[4];
+    const int n32 = (n + 31) >> 5U;
 
     const int i = get_global_id(0);
     const int j = i * n32;

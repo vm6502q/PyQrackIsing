@@ -138,8 +138,7 @@ def make_G_m_buf(G_m, is_segmented, segment_size):
     mf = cl.mem_flags
     ctx = opencl_context.ctx
     if is_segmented:
-        o_shape = segment_size
-        segment_size = (segment_size + 3) >> 2
+        o_shape = G_m.shape[0] * G_m.shape[1]
         n_shape = segment_size << 2
         _G_m = np.reshape(G_m, (o_shape,))
         if n_shape != o_shape:
@@ -161,8 +160,7 @@ def make_G_m_csr_buf(G_m, is_segmented, segment_size):
     G_rows_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indptr)
     G_cols_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m.indices)
     if is_segmented:
-        o_shape = segment_size
-        segment_size = (segment_size + 3) >> 2
+        o_shape = G_m.data.shape[0]
         n_shape = segment_size << 2
         _G_data = np.reshape(G_m.data, (o_shape,))
         if n_shape != o_shape:

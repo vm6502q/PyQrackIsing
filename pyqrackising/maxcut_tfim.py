@@ -15,6 +15,7 @@ except ImportError:
 
 epsilon = opencl_context.epsilon
 dtype = opencl_context.dtype
+wgs = opencl_context.work_group_size
 
 
 @njit
@@ -144,7 +145,7 @@ def shot_loop(G_m, max_edge, thresholds, weights, tot_init_weight, repulsion_bas
         solutions[s] = local_repulsion_choice(G_m, max_edge, weights, tot_init_weight, repulsion_base, n, m)
 
 
-def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size):
+def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size):
     shots = ((max(1, shots >> 1) + 31) >> 5) << 5
     n = len(G_m)
     tot_init_weight = weights.sum()
@@ -154,7 +155,7 @@ def sample_for_opencl(G_m, G_m_buf, max_edge, shots, thresholds, weights, repuls
     best_solution = solutions[0]
     best_energy = -float("inf")
 
-    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size], dtype=np.int32))
+    opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size, theta_segment_size], dtype=np.int32))
 
     improved = True
     while improved:
@@ -325,7 +326,6 @@ def maxcut_tfim(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    wgs = max(32, opencl_context.work_group_size)
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= wgs) and (shots >= wgs)
 
     if not is_opencl:
@@ -337,9 +337,9 @@ def maxcut_tfim(
 
         return bit_string, best_value, partition
 
-    segment_size = G_m.shape[0] ** 2
-    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((((((((n_qubits + 31) >> 5) << 5) * ((shots + 1) >> 1)) + 7) >> 3) << 1) > opencl_context.max_alloc)
-
+    segment_size = (G_m.shape[0] * G_m.shape[1] + 3) >> 2
+    theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
+    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((theta_segment_size << 3) > opencl_context.max_alloc)
     G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
 
     J_eff, degrees, max_edge = init_J_and_z(G_m)
@@ -348,7 +348,7 @@ def maxcut_tfim(
     degrees = None
     J_eff = 1.0 / (1.0 + epsilon - J_eff)
 
-    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size)
+    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
     bit_string, l, r = get_cut(best_solution, nodes)
 
