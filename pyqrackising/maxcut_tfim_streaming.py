@@ -84,7 +84,7 @@ def compute_cut(sample, G_func, nodes, n_qubits):
 
 
 @njit(parallel=True)
-def sample_measurement(G_func, nodes, max_edge, shots, thresholds, degrees_sum, weights, n, repulsion_base, is_spin_glass):
+def sample_measurement(G_func, nodes, max_edge, shots, thresholds, weights, n, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
     tot_init_weight = weights.sum()
 
@@ -171,12 +171,11 @@ def find_G_min(G_func, nodes, n_nodes):
 def cpu_footer(shots, quality, n_qubits, G_min, G_func, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     J_eff, degrees, max_edge = init_J_and_z(G_func, nodes, G_min)
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
-    degrees_sum = degrees.sum()
 
     degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    J_eff = repulsion_base ** J_eff
 
-    best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, degrees_sum, J_eff, n_qubits, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_func, nodes, max_edge, shots, hamming_prob, J_eff, n_qubits, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -211,7 +210,7 @@ def maxcut_tfim_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 6
+        quality = 5
 
     if shots is None:
         # Number of measurement shots

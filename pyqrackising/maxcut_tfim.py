@@ -210,7 +210,7 @@ def cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, an
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    J_eff = repulsion_base ** J_eff
 
     best_solution, best_value = sample_measurement(G_m, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
@@ -311,7 +311,7 @@ def maxcut_tfim(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 6
+        quality = 5
 
     if shots is None:
         # Number of measurement shots
@@ -326,7 +326,7 @@ def maxcut_tfim(
     if repulsion_base is None:
         repulsion_base = 8.0
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= wgs) and (shots >= wgs)
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if not is_opencl:
         bit_string, best_value, partition = cpu_footer(shots, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
@@ -346,7 +346,7 @@ def maxcut_tfim(
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    J_eff = repulsion_base ** J_eff
 
     best_solution, best_value = sample_for_opencl(G_m, G_m_buf, max_edge, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 

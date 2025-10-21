@@ -222,8 +222,7 @@ def init_J_and_z(G_m):
 def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
-    degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    J_eff = repulsion_base ** J_eff
 
     best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass)
 
@@ -374,7 +373,7 @@ def maxcut_tfim_sparse(
             return "01", weight, ([nodes[0]], [nodes[1]])
 
     if quality is None:
-        quality = 6
+        quality = 5
 
     if shots is None:
         # Number of measurement shots
@@ -393,7 +392,7 @@ def maxcut_tfim_sparse(
 
     n_qubits = G_m.shape[0]
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE and (n_qubits >= wgs) and (shots >= wgs)
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if not is_opencl:
         bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_max, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
@@ -413,7 +412,7 @@ def maxcut_tfim_sparse(
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
-    J_eff = 1.0 / (1.0 + epsilon - J_eff)
+    J_eff = repulsion_base ** J_eff
 
     best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, G_max, shots, hamming_prob, J_eff, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
 
