@@ -61,7 +61,8 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
                 state[j] = not state[j]
                 energy = compute_energy_sparse(state, G_data, G_rows, G_cols, n)
                 if energy > energies[i]:
-                    states[i], energies[i] = state, energy
+                    states[i], energies[i] = state.copy(), energy
+                state[j] = not state[j]
     else:
         for i in prange(n):
             state = best_theta.copy()
@@ -72,7 +73,8 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
                 state[j] = not state[j]
                 energy = compute_cut_sparse(state, G_data, G_rows, G_cols, n)
                 if energy > energies[i]:
-                    states[i], energies[i] = state, energy
+                    states[i], energies[i] = state.copy(), energy
+                state[j] = not state[j]
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
