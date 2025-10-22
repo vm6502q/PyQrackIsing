@@ -108,8 +108,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
 @njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
     n = len(best_theta)
-    npow = 1 << n
-    thread_iterations = ((gray_iterations + thread_count - 1) // thread_count + 1) >> 1
+    thread_iterations = (gray_iterations + thread_count - 1) // thread_count
 
     states = np.empty((thread_count, n), dtype=np.bool_)
     energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
@@ -117,17 +116,11 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     if is_spin_glass:
         for i in prange(thread_count):
             iterator = iterators[i]
-            r_iterator = iterator.copy()
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
                 energy = compute_energy_streaming(iterator, G_func, nodes, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
-
-                gray_code_next(r_iterator, npow - (curr_idx + 1))
-                energy = compute_energy_streaming(r_iterator, G_func, nodes, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = r_iterator.copy(), energy
     else:
         for i in prange(thread_count):
             iterator = iterators[i]
@@ -137,11 +130,6 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                 energy = compute_cut_streaming(iterator, G_func, nodes, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
-
-                gray_code_next(r_iterator, npow - (curr_idx + 1))
-                energy = compute_cut_streaming(r_iterator, G_func, nodes, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = r_iterator.copy(), energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
