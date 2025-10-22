@@ -116,9 +116,7 @@ def spin_glass_solver_streaming(
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(
-                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                    ))
+                    combos = np.array(list(itertools.combinations(range(n_qubits), k)), dtype=np.int32).flatten()
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
