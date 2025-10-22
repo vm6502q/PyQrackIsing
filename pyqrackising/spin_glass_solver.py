@@ -200,6 +200,7 @@ def spin_glass_solver(
         if energy > max_energy:
             max_energy = energy
             best_theta = state
+            improved = True
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
