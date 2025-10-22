@@ -212,8 +212,7 @@ def spin_glass_solver_streaming(
 
         # Gray code with default O(n^3)
         iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes, n_qubits, is_spin_glass)
-        best_i = np.argmax(energies)
-        energy, state = energies[best_i], iterators[best_i]
+        energy, state = energies[0], iterators[0]
         if energy > max_energy:
             max_energy = energy
             best_theta = state
