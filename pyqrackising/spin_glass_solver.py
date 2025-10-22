@@ -146,7 +146,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                     states[i], energies[i] = iterator.copy(), energy
 
                 gray_code_next(r_iterator, npow - (curr_idx + 1))
-                energy = compute_energy(r_iterator, G_m, n)
+                energy = compute_cut(r_iterator, G_m, n)
                 if energy > energies[i]:
                     states[i], energies[i] = r_iterator.copy(), energy
 
