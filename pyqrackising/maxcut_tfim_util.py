@@ -495,8 +495,6 @@ def gray_code_next(state, curr_idx):
     flip_bit = int(np.log2(diff))
     state[flip_bit] = not state[flip_bit]
 
-    return state.copy()
-
 
 @njit
 def gray_mutation(index, seed_bits):

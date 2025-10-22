@@ -87,19 +87,19 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
             i_offset = i * thread_iterations
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
-                state = gray_code_next(iterator, curr_idx)
-                energy = compute_energy_streaming(state, G_func, nodes, n)
+                gray_code_next(iterator, curr_idx)
+                energy = compute_energy_streaming(iterator, G_func, nodes, n)
                 if energy > energies[i]:
-                    states[i], energies[i] = state, energy
+                    states[i], energies[i] = iterator.copy(), energy
     else:
         for i in prange(thread_count):
             i_offset = i * thread_iterations
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
-                state = gray_code_next(iterator, curr_idx)
-                energy = compute_cut_streaming(state, G_func, nodes, n)
+                gray_code_next(iterator, curr_idx)
+                energy = compute_cut_streaming(iterator, G_func, nodes, n)
                 if energy > energies[i]:
-                    states[i], energies[i] = state, energy
+                    states[i], energies[i] = iterator.copy(), energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
