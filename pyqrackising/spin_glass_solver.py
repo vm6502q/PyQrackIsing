@@ -22,25 +22,23 @@ dtype = opencl_context.dtype
 def run_single_bit_flips(best_theta, is_spin_glass, G_m):
     n = len(best_theta)
 
-    states = np.empty((n, n), dtype=np.bool_)
     energies = np.empty(n, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            states[i] = state
             energies[i] = compute_energy(state, G_m, n)
     else:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            states[i] = state
             energies[i] = compute_cut(state, G_m, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
-    best_state = states[best_index]
+    best_state = best_theta.copy()
+    best_state[best_index] = not best_state[best_index]
 
     return best_energy, best_state
 
