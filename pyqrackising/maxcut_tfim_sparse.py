@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 from numba import njit, prange
+import os
 
 from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
 
@@ -69,13 +70,14 @@ def local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s):
 
 
 @njit(parallel=True)
-def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base, is_spin_glass):
-    shots = max(1, shots >> 1)
+def sample_measurement(G_data, G_rows, G_cols, shots, thread_count, thresholds, repulsion_base, is_spin_glass):
+    shot_segment = (max(1, shots >> 1) + thread_count - 1) // thread_count
+    shots = shot_segment * thread_count
     n = G_rows.shape[0] - 1
 
-    solutions = np.empty((shots, n), dtype=np.bool_)
-    energies = np.empty(shots, dtype=dtype)
-    
+    solutions = np.empty((thread_count, n), dtype=np.bool_)
+    energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
+
     best_solution = solutions[0]
     best_energy = -float("inf")
 
@@ -83,23 +85,35 @@ def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base
     while improved:
         improved = False
         if is_spin_glass:
-            for s in prange(shots):
-                # First dimension: Hamming weight
-                m = sample_mag(thresholds)
+            for i in prange(thread_count):
+                s_offset = i * shot_segment
+                for j in range(shot_segment):
+                    s = s_offset + j
 
-                # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
-                solutions[s] = sample
-                energies[s] = compute_energy_sparse(sample, G_data, G_rows, G_cols, n)
+                    # First dimension: Hamming weight
+                    m = sample_mag(thresholds)
+
+                    # Second dimension: permutation within Hamming weight
+                    sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
+                    energy = compute_energy_sparse(sample, G_data, G_rows, G_cols, n)
+
+                    if energy > energies[i]:
+                        solutions[i], energies[i] = sample, energy
         else:
-            for s in prange(shots):
-                # First dimension: Hamming weight
-                m = sample_mag(thresholds)
+            for i in prange(thread_count):
+                s_offset = i * shot_segment
+                for j in range(shot_segment):
+                    s = s_offset + j
 
-                # Second dimension: permutation within Hamming weight
-                sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
-                solutions[s] = sample
-                energies[s] = compute_cut_sparse(sample, G_data, G_rows, G_cols, n)
+                    # First dimension: Hamming weight
+                    m = sample_mag(thresholds)
+
+                    # Second dimension: permutation within Hamming weight
+                    sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
+                    energy = compute_cut_sparse(sample, G_data, G_rows, G_cols, n)
+
+                    if energy > energies[i]:
+                        solutions[i], energies[i] = sample, energy
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -109,7 +123,7 @@ def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut_sparse(best_solution, G_data, G_rows, G_cols, n)
+        best_energy = compute_cut_sparse(sample, G_data, G_rows, G_cols, n)
 
     return best_solution, best_energy
 
@@ -174,10 +188,10 @@ def init_J_and_z(G_m, repulsion_base):
 
 
 @njit
-def cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
+def cpu_footer(J_eff, degrees, shots, thread_count, quality, n_qubits, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
     hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
-    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, hamming_prob, repulsion_base, is_spin_glass)
+    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, thread_count, hamming_prob, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
@@ -312,7 +326,9 @@ def maxcut_tfim_sparse(
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if not is_opencl:
-        bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
+        thread_count = os.cpu_count() ** 2
+
+        bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, thread_count, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
 
         if best_value < 0.0:
             # Best cut is trivial partition, all/empty

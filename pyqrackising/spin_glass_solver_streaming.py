@@ -41,7 +41,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes):
     n = len(best_theta)
 
     states = np.empty((n, n), dtype=np.bool_)
-    energies = np.zeros(n, dtype=dtype)
+    energies = np.full(n, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(n):
@@ -82,7 +82,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     gray_iterations = (gray_iterations + thread_count - 1) // thread_count
 
     states = np.empty((thread_count, n), dtype=np.bool_)
-    energies = np.zeros(thread_count, dtype=dtype)
+    energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(thread_count):
