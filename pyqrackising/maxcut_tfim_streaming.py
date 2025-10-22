@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 
-from .maxcut_tfim_util import get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
 
 
 epsilon = opencl_context.epsilon
@@ -51,29 +51,6 @@ def local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s):
     return used
 
 
-@njit
-def compute_energy(sample, G_func, nodes, n_qubits):
-    energy = 0
-    for u in range(n_qubits):
-        u_bit = sample[u]
-        for v in range(u + 1, n_qubits):
-            val = G_func(nodes[u], nodes[v])
-            energy += val if u_bit == sample[v] else -val
-
-    return -energy
-
-
-@njit
-def compute_cut(sample, G_func, nodes, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    cut = 0
-    for u in l:
-        for v in r:
-            cut += G_func(nodes[u], nodes[v])
-
-    return cut
-
-
 @njit(parallel=True)
 def sample_measurement(G_func, nodes, shots, thresholds, n, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
@@ -95,7 +72,7 @@ def sample_measurement(G_func, nodes, shots, thresholds, n, repulsion_base, is_s
                 # Second dimension: permutation within Hamming weight
                 sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
                 solutions[s] = sample
-                energies[s] = compute_energy(sample, G_func, nodes, n)
+                energies[s] = compute_energy_streaming(sample, G_func, nodes, n)
         else:
             for s in prange(shots):
                 # First dimension: Hamming weight
@@ -104,7 +81,7 @@ def sample_measurement(G_func, nodes, shots, thresholds, n, repulsion_base, is_s
                 # Second dimension: permutation within Hamming weight
                 sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
                 solutions[s] = sample
-                energies[s] = compute_cut(sample, G_func, nodes, n)
+                energies[s] = compute_cut_streaming(sample, G_func, nodes, n)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -114,7 +91,7 @@ def sample_measurement(G_func, nodes, shots, thresholds, n, repulsion_base, is_s
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_func, nodes, n)
+        best_energy = compute_cut_streaming(best_solution, G_func, nodes, n)
 
     return best_solution, best_energy
 

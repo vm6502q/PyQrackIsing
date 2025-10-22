@@ -217,6 +217,78 @@ def convert_bool_to_uint(samples):
 
 
 @njit
+def compute_energy(sample, G_m, n_qubits):
+    energy = 0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            val = G_m[u, v]
+            energy += val if sample[u] == sample[v] else -val
+
+    return -energy
+
+
+@njit
+def compute_cut(sample, G_m, n_qubits):
+    l, r = get_cut_base(sample, n_qubits)
+    cut = 0
+    for u in l:
+        for v in r:
+            cut += G_m[u, v]
+
+    return cut
+
+
+@njit
+def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
+    energy = 0
+    for u in range(n_qubits):
+        u_bit = sample[u]
+        for col in range(G_rows[u], G_rows[u + 1]):
+            val = G_data[col]
+            energy += val if u_bit == sample[G_cols[col]] else -val
+
+    return -energy
+
+
+@njit
+def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
+    l, r = get_cut_base(sample, n_qubits)
+    s = l if len(l) < len(r) else r
+    cut = 0
+    for u in s:
+        u_bit = sample[u]
+        for col in range(G_rows[u], G_rows[u + 1]):
+            if u_bit != sample[G_cols[col]]:
+                cut += G_data[col]
+
+    return cut
+
+
+@njit
+def compute_energy_streaming(sample, G_func, nodes, n_qubits):
+    energy = 0
+    for u in range(n_qubits):
+        u_bit = sample[u]
+        for v in range(u + 1, n_qubits):
+            val = G_func(nodes[u], nodes[v])
+            energy += val if u_bit == sample[v] else -val
+
+    return -energy
+
+
+@njit
+def compute_cut_streaming(sample, G_func, nodes, n_qubits):
+    l, r = get_cut_base(sample, n_qubits)
+    cut = 0
+    for u in l:
+        for v in r:
+            cut += G_func(nodes[u], nodes[v])
+
+    return cut
+
+
+
+@njit
 def get_cut(solution, nodes, n):
     bit_string = ""
     l, r = [], []

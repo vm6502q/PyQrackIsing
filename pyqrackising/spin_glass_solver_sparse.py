@@ -1,5 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
-from .maxcut_tfim_util import get_cut_base, make_G_m_csr_buf, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut_base, make_G_m_csr_buf, opencl_context, setup_opencl
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -17,57 +17,33 @@ except ImportError:
 
 
 @njit
-def evaluate_cut_edges(theta_bits, G_data, G_rows, G_cols, n):
-    l, r = get_cut_base(theta_bits, n)
-    s = l if len(l) < len(r) else r
-    cut = 0
-    for u in s:
-        u_bit = theta_bits[u]
-        for col in range(G_rows[u], G_rows[u + 1]):
-            v = G_cols[col]
-            if u_bit != theta_bits[v]:
-                cut += G_data[col]
-
-    return cut
-
-
-@njit
-def compute_energy(sample, G_data, G_rows, G_cols, n):
-    energy = 0
-    for u in range(n):
-        for col in range(G_rows[u], G_rows[u + 1]):
-            v = G_cols[col]
-            energy += (G_data[col] if sample[u] == sample[v] else -G_data[col])
-
-    return energy
-
-
-@njit
 def bootstrap_worker(theta, G_data, G_rows, G_cols, indices, is_spin_glass, n):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_data, G_rows, G_cols, n) if is_spin_glass else -evaluate_cut_edges(local_theta, G_data, G_rows, G_cols, n)
 
-    return energy
+    if is_spin_glass:
+        return compute_energy_sparse(local_theta, G_data, G_rows, G_cols, n)
+
+    return compute_cut_sparse(local_theta, G_data, G_rows, G_cols, n)
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, min_energy, dtype, is_spin_glass, n):
+def bootstrap(best_theta, G_data, G_rows, G_cols, indices_array, k, max_energy, dtype, is_spin_glass, n):
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
         energies[i] = bootstrap_worker(best_theta, G_data, G_rows, G_cols, indices_array[j : j + k], is_spin_glass, n)
 
-    energy = energies.min()
-    if energy < min_energy:
+    energy = energies.max()
+    if energy > max_energy:
         index_match = np.random.choice(np.where(energies == energy)[0])
         indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
-        min_energy = energy
+        max_energy = energy
         for i in indices:
             best_theta[i] = not best_theta[i]
 
-    return min_energy
+    return max_energy
 
 
 def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices_array_np, k, best_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
@@ -142,7 +118,7 @@ def run_bootstrap_opencl(best_theta, G_data_buf, G_rows_buf, G_cols_buf, indices
     for i in indices_to_flip:
         best_theta[i] = not best_theta[i]
 
-    return best_energy
+    return energy
 
 
 def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
@@ -157,13 +133,14 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
     return lil.tocsr()
 
 
-def log_intermediate(theta, G_data, G_rows, G_cols, nodes, min_energy, is_spin_glass, n):
+def log_intermediate(theta, G_data, G_rows, G_cols, nodes, max_energy, is_spin_glass, n):
     bitstring, l, r = get_cut_from_bit_array(theta, nodes)
     if is_spin_glass:
-        cut_value = evaluate_cut_edges(theta, G_data, G_rows, G_cols, n)
+        cut_value = compute_cut_sparse(theta, G_data, G_rows, G_cols, n)
+        min_energy = -max_energy
     else:
-        cut_value = -min_energy
-        min_energy = compute_energy(theta, G_data, G_rows, G_cols, n)
+        cut_value = max_energy
+        min_energy = -compute_energy_sparse(theta, G_data, G_rows, G_cols, n)
     print(bitstring, float(cut_value), (l, r), float(min_energy))
 
 
@@ -231,14 +208,14 @@ def spin_glass_solver_sparse(
     if max_order is None:
         max_order = n_qubits
 
-    min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else -evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+    max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
 
     if is_log:
-        log_intermediate(best_theta, G_m.data, G_m.indptr, G_m.indices, nodes, min_energy, is_spin_glass, n_qubits)
+        log_intermediate(best_theta, G_m.data, G_m.indptr, G_m.indices, nodes, max_energy, is_spin_glass, n_qubits)
 
     combos_list = []
     reheat_theta = best_theta.copy()
-    reheat_min_energy = min_energy
+    reheat_max_energy = max_energy
     for reheat_round in range(reheat_tries + 1):
         improved = True
         correction_quality = min_order
@@ -260,35 +237,35 @@ def spin_glass_solver_sparse(
                 if is_opencl:
                     combo_count = len(combos) // k
                     opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, segment_size], dtype=np.int32))
-                    energy = run_bootstrap_opencl(reheat_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, reheat_min_energy, is_segmented, *opencl_args)
+                    energy = run_bootstrap_opencl(reheat_theta, G_data_buf, G_rows_buf, G_cols_buf, combos, k, reheat_max_energy, is_segmented, *opencl_args)
                 else:
-                    energy = bootstrap(reheat_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, reheat_min_energy, dtype, is_spin_glass, n_qubits)
+                    energy = bootstrap(reheat_theta, G_m.data, G_m.indptr, G_m.indices, combos, k, reheat_max_energy, dtype, is_spin_glass, n_qubits)
 
-                if energy < reheat_min_energy:
-                    reheat_min_energy = energy
+                if energy > reheat_max_energy:
+                    reheat_max_energy = energy
                     improved = True
                     if correction_quality < (k + 1):
                         correction_quality = k + 1
 
                     if is_log:
-                        log_intermediate(reheat_theta, G_m.data, G_m.indptr, G_m.indices, nodes, min_energy, is_spin_glass, n_qubits)
+                        log_intermediate(reheat_theta, G_m.data, G_m.indptr, G_m.indices, nodes, max_energy, is_spin_glass, n_qubits)
 
                     break
 
                 k = k + 1
 
-        if min_energy < reheat_min_energy:
+        if max_energy > reheat_max_energy:
             reheat_theta = best_theta.copy()
         else:
             best_theta = reheat_theta.copy()
-            min_energy = reheat_min_energy
+            max_energy = reheat_max_energy
 
         if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
             bits_to_flip = random.sample(range(n_qubits), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
-            reheat_min_energy = compute_energy(reheat_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+            reheat_max_energy = compute_energy_sparse(reheat_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else compute_cut_sparse(reheat_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
 
     opencl_context.G_data_buf = None
     opencl_context.G_rows_buf = None
@@ -296,9 +273,10 @@ def spin_glass_solver_sparse(
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     if is_spin_glass:
-        cut_value = evaluate_cut_edges(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+        cut_value = compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+        min_energy = -max_energy
     else:
-        cut_value = -min_energy
-        min_energy = compute_energy(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+        cut_value = max_energy
+        min_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)

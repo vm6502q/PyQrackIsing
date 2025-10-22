@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 
-from .maxcut_tfim_util import binary_search, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -68,32 +68,6 @@ def local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s):
     return used
 
 
-@njit
-def compute_energy(sample, G_data, G_rows, G_cols, n_qubits):
-    energy = 0
-    for u in range(n_qubits):
-        u_bit = sample[u]
-        for col in range(G_rows[u], G_rows[u + 1]):
-            val = G_data[col]
-            energy += val if u_bit == sample[G_cols[col]] else -val
-
-    return -energy
-
-
-@njit
-def compute_cut(sample, G_data, G_rows, G_cols, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    s = l if len(l) < len(r) else r
-    cut = 0
-    for u in s:
-        u_bit = sample[u]
-        for col in range(G_rows[u], G_rows[u + 1]):
-            if u_bit != sample[G_cols[col]]:
-                cut += G_data[col]
-
-    return cut
-
-
 @njit(parallel=True)
 def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base, is_spin_glass):
     shots = max(1, shots >> 1)
@@ -116,7 +90,7 @@ def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base
                 # Second dimension: permutation within Hamming weight
                 sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
                 solutions[s] = sample
-                energies[s] = compute_energy(sample, G_data, G_rows, G_cols, n)
+                energies[s] = compute_energy_sparse(sample, G_data, G_rows, G_cols, n)
         else:
             for s in prange(shots):
                 # First dimension: Hamming weight
@@ -125,7 +99,7 @@ def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base
                 # Second dimension: permutation within Hamming weight
                 sample = local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s)
                 solutions[s] = sample
-                energies[s] = compute_cut(sample, G_data, G_rows, G_cols, n)
+                energies[s] = compute_cut_sparse(sample, G_data, G_rows, G_cols, n)
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -135,7 +109,7 @@ def sample_measurement(G_data, G_rows, G_cols, shots, thresholds, repulsion_base
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n)
+        best_energy = compute_cut_sparse(best_solution, G_data, G_rows, G_cols, n)
 
     return best_solution, best_energy
 
@@ -171,7 +145,7 @@ def sample_for_opencl(G_data, G_rows, G_cols, G_data_buf, G_rows_buf, G_cols_buf
             improved = True
 
     if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_data, G_rows, G_cols, n) 
+        best_energy = compute_cut_sparse(best_solution, G_data, G_rows, G_cols, n) 
 
     return best_solution, float(best_energy)
 

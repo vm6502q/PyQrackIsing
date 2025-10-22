@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numba import njit, prange
 
-from .maxcut_tfim_util import convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
+from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -56,28 +56,6 @@ def local_repulsion_choice(G_m, repulsion_base, n, m, s):
     used[node] = True
 
     return used
-
-
-@njit
-def compute_energy(sample, G_m, n_qubits):
-    energy = 0
-    for u in range(n_qubits):
-        for v in range(u + 1, n_qubits):
-            val = G_m[u, v]
-            energy += val if sample[u] == sample[v] else -val
-
-    return -energy
-
-
-@njit
-def compute_cut(sample, G_m, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    cut = 0
-    for u in l:
-        for v in r:
-            cut += G_m[u, v]
-
-    return cut
 
 
 @njit(parallel=True)

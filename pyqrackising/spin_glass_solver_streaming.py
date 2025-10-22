@@ -1,5 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import get_cut_base, opencl_context
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut_base, opencl_context
 from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
 import itertools
 import networkx as nx
@@ -12,65 +12,43 @@ epsilon = opencl_context.epsilon
 
 
 @njit
-def evaluate_cut_edges(theta_bits, G_func, nodes, n):
-    l, r = get_cut_base(theta_bits, n)
-    cut = 0
-    for u in l:
-        for v in r:
-            cut += G_func(nodes[u], nodes[v])
-
-    return cut
-
-
-@njit
-def compute_energy(theta_bits, G_func, nodes, n):
-    energy = 0
-    for u in range(n):
-        u_bit = theta_bits[u]
-        for v in range(u + 1, n):
-            val = G_func(nodes[u], nodes[v])
-            energy += (val if u_bit == theta_bits[v] else -val)
-
-    return energy
-
-
-@njit
 def bootstrap_worker(theta, G_func, nodes, indices, is_spin_glass, n):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_func, nodes, n) if is_spin_glass else -evaluate_cut_edges(local_theta, G_func, nodes, n)
+    energy = compute_energy_streaming(local_theta, G_func, nodes, n) if is_spin_glass else compute_cut_streaming(local_theta, G_func, nodes, n)
 
     return energy
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_func, nodes, indices_array, k, min_energy, dtype, is_spin_glass, n):
+def bootstrap(best_theta, G_func, nodes, indices_array, k, max_energy, dtype, is_spin_glass, n):
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
         energies[i] = bootstrap_worker(best_theta, G_func, nodes, indices_array[j : j + k], is_spin_glass, n)
 
     energy = energies.min()
-    if energy < min_energy:
+    if energy > max_energy:
         atol = dtype(epsilon)
         rtol = dtype(0)
         index_match = np.random.choice(np.where(np.isclose(energies, energy, atol=atol, rtol=rtol))[0])
         indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
-        min_energy = energies[index_match]
+        max_energy = energies[index_match]
         for i in indices:
             best_theta[i] = not best_theta[i]
 
-    return min_energy
+    return max_energy
 
 
-def log_intermediate(theta, G_func, nodes, min_energy, is_spin_glass, n):
+def log_intermediate(theta, G_func, nodes, max_energy, is_spin_glass, n):
     bitstring, l, r = get_cut_from_bit_array(theta, nodes)
     if is_spin_glass:
-        cut_value = evaluate_cut_edges(theta, G_func, nodes, n)
+        cut_value = compute_cut_streaming(theta, G_func, nodes, n)
+        min_energy = -max_energy
     else:
-        cut_value = -min_energy
-        min_energy = compute_energy(theta, G_func, nodes, n)
+        cut_value = max_energy
+        min_energy = compute_energy_streaming(theta, G_func, nodes, n)
     print(bitstring, float(cut_value), (l, r), float(min_energy))
 
 
@@ -120,14 +98,14 @@ def spin_glass_solver_streaming(
     if max_order is None:
         max_order = n_qubits
 
-    min_energy = compute_energy(best_theta, G_func, nodes, n_qubits) if is_spin_glass else -evaluate_cut_edges(best_theta, G_func, nodes, n_qubits)
+    max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if is_spin_glass else compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
 
     if is_log:
-        log_intermediate(best_theta, G_func, nodes, min_energy, is_spin_glass, n_qubits)
+        log_intermediate(best_theta, G_func, nodes, max_energy, is_spin_glass, n_qubits)
 
     combos_list = []
     reheat_theta = best_theta.copy()
-    reheat_min_energy = min_energy
+    reheat_max_energy = max_energy
     for reheat_round in range(reheat_tries + 1):
         improved = True
         correction_quality = min_order
@@ -146,39 +124,40 @@ def spin_glass_solver_streaming(
                 else:
                     combos = combos_list[k - 1]
 
-                energy = bootstrap(best_theta, G_func, nodes, combos, k, min_energy, dtype, is_spin_glass, n_qubits)
+                energy = bootstrap(best_theta, G_func, nodes, combos, k, max_energy, dtype, is_spin_glass, n_qubits)
 
-                if energy < reheat_min_energy:
-                    reheat_min_energy = energy
+                if energy > reheat_max_energy:
+                    reheat_max_energy = energy
                     improved = True
                     if correction_quality < (k + 1):
                         correction_quality = k + 1
 
                     if is_log:
-                        log_intermediate(reheat_theta, G_func, nodes, min_energy, is_spin_glass, n_qubits)
+                        log_intermediate(reheat_theta, G_func, nodes, max_energy, is_spin_glass, n_qubits)
 
                     break
 
                 k = k + 1
 
-        if min_energy < reheat_min_energy:
+        if max_energy > reheat_max_energy:
             reheat_theta = best_theta.copy()
         else:
             best_theta = reheat_theta.copy()
-            min_energy = reheat_min_energy
+            max_energy = reheat_max_energy
 
         if reheat_round < reheat_tries:
             num_to_flip = int(np.round(np.log2(n_qubits)))
             bits_to_flip = random.sample(range(n_qubits), num_to_flip)
             for bit in bits_to_flip:
                 reheat_theta[bit] = not reheat_theta[bit]
-            reheat_min_energy = compute_energy(reheat_theta, G_func, nodes, n_qubits) if is_spin_glass else -evaluate_cut_edges(reheat_theta, G_func, nodes, n_qubits)
+            reheat_max_energy = compute_energy_streaming(reheat_theta, G_func, nodes, n_qubits) if is_spin_glass else compute_cut_streaming(reheat_theta, G_func, nodes, n_qubits)
 
     bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
     if is_spin_glass:
-        cut_value = evaluate_cut_edges(best_theta, G_func, nodes, n_qubits)
+        cut_value = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
+        min_energy = -max_energy
     else:
-        cut_value = -min_energy
-        min_energy = compute_energy(best_theta, G_func, nodes, n_qubits)
+        cut_value = max_energy
+        min_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
 
     return bitstring, float(cut_value), (l, r), float(min_energy)
