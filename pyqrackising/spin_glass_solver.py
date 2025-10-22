@@ -25,11 +25,12 @@ def bootstrap_worker(theta, G_m, indices, is_spin_glass, n):
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_m, indices_array, k, max_energy, dtype, is_spin_glass, n):
+def bootstrap(best_theta, G_m, indices_array, k, max_energy, dtype, is_spin_glass, n_qubits):
+    n = len(indices_array) // k
     energies = np.empty(n, dtype=dtype)
     for i in prange(n):
         j = i * k
-        energies[i] = bootstrap_worker(best_theta, G_m, indices_array[j : j + k], is_spin_glass, n)
+        energies[i] = bootstrap_worker(best_theta, G_m, indices_array[j : j + k], is_spin_glass, n_qubits)
 
     energy = energies.min()
     if energy > max_energy:
