@@ -45,32 +45,33 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
 
 
 @njit(parallel=True)
-def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
+def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, combos):
     n = len(best_theta)
+    combo_count = (n * (n - 1)) >> 1
 
-    states = np.empty((n, n), dtype=np.bool_)
-    energies = np.full(n, np.finfo(dtype).min, dtype=dtype)
+    states = np.empty((combo_count, n), dtype=np.bool_)
+    energies = np.empty(combo_count, dtype=dtype)
 
     if is_spin_glass:
-        for i in prange(n):
+        for c in prange(combo_count):
             state = best_theta.copy()
-            state[i] = not state[i]
-            for j in range(i + 1, n):
-                state[j] = not state[j]
-                energy = compute_energy_sparse(state, G_data, G_rows, G_cols, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = state.copy(), energy
-                state[j] = not state[j]
+            c2 = c << 1
+            b = combos[c2]
+            state[b] = not state[b]
+            b = combos[c2 + 1]
+            state[b] = not state[b]
+
+            states[c], energies[c] = state, compute_energy_sparse(state, G_data, G_rows, G_cols, n)
     else:
-        for i in prange(n):
+        for c in prange(combo_count):
             state = best_theta.copy()
-            state[i] = not state[i]
-            for j in range(i + 1, n):
-                state[j] = not state[j]
-                energy = compute_cut_sparse(state, G_data, G_rows, G_cols, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = state.copy(), energy
-                state[j] = not state[j]
+            c2 = c << 1
+            b = combos[c2]
+            state[b] = not state[b]
+            b = combos[c2 + 1]
+            state[b] = not state[b]
+
+            states[c], energies[c] = state, compute_cut_sparse(state, G_data, G_rows, G_cols, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -201,6 +202,8 @@ def spin_glass_solver_sparse(
 
     max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
 
+    combos2 = np.array(list(itertools.combinations(range(n_qubits), 2))).flatten()
+
     thread_count = os.cpu_count() ** 2
     improved = True
     while improved:
@@ -215,7 +218,7 @@ def spin_glass_solver_sparse(
             continue
 
         # Double bit flips with O(n^3)
-        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
+        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, combos2)
         if energy > max_energy:
             max_energy = energy
             best_theta = state

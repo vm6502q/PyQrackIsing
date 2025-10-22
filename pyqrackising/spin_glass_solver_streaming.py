@@ -37,32 +37,33 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
 
 
 @njit(parallel=True)
-def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes):
+def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, combos):
     n = len(best_theta)
+    combo_count = (n * (n - 1)) >> 1
 
-    states = np.empty((n, n), dtype=np.bool_)
-    energies = np.full(n, np.finfo(dtype).min, dtype=dtype)
+    states = np.empty((combo_count, n), dtype=np.bool_)
+    energies = np.empty(combo_count, dtype=dtype)
 
     if is_spin_glass:
-        for i in prange(n):
+        for c in prange(combo_count):
             state = best_theta.copy()
-            state[i] = not state[i]
-            for j in range(i + 1, n):
-                state[j] = not state[j]
-                energy = compute_energy_streaming(state, G_func, nodes, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = state.copy(), energy
-                state[j] = not state[j]
+            c2 = c << 1
+            b = combos[c2]
+            state[b] = not state[b]
+            b = combos[c2 + 1]
+            state[b] = not state[b]
+
+            states[c], energies[c] = state, compute_energy_streaming(state, G_func, nodes, n)
     else:
-        for i in prange(n):
+        for c in prange(combo_count):
             state = best_theta.copy()
-            state[i] = not state[i]
-            for j in range(i + 1, n):
-                state[j] = not state[j]
-                energy = compute_cut_streaming(state, G_func, nodes, n)
-                if energy > energies[i]:
-                    states[i], energies[i] = state.copy(), energy
-                state[j] = not state[j]
+            c2 = c << 1
+            b = combos[c2]
+            state[b] = not state[b]
+            b = combos[c2 + 1]
+            state[b] = not state[b]
+
+            states[c], energies[c] = state, compute_cut_streaming(state, G_func, nodes, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -185,6 +186,8 @@ def spin_glass_solver_streaming(
 
     max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if is_spin_glass else cut_value
 
+    combos2 = np.array(list(itertools.combinations(range(n_qubits), 2))).flatten()
+
     thread_count = os.cpu_count() ** 2
     improved = True
     while improved:
@@ -199,7 +202,7 @@ def spin_glass_solver_streaming(
             continue
 
         # Double bit flips with O(n^3)
-        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes)
+        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, combos2)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
