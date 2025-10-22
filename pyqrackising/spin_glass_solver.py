@@ -83,6 +83,31 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m):
 
 
 @njit(parallel=True)
+def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spin_glass):
+    seed_count = thread_count * gray_seed_multiple
+
+    seeds = np.empty((seed_count, n), dtype=np.bool_)
+    energies = np.empty(seed_count, dtype=dtype)
+
+    if is_spin_glass:
+        for i in prange(seed_count):
+            seed = gray_mutation(i, best_theta)
+            energies[i] = compute_energy(seed, G_m, n)
+            seeds[i] = seed
+    else:
+        for i in prange(seed_count):
+            seed = gray_mutation(i, best_theta)
+            energies[i] = compute_cut(seed, G_m, n)
+            seeds[i] = seed
+
+    indices = np.argsort(energies)[::-1]
+    best_seeds = np.empty((thread_count, n), dtype=np.bool_)
+    for i in prange(thread_count):
+        best_seeds[i] = seeds[indices[i]]
+
+    return best_seeds
+
+@njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m):
     n = len(best_theta)
     thread_iterations = gray_iterations // thread_count
@@ -128,7 +153,8 @@ def spin_glass_solver(
     anneal_h=None,
     repulsion_base=None,
     is_log=False,
-    gray_iterations=None
+    gray_iterations=None,
+    gray_seed_multiple=None
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -171,6 +197,9 @@ def spin_glass_solver(
     if gray_iterations is None:
         gray_iterations = n_qubits * os.cpu_count()
 
+    if gray_seed_multiple is None:
+        gray_seed_multiple = os.cpu_count()
+
     max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
 
     thread_count = os.cpu_count() ** 2
@@ -195,7 +224,7 @@ def spin_glass_solver(
             continue
 
         # Gray code with default O(n^3)
-        iterators = np.array([gray_mutation(i, best_theta) for i in range(thread_count)])
+        iterators = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
         energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m)
         if energy > max_energy:
             max_energy = energy
