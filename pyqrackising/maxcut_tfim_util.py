@@ -484,11 +484,8 @@ def bit_pick(weights, used, n):
 
 @njit
 def gray_code_next(state, curr_idx):
-    if curr_idx == 0:
-         return state.copy()
-
-    prev = curr_idx - 1
-    curr = curr_idx
+    prev = curr_idx
+    curr = curr_idx + 1
     prev = prev ^ (prev >> 1)
     curr = curr ^ (curr >> 1)
     diff = prev ^ curr

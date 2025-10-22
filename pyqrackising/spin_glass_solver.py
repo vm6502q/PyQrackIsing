@@ -101,39 +101,54 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
             seeds[i] = seed
 
     indices = np.argsort(energies)[::-1]
-    best_seeds = np.empty((thread_count, n), dtype=np.bool_)
-    for i in prange(thread_count):
-        best_seeds[i] = seeds[indices[i]]
 
-    return best_seeds
+    best_seeds = np.empty((thread_count, n), dtype=np.bool_)
+    best_energies = np.empty(thread_count, dtype=dtype)
+
+    for i in prange(thread_count):
+        idx = indices[i]
+        best_seeds[i] = seeds[idx]
+        best_energies[i] = energies[idx]
+
+    return best_seeds, best_energies
 
 @njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m):
     n = len(best_theta)
-    thread_iterations = gray_iterations // thread_count
-    gray_iterations = (gray_iterations + thread_count - 1) // thread_count
+    npow = 1 << n
+    thread_iterations = ((gray_iterations + thread_count - 1) // thread_count + 1) >> 1
 
     states = np.empty((thread_count, n), dtype=np.bool_)
     energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(thread_count):
-            i_offset = i * thread_iterations
             iterator = iterators[i]
+            r_iterator = iterator.copy()
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
                 energy = compute_energy(iterator, G_m, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
+
+                gray_code_next(r_iterator, npow - (curr_idx + 1))
+                energy = compute_energy(r_iterator, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = r_iterator.copy(), energy
     else:
         for i in prange(thread_count):
-            i_offset = i * thread_iterations
             iterator = iterators[i]
+            r_iterator = iterator.copy()
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
                 energy = compute_cut(iterator, G_m, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
+
+                gray_code_next(r_iterator, npow - (curr_idx + 1))
+                energy = compute_energy(r_iterator, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = r_iterator.copy(), energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -224,7 +239,15 @@ def spin_glass_solver(
             continue
 
         # Gray code with default O(n^3)
-        iterators = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
+        iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
+        best_i = np.argmax(energies)
+        energy, state = energies[best_i], iterators[best_i]
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            continue
+
         energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m)
         if energy > max_energy:
             max_energy = energy
