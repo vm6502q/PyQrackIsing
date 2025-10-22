@@ -181,13 +181,12 @@ def spin_glass_solver_sparse(
             max_energy = energy
             best_theta = state
             improved = True
-            break
+            continue
         energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
             improved = True
-            break
 
     # Gray code
     thread_count = os.cpu_count() ** 2
