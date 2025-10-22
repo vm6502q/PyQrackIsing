@@ -30,11 +30,13 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
+            states[i] = state
             energies[i] = compute_energy_sparse(state, G_data, G_rows, G_cols, n)
     else:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
+            states[i] = state
             energies[i] = compute_cut_sparse(state, G_data, G_rows, G_cols, n)
 
     best_index = np.argmax(energies)

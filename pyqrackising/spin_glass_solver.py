@@ -29,11 +29,13 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_m):
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
+            states[i] = state
             energies[i] = compute_energy(state, G_m, n)
     else:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
+            states[i] = state
             energies[i] = compute_cut(state, G_m, n)
 
     best_index = np.argmax(energies)
