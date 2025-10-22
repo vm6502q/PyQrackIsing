@@ -157,29 +157,33 @@ def spin_glass_solver_streaming(
 
     max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if is_spin_glass else cut_value
 
-    # Single bit flips
+    thread_count = os.cpu_count() ** 2
     improved = True
     while improved:
         improved = False
+
+        # Single bit flips with O(n^2)
         energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
             improved = True
             continue
+
+        # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
             improved = True
+            continue
 
-    # Gray code
-    thread_count = os.cpu_count() ** 2
-    iterators = np.array([gray_mutation(i, best_theta) for i in range(thread_count)])
-    energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes)
-    if energy > max_energy:
-        max_energy = energy
-        best_theta = state
+        # Gray code with default O(n^3)
+        iterators = np.array([gray_mutation(i, best_theta) for i in range(thread_count)])
+        energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes)
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
