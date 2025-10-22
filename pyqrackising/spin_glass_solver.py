@@ -1,9 +1,10 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, get_cut_base, int_to_bitstring, make_G_m_buf, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, int_to_bitstring, opencl_context, setup_opencl
 import itertools
 import networkx as nx
 import numpy as np
 from numba import njit, prange
+import os
 import random
 
 
@@ -14,115 +15,104 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
 
 
-@njit
-def bootstrap_worker(theta, G_m, indices, is_spin_glass, n):
-    local_theta = theta.copy()
-    for i in indices:
-        local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, G_m, n) if is_spin_glass else compute_cut(local_theta, G_m, n)
-
-    return energy
+dtype = opencl_context.dtype
 
 
 @njit(parallel=True)
-def bootstrap(best_theta, G_m, indices_array, k, max_energy, dtype, is_spin_glass, n_qubits):
-    n = len(indices_array) // k
+def run_single_bit_flips(best_theta, is_spin_glass, G_m):
+    n = len(best_theta)
+
+    states = np.empty((n, n), dtype=np.bool_)
     energies = np.empty(n, dtype=dtype)
-    for i in prange(n):
-        j = i * k
-        energies[i] = bootstrap_worker(best_theta, G_m, indices_array[j : j + k], is_spin_glass, n_qubits)
 
-    energy = energies.min()
-    if energy > max_energy:
-        index_match = np.random.choice(np.where(energies == energy)[0])
-        indices = indices_array[(index_match * k) : ((index_match + 1) * k)]
-        max_energy = energy
-        for i in indices:
-            best_theta[i] = not best_theta[i]
-
-    return max_energy
-
-
-def run_bootstrap_opencl(best_theta, G_m_buf, indices_array_np, k, best_energy, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
-    ctx = opencl_context.ctx
-    queue = opencl_context.queue
-    bootstrap_kernel = opencl_context.bootstrap_segmented_kernel if is_segmented else opencl_context.bootstrap_kernel
-    dtype = opencl_context.dtype
-    epsilon = opencl_context.epsilon
-
-    best_theta_np = np.array([(1 if b else 0) for b in best_theta], dtype=np.int8)
-
-    # Buffers
-    mf = cl.mem_flags
-    best_theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=best_theta_np)
-    indices_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=indices_array_np)
-
-    # Set kernel args
-    if is_segmented:
-        bootstrap_kernel.set_args(
-            G_m_buf[0],
-            G_m_buf[1],
-            G_m_buf[2],
-            G_m_buf[3],
-            best_theta_buf,
-            indices_buf,
-            args_buf,
-            max_energy_buf,
-            max_index_buf,
-            local_energy_buf,
-            local_index_buf
-        )
-    else:
-        bootstrap_kernel.set_args(
-            G_m_buf,
-            best_theta_buf,
-            indices_buf,
-            args_buf,
-            max_energy_buf,
-            max_index_buf,
-            local_energy_buf,
-            local_index_buf
-        )
-
-    cl.enqueue_nd_range_kernel(queue, bootstrap_kernel, (global_size,), (local_size,))
-
-    # Read results
-    cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
-    queue.finish()
-
-    # Queue read for results we might not need
-    cl.enqueue_copy(queue, max_index_host, max_index_buf)
-
-    # Find global minimum
-    best_x = np.argmax(max_energy_host)
-    energy = -max_energy_host[best_x]
-
-    if energy >= best_energy:
-        # No improvement: we can exit early
-        return best_energy
-
-    # We need the best index
-    queue.finish()
-    best_i = max_index_host[best_x]
-
-    flip_index_start = best_i * k
-    indices_to_flip = indices_array_np[flip_index_start : flip_index_start + k]
-
-    for i in indices_to_flip:
-        best_theta[i] = not best_theta[i]
-
-    return energy
-
-
-def log_intermediate(theta, G_m, nodes, max_energy, is_spin_glass, n):
-    bitstring, l, r = get_cut(theta, nodes, n)
     if is_spin_glass:
-        cut_value = compute_cut(theta, G_m, n)
-        min_energy = -max_energy
+        for i in prange(n):
+            state = best_theta.copy()
+            state[i] = not state[i]
+            energies[i] = compute_energy(state, G_m, n)
     else:
-        cut_value = max_energy
-        min_energy = -compute_energy(theta, G_m, n)
-    print(bitstring, float(cut_value), (l, r), float(min_energy))
+        for i in prange(n):
+            state = best_theta.copy()
+            state[i] = not state[i]
+            energies[i] = compute_cut(state, G_m, n)
+
+    best_index = np.argmax(energies)
+    best_energy = energies[best_index]
+    best_state = states[best_index]
+
+    return best_energy, best_state
+
+
+@njit(parallel=True)
+def run_double_bit_flips(best_theta, is_spin_glass, G_m):
+    n = len(best_theta)
+
+    states = np.empty((n, n), dtype=np.bool_)
+    energies = np.zeros(n, dtype=dtype)
+
+    if is_spin_glass:
+        for i in prange(n):
+            state = best_theta.copy()
+            state[i] = not state[i]
+            for j in range(n):
+                if i == j:
+                    continue
+                state[j] = not state[j]
+                energy = compute_energy(state, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = state, energy
+    else:
+        for i in prange(n):
+            state = best_theta.copy()
+            state[i] = not state[i]
+            for j in range(n):
+                if i == j:
+                    continue
+                state[j] = not state[j]
+                energy = compute_cut(state, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = state, energy
+
+    best_index = np.argmax(energies)
+    best_energy = energies[best_index]
+    best_state = states[best_index]
+
+    return best_energy, best_state
+
+
+@njit(parallel=True)
+def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m):
+    n = len(best_theta)
+    thread_iterations = gray_iterations // thread_count
+    gray_iterations = (gray_iterations + thread_count - 1) // thread_count
+
+    states = np.empty((thread_count, n), dtype=np.bool_)
+    energies = np.zeros(thread_count, dtype=dtype)
+
+    if is_spin_glass:
+        for i in prange(thread_count):
+            i_offset = i * thread_iterations
+            iterator = iterators[i]
+            for curr_idx in range(thread_iterations):
+                state = gray_code_next(iterator, curr_idx)
+                energy = compute_energy(state, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = state, energy
+    else:
+        for i in prange(thread_count):
+            i_offset = i * thread_iterations
+            iterator = iterators[i]
+            for curr_idx in range(thread_iterations):
+                state = gray_code_next(iterator, curr_idx)
+                energy = compute_cut(state, G_m, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = state, energy
+
+    best_index = np.argmax(energies)
+    best_energy = energies[best_index]
+    best_state = states[best_index]
+
+    return best_energy, best_state
 
 
 def spin_glass_solver(
@@ -130,15 +120,13 @@ def spin_glass_solver(
     quality=None,
     shots=None,
     best_guess=None,
-    is_combo_maxcut_gpu=True,
+    is_maxcut_gpu=True,
     is_spin_glass=True,
     anneal_t=None,
     anneal_h=None,
     repulsion_base=None,
-    min_order=2,
-    max_order=2,
     is_log=False,
-    reheat_tries=0
+    gray_iterations=None
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -175,77 +163,38 @@ def spin_glass_solver(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, _, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_combo_maxcut_gpu, is_nested=True)
+        bitstring, cut_value, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_maxcut_gpu, is_nested=True)
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
-    segment_size = G_m.shape[0] * G_m.shape[1]
-    is_segmented = (G_m.nbytes << 1) > opencl_context.max_alloc
+    if gray_iterations is None:
+        gray_iterations = n_qubits * os.cpu_count()
 
-    is_opencl = is_combo_maxcut_gpu and IS_OPENCL_AVAILABLE
+    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
 
-    if is_opencl:
-        G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
+    # Single bit flips
+    improved = True
+    while improved:
+        improved = False
+        energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m)
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            break
+        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m)
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            break
 
-    if max_order is None:
-        max_order = n_qubits
-
-    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else compute_cut(best_theta, G_m, n_qubits)
-
-    if is_log:
-        log_intermediate(best_theta, G_m, nodes, max_energy, is_spin_glass, n_qubits)
-
-    combos_list = []
-    reheat_theta = best_theta.copy()
-    reheat_max_energy = max_energy
-    for reheat_round in range(reheat_tries + 1):
-        improved = True
-        correction_quality = min_order
-        while improved:
-            improved = False
-            k = 1
-            while (k <= correction_quality) and (k <= max_order):
-                if n_qubits < k:
-                    break
-
-                if len(combos_list) < k:
-                    combos = np.array(list(itertools.combinations(range(n_qubits), k)), dtype=np.int32).flatten()
-                    combos_list.append(combos)
-                else:
-                    combos = combos_list[k - 1]
-
-                if is_opencl:
-                    combo_count = len(combos) // k
-                    opencl_args = setup_opencl(n_qubits, combo_count, np.array([n_qubits, k, combo_count, is_spin_glass, segment_size], dtype=np.int32))
-                    energy = run_bootstrap_opencl(reheat_theta, G_m_buf, combos, k, reheat_max_energy, is_segmented, *opencl_args)
-                else:
-                    energy = bootstrap(reheat_theta, G_m, combos, k, reheat_max_energy, dtype, is_spin_glass, n_qubits)
-
-                if energy > reheat_max_energy:
-                    reheat_max_energy = energy
-                    improved = True
-                    if correction_quality < (k + 1):
-                        correction_quality = k + 1
-                    if is_log:
-                        log_intermediate(reheat_theta, G_m, nodes, reheat_max_energy, is_spin_glass, n_qubits)
-
-                    break
-
-                k = k + 1
-
-        if max_energy > reheat_max_energy:
-            reheat_theta = best_theta.copy()
-        else:
-            best_theta = reheat_theta.copy()
-            max_energy = reheat_max_energy
-
-        if reheat_round < reheat_tries:
-            num_to_flip = int(np.round(np.log2(n_qubits)))
-            bits_to_flip = random.sample(range(n_qubits), num_to_flip)
-            for bit in bits_to_flip:
-                reheat_theta[bit] = not reheat_theta[bit]
-            reheat_max_energy = compute_energy(reheat_theta, G_m, n_qubits) if is_spin_glass else compute_cut(reheat_theta, G_m, n_qubits)
-
-    opencl_context.G_m_buf = None
+    # Gray code
+    thread_count = os.cpu_count() ** 2
+    iterators = np.array([gray_mutation(i, best_theta) for i in range(thread_count)])
+    energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m)
+    if energy > max_energy:
+        max_energy = energy
+        best_theta = state
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:

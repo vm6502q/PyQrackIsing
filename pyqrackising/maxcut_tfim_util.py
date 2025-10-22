@@ -7,7 +7,7 @@ from scipy.sparse import lil_matrix
 
 
 class OpenCLContext:
-    def __init__(self, p, a, w, d, e, r, c, q, b, s, x, y, i, j, k, l):
+    def __init__(self, p, a, w, d, e, r, c, q,i, j, k, l):
         self.MAX_GPU_PROC_ELEM = p
         self.IS_OPENCL_AVAILABLE = a
         self.work_group_size = w
@@ -16,10 +16,6 @@ class OpenCLContext:
         self.max_alloc = r
         self.ctx = c
         self.queue = q
-        self.bootstrap_kernel = b
-        self.bootstrap_sparse_kernel = s
-        self.bootstrap_segmented_kernel = x
-        self.bootstrap_sparse_segmented_kernel = y
         self.calculate_cut_kernel = i
         self.calculate_cut_sparse_kernel = j
         self.calculate_cut_segmented_kernel = k
@@ -33,10 +29,6 @@ dtype = np.float32
 epsilon = 2 ** -23
 work_group_size = 32
 max_alloc = 0xFFFFFFFFFFFFFFFF
-bootstrap_kernel = None
-bootstrap_sparse_kernel = None
-bootstrap_segmented_kernel = None
-bootstrap_sparse_segmented_kernel = None
 calculate_cut_kernel = None
 calculate_cut_sparse_kernel = None
 calculate_cut_segmented_kernel = None
@@ -89,16 +81,12 @@ try:
     # Load and build OpenCL kernels
     kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
     program = cl.Program(ctx, kernel_src).build()
-    bootstrap_kernel = program.bootstrap
-    bootstrap_sparse_kernel = program.bootstrap_sparse
-    bootstrap_segmented_kernel = program.bootstrap_segmented
-    bootstrap_sparse_segmented_kernel = program.bootstrap_sparse_segmented
     calculate_cut_kernel = program.calculate_cut
     calculate_cut_sparse_kernel = program.calculate_cut_sparse
     calculate_cut_segmented_kernel = program.calculate_cut_segmented
     calculate_cut_sparse_segmented_kernel = program.calculate_cut_sparse_segmented
 
-    work_group_size = bootstrap_kernel.get_work_group_info(
+    work_group_size = calculate_cut_kernel.get_work_group_info(
         cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
         ctx.devices[0]
     )
@@ -108,7 +96,7 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, bootstrap_kernel, bootstrap_sparse_kernel, bootstrap_segmented_kernel, bootstrap_sparse_segmented_kernel, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel)
 
 
 def setup_opencl(l, g, args_np):
@@ -492,3 +480,30 @@ def bit_pick(weights, used, n):
             break
 
     return node
+
+
+@njit
+def gray_code_next(state, curr_idx):
+    if curr_idx == 0:
+         return state.copy()
+
+    prev = curr_idx - 1
+    curr = curr_idx
+    prev = prev ^ (prev >> 1)
+    curr = curr ^ (curr >> 1)
+    diff = prev ^ curr
+    flip_bit = int(np.log2(diff))
+    state[flip_bit] = not state[flip_bit]
+
+    return state.copy()
+
+
+@njit
+def gray_mutation(index, seed_bits):
+    """Apply Gray-code-indexed bit flips to a seed bitstring."""
+    n = seed_bits.shape[0]
+    gray = index ^ (index >> 1)
+    bits = seed_bits.copy()
+    for i in range(n):
+        bits[n - 1 - i] ^= (gray >> i) & 1
+    return bits
