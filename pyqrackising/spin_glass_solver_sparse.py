@@ -1,6 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
-from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut_base, make_G_m_csr_buf, opencl_context, setup_opencl
-from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
+from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut, get_cut_base, int_to_bitstring, make_G_m_csr_buf, opencl_context, setup_opencl
 import itertools
 import networkx as nx
 import numpy as np
@@ -134,7 +133,7 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes, dtype):
 
 
 def log_intermediate(theta, G_data, G_rows, G_cols, nodes, max_energy, is_spin_glass, n):
-    bitstring, l, r = get_cut_from_bit_array(theta, nodes)
+    bitstring, l, r = get_cut(theta, nodes, n)
     if is_spin_glass:
         cut_value = compute_cut_sparse(theta, G_data, G_rows, G_cols, n)
         min_energy = -max_energy
@@ -271,7 +270,7 @@ def spin_glass_solver_sparse(
     opencl_context.G_rows_buf = None
     opencl_context.G_cols_buf = None
 
-    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
+    bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
         cut_value = compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
         min_energy = -max_energy

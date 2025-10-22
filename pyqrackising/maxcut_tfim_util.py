@@ -287,7 +287,6 @@ def compute_cut_streaming(sample, G_func, nodes, n_qubits):
     return cut
 
 
-
 @njit
 def get_cut(solution, nodes, n):
     bit_string = ""
@@ -313,6 +312,11 @@ def get_cut_base(solution, n):
             l.append(i)
 
     return l, r
+
+
+# By Gemini (Google Search AI)
+def int_to_bitstring(integer, length):
+    return (bin(integer)[2:].zfill(length))[::-1]
 
 
 @njit

@@ -1,6 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut_base, opencl_context
-from .spin_glass_solver_util import get_cut_from_bit_array, int_to_bitstring
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, int_to_bitstring, opencl_context
 import itertools
 import networkx as nx
 import numpy as np
@@ -42,7 +41,7 @@ def bootstrap(best_theta, G_func, nodes, indices_array, k, max_energy, dtype, is
 
 
 def log_intermediate(theta, G_func, nodes, max_energy, is_spin_glass, n):
-    bitstring, l, r = get_cut_from_bit_array(theta, nodes)
+    bitstring, l, r = get_cut(theta, nodes, n)
     if is_spin_glass:
         cut_value = compute_cut_streaming(theta, G_func, nodes, n)
         min_energy = -max_energy
@@ -152,7 +151,7 @@ def spin_glass_solver_streaming(
                 reheat_theta[bit] = not reheat_theta[bit]
             reheat_max_energy = compute_energy_streaming(reheat_theta, G_func, nodes, n_qubits) if is_spin_glass else compute_cut_streaming(reheat_theta, G_func, nodes, n_qubits)
 
-    bitstring, l, r = get_cut_from_bit_array(best_theta, nodes)
+    bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
         cut_value = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
         min_energy = -max_energy
