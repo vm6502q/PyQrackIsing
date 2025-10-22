@@ -84,32 +84,72 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
 
 
 @njit(parallel=True)
+def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows, G_cols, n, is_spin_glass):
+    seed_count = thread_count * gray_seed_multiple
+
+    seeds = np.empty((seed_count, n), dtype=np.bool_)
+    energies = np.empty(seed_count, dtype=dtype)
+
+    if is_spin_glass:
+        for i in prange(seed_count):
+            seed = gray_mutation(i, best_theta)
+            energies[i] = compute_energy_sparse(seed, G_data, G_rows, G_cols, n)
+            seeds[i] = seed
+    else:
+        for i in prange(seed_count):
+            seed = gray_mutation(i, best_theta)
+            energies[i] = compute_cut_sparse(seed, G_data, G_rows, G_cols, n)
+            seeds[i] = seed
+
+    indices = np.argsort(energies)[::-1]
+
+    best_seeds = np.empty((thread_count, n), dtype=np.bool_)
+    best_energies = np.empty(thread_count, dtype=dtype)
+
+    for i in prange(thread_count):
+        idx = indices[i]
+        best_seeds[i] = seeds[idx]
+        best_energies[i] = energies[idx]
+
+    return best_seeds, best_energies
+
+@njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_data, G_rows, G_cols):
     n = len(best_theta)
-    thread_iterations = gray_iterations // thread_count
-    gray_iterations = (gray_iterations + thread_count - 1) // thread_count
+    npow = 1 << n
+    thread_iterations = ((gray_iterations + thread_count - 1) // thread_count + 1) >> 1
 
     states = np.empty((thread_count, n), dtype=np.bool_)
     energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(thread_count):
-            i_offset = i * thread_iterations
             iterator = iterators[i]
+            r_iterator = iterator.copy()
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
                 energy = compute_energy_sparse(iterator, G_data, G_rows, G_cols, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
+
+                gray_code_next(r_iterator, npow - (curr_idx + 1))
+                energy = compute_energy_sparse(r_iterator, G_data, G_rows, G_cols, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = r_iterator.copy(), energy
     else:
         for i in prange(thread_count):
-            i_offset = i * thread_iterations
             iterator = iterators[i]
+            r_iterator = iterator.copy()
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
                 energy = compute_cut_sparse(iterator, G_data, G_rows, G_cols, n)
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
+
+                gray_code_next(r_iterator, npow - (curr_idx + 1))
+                energy = compute_cut_sparse(r_iterator, G_data, G_rows, G_cols, n)
+                if energy > energies[i]:
+                    states[i], energies[i] = r_iterator.copy(), energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -129,7 +169,8 @@ def spin_glass_solver_sparse(
     anneal_h=None,
     repulsion_base=None,
     is_log=False,
-    gray_iterations=None
+    gray_iterations=None,
+    gray_seed_multiple=None
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -172,6 +213,9 @@ def spin_glass_solver_sparse(
     if gray_iterations is None:
         gray_iterations = n_qubits * os.cpu_count()
 
+    if gray_seed_multiple is None:
+        gray_seed_multiple = os.cpu_count()
+
     max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
 
     thread_count = os.cpu_count() ** 2
@@ -196,7 +240,15 @@ def spin_glass_solver_sparse(
             continue
 
         # Gray code with default O(n^3)
-        iterators = np.array([gray_mutation(i, best_theta) for i in range(thread_count)])
+        iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m.data, G_m.indptr, G_m.indices, n_qubits, is_spin_glass)
+        best_i = np.argmax(energies)
+        energy, state = energies[best_i], iterators[best_i]
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            continue
+
         energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
         if energy > max_energy:
             max_energy = energy
