@@ -151,20 +151,18 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     if is_spin_glass:
         for i in prange(thread_count):
             iterator = iterators[i]
-            for block in range(blocks):
-                offset = block * thread_count
-                for curr_idx in range(thread_iterations):
-                    gray_code_next(iterator, curr_idx, offset)
+            for curr_idx in range(thread_iterations):
+                for block in range(blocks):
+                    gray_code_next(iterator, curr_idx, block * thread_count)
                     energy = compute_energy(iterator, G_m, n)
                     if energy > energies[i]:
                         states[i], energies[i] = iterator.copy(), energy
     else:
         for i in prange(thread_count):
             iterator = iterators[i]
-            for block in range(blocks):
-                offset = block * thread_count
-                for curr_idx in range(thread_iterations):
-                    gray_code_next(iterator, curr_idx, offset)
+            for curr_idx in range(thread_iterations):
+                for block in range(blocks):
+                    gray_code_next(iterator, curr_idx, block * thread_count)
                     energy = compute_cut(iterator, G_m, n)
                     if energy > energies[i]:
                         states[i], energies[i] = iterator.copy(), energy
