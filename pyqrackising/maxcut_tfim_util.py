@@ -7,10 +7,10 @@ from scipy.sparse import lil_matrix
 
 
 class OpenCLContext:
-    def __init__(self, a, b, w, d, e, f, c, q, i, j, k, l, m, n, o, p, x, y):
+    def __init__(self, a, b, g, d, e, f, c, q, i, j, k, l, m, n, o, p, x, y, z, w):
         self.MAX_GPU_PROC_ELEM = a
         self.IS_OPENCL_AVAILABLE = b
-        self.work_group_size = w
+        self.work_group_size = g
         self.dtype = d
         self.epsilon = e
         self.max_alloc = f
@@ -25,7 +25,9 @@ class OpenCLContext:
         self.single_bit_flips_segmented_kernel = o
         self.single_bit_flips_sparse_segmented_kernel = p
         self.double_bit_flips_kernel = x
-        self.double_bit_flips_segmented_kernel = y
+        self.double_bit_flips_sparse_kernel = y
+        self.double_bit_flips_segmented_kernel = z
+        self.double_bit_flips_sparse_segmented_kernel = w
 
 IS_OPENCL_AVAILABLE = True
 ctx = None
@@ -44,7 +46,9 @@ single_bit_flips_sparse_kernel = None
 single_bit_flips_segmented_kernel = None
 single_bit_flips_sparse_segmented_kernel = None
 double_bit_flips_kernel = None
+double_bit_flips_sparse_kernel = None
 double_bit_flips_segmented_kernel = None
+double_bit_flips_sparse_segmented_kernel = None
 
 dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
 kernel_src = ''
@@ -102,7 +106,9 @@ try:
     single_bit_flips_segmented_kernel = program.single_bit_flips_segmented
     single_bit_flips_sparse_segmented_kernel = program.single_bit_flips_sparse_segmented
     double_bit_flips_kernel = program.double_bit_flips
+    double_bit_flips_sparse_kernel = program.double_bit_flips_sparse
     double_bit_flips_segmented_kernel = program.double_bit_flips_segmented
+    double_bit_flips_sparse_segmented_kernel = program.double_bit_flips_sparse_segmented
 
     work_group_size = calculate_cut_kernel.get_work_group_info(
         cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
@@ -114,7 +120,7 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_sparse_kernel, double_bit_flips_segmented_kernel, double_bit_flips_sparse_segmented_kernel)
 
 
 def setup_opencl(l, g, args_np):

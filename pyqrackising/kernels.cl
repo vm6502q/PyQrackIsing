@@ -333,6 +333,78 @@ __kernel void single_bit_flips_sparse(
     reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
+real1 double_bit_flip_worker_sparse(__constant uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass, const int k, const int l) {
+    real1 energy = ZERO_R1;
+    for (int u = 0; u < n; ++u) {
+        bool u_bit = get_const_bit(theta, u);
+        if ((u == k) || (u == l)) {
+            u_bit = !u_bit;
+        }
+        const size_t mCol = G_rows[u + 1];
+        for (int col = G_rows[u]; col < mCol; ++col) {
+            const int v = G_cols[col];
+            const real1 val = G_data[col];
+            bool v_bit = get_const_bit(theta, v);
+            if ((v == k) || (v == l)) {
+                v_bit = !v_bit;
+            }
+            if (u_bit != v_bit) {
+                energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
+            }
+        }
+    }
+
+    return energy;
+}
+
+__kernel void double_bit_flips_sparse(
+    __global const real1* G_data,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    __constant uint* best_theta,
+    __constant int* args,               // args[0] = n, args[1] = k
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
+    __local real1* loc_energy,          // local memory buffer
+    __local int* loc_index              // local memory buffer
+) {
+    const int n = args[0];
+    const bool is_spin_glass = args[1];
+    const int combo_count = (n * (n - 1)) >> 1;
+
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
+
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        int c = i;
+        int k = 0;
+        int lcv = n - 1;
+        while (c >= lcv) {
+            c -= lcv;
+            ++k;
+            --lcv;
+
+            if (!lcv) {
+                break;
+            }
+        }
+        const int l = c + k + 1;
+
+        const real1 energy = double_bit_flip_worker_sparse(best_theta, G_data, G_rows, G_cols, n, is_spin_glass, k, l);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+}
+
 real1 cut_worker_segmented(
     __global const uint* theta,
     __global const real1** G_m,
@@ -684,6 +756,97 @@ __kernel void single_bit_flips_sparse_segmented(
 
     for (; i < n; i += max_i) {
         const real1 energy = single_bit_flip_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, n, segment_size, is_spin_glass, i);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+}
+
+real1 double_bit_flip_worker_sparse_segmented(
+    __constant uint* theta,
+    __global const real1** G_data,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    const int n,
+    const int segment_size,
+    const bool is_spin_glass,
+    const int k,
+    const int l
+) {
+    real1 energy = ZERO_R1;
+
+    for (int u = 0; u < n; ++u) {
+        bool u_bit = get_const_bit(theta, u);
+        if ((u == k) || (u == l)) {
+            u_bit = !u_bit;
+        }
+        const uint row_start = G_rows[u];
+        const uint row_end = G_rows[u + 1];
+
+        for (uint col = row_start; col < row_end; ++col) {
+            const int v = G_cols[col];
+            const real1 val = get_G_m(G_data, col, segment_size);
+            bool v_bit = get_const_bit(theta, v);
+            if ((v == k) || (v == l)) {
+                v_bit = !v_bit;
+            }
+            if (u_bit != v_bit) {
+                energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
+            }
+        }
+    }
+
+    return energy;
+}
+
+__kernel void double_bit_flips_sparse_segmented(
+    __global const real1* G_data0,
+    __global const real1* G_data1,
+    __global const real1* G_data2,
+    __global const real1* G_data3,
+    __global const uint* G_rows,
+    __global const uint* G_cols,
+    __constant uint* best_theta,
+    __constant int* args,               // args[0] = n, args[1] = k, args[2] = combo_count, args[3] = segment_size
+    __global real1* max_energy_ptr,
+    __global int* max_index_ptr,
+    __local real1* loc_energy,
+    __local int* loc_index
+) {
+    __global const real1* G_data[4] = { G_data0, G_data1, G_data2, G_data3 };
+
+    const int n = args[0];
+    const bool is_spin_glass = args[1];
+    const int segment_size = args[2];
+    const int combo_count = (n * (n - 1)) >> 1;
+
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
+
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < combo_count; i += max_i) {
+        int c = i;
+        int k = 0;
+        int lcv = n - 1;
+        while (c >= lcv) {
+            c -= lcv;
+            ++k;
+            --lcv;
+
+            if (!lcv) {
+                break;
+            }
+        }
+        const int l = c + k + 1;
+
+        const real1 energy = double_bit_flip_worker_sparse_segmented(best_theta, G_data, G_rows, G_cols, n, segment_size, is_spin_glass, k, l);
         if (energy > best_energy) {
             best_energy = energy;
             best_i = i;

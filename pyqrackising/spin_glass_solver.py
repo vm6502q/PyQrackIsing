@@ -165,7 +165,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     return best_energy, best_state
 
 
-def run_bit_flips_opencl(kernel, best_energy, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
 
     # Set kernel args
@@ -213,9 +213,26 @@ def run_bit_flips_opencl(kernel, best_energy, theta, theta_buf, G_m_buf, is_segm
     # We need the best index
     queue.finish()
 
-    k = max_index_host[best_x]
+    s = max_index_host[best_x]
     theta = theta.copy()
-    theta[k] = not theta[k]
+
+    if is_double:
+        c = s
+        i = 0
+        lcv = n - 1
+        while c >= lcv:
+            c -= lcv
+            i += 1
+            lcv -= 1
+            if not lcv:
+                break
+        j = c + i + 1
+
+        theta = theta.copy()
+        theta[i] = not theta[i]
+        theta[j] = not theta[j]
+    else:
+        theta[s] = not theta[s]
 
     return energy, theta
 
@@ -306,7 +323,7 @@ def spin_glass_solver(
         # Single bit flips with O(n^2)
         if is_opencl:
             theta_buf = make_best_theta_buf(best_theta)
-            energy, state = run_bit_flips_opencl(single_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m)
         if energy > max_energy:
@@ -318,7 +335,7 @@ def spin_glass_solver(
         # Double bit flips with O(n^3)
         if is_opencl:
             # theta_buf has not changed
-            energy, state = run_bit_flips_opencl(double_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count)
         if energy > max_energy:
