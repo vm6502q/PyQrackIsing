@@ -97,7 +97,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
 
 @njit(parallel=True)
 def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes, n, is_spin_glass):
-    blocks = (n + thread_count - 1) // thread_count
+    blocks = (n + 63) // 64
     block_size = thread_count * gray_seed_multiple
     seed_count = block_size * blocks
 
@@ -106,15 +106,15 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
 
     if is_spin_glass:
         for s in prange(seed_count):
-            offset = s // block_size
             i = s % block_size
+            offset = (s // block_size) * 64
             seed = gray_mutation(i, best_theta, offset)
             energies[s] = compute_energy_streaming(seed, G_func, nodes, n)
             seeds[s] = seed
     else:
         for s in prange(seed_count):
-            offset = s // block_size
             i = s % block_size
+            offset = (s // block_size) * 64
             seed = gray_mutation(i, best_theta, offset)
             energies[s] = compute_cut_streaming(seed, G_func, nodes, n)
             seeds[s] = seed
@@ -135,7 +135,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
     n = len(best_theta)
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
-    blocks = (n + thread_count - 1) // thread_count
+    blocks = (n + 63) // 64
 
     states = np.empty((thread_count, n), dtype=np.bool_)
     energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
@@ -145,7 +145,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
-                    gray_code_next(iterator, curr_idx, block * thread_count)
+                    gray_code_next(iterator, curr_idx, block * 64)
                     energy = compute_energy_streaming(iterator, G_func, nodes, n)
                     if energy > energies[i]:
                         states[i], energies[i] = iterator.copy(), energy
@@ -154,7 +154,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
-                    gray_code_next(iterator, curr_idx, block * thread_count)
+                    gray_code_next(iterator, curr_idx, block * 64)
                     energy = compute_cut_streaming(iterator, G_func, nodes, n)
                     if energy > energies[i]:
                         states[i], energies[i] = iterator.copy(), energy
