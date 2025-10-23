@@ -1,5 +1,5 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
-from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut, gray_code_next, gray_mutation, int_to_bitstring, opencl_context, setup_opencl, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut, gray_code_next, gray_mutation, int_to_bitstring, make_G_m_csr_buf, opencl_context, setup_opencl, to_scipy_sparse_upper_triangular
 import itertools
 import networkx as nx
 import numpy as np
@@ -17,6 +17,7 @@ except ImportError:
 
 
 dtype = opencl_context.dtype
+wgs = opencl_context.work_group_size
 
 
 @njit(parallel=True)
@@ -142,6 +143,78 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     return best_energy, best_state
 
 
+def run_single_bit_flips_opencl(best_energy, theta, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+    queue = opencl_context.queue
+    ctx = opencl_context.ctx
+    single_bit_flips_kernel = opencl_context.single_bit_flips_sparse_segmented_kernel if is_segmented else opencl_context.single_bit_flips_sparse_kernel
+
+    n = theta.shape[0]
+    n32 = (n + 31) >> 5
+    theta_np = np.zeros(n32, dtype=np.uint32)
+    for i in range(n):
+        if theta[i]:
+            theta_np[(i >> 5)] |= 1 << (i & 31)
+
+    # Buffers
+    mf = cl.mem_flags
+    theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta_np)
+
+    # Set kernel args
+    if is_segmented:
+        single_bit_flips_kernel.set_args(
+            G_data_buf[0],
+            G_data_buf[1],
+            G_data_buf[2],
+            G_data_buf[3],
+            G_rows_buf,
+            G_cols_buf,
+            theta_buf,
+            args_buf,
+            max_energy_buf,
+            max_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
+    else:
+        single_bit_flips_kernel.set_args(
+            G_data_buf,
+            G_rows_buf,
+            G_cols_buf,
+            theta_buf,
+            args_buf,
+            max_energy_buf,
+            max_index_buf,
+            local_energy_buf,
+            local_index_buf
+        )
+
+    cl.enqueue_nd_range_kernel(queue, single_bit_flips_kernel, (global_size,), (local_size,))
+
+    # Read results
+    cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
+    queue.finish()
+
+    # Queue read for results we might not need
+    cl.enqueue_copy(queue, max_index_host, max_index_buf)
+
+    # Find global minimum
+    best_x = np.argmax(max_energy_host)
+    energy = max_energy_host[best_x]
+
+    if energy <= best_energy:
+        # No improvement: we can exit early
+        return best_energy, theta
+
+    # We need the best index
+    queue.finish()
+
+    k = max_index_host[best_x]
+    theta = theta.copy()
+    theta[k] = not theta[k]
+
+    return energy, theta
+
+
 def spin_glass_solver_sparse(
     G,
     quality=None,
@@ -204,13 +277,27 @@ def spin_glass_solver_sparse(
 
     combos2 = np.array(list(itertools.combinations(range(n_qubits), 2))).flatten()
 
+    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
+
+    if is_opencl:
+        segment_size = (G_m.data.shape[0] + 3) >> 2
+        is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc
+        G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
+
+        local_work_group_size = min(wgs, n_qubits)
+        global_work_group_size = n_qubits
+        opencl_args = setup_opencl(local_work_group_size, global_work_group_size, np.array([n_qubits, is_spin_glass, segment_size]))
+
     thread_count = os.cpu_count() ** 2
     improved = True
     while improved:
         improved = False
 
         # Single bit flips with O(n^2)
-        energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
+        if is_opencl:
+            energy, state = run_single_bit_flips_opencl(max_energy, best_theta, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, *opencl_args)
+        else:
+            energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
