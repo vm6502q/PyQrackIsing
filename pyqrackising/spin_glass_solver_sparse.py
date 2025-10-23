@@ -114,15 +114,15 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows
 
     if is_spin_glass:
         for s in prange(seed_count):
-            offset = s // block_size
             i = s % block_size
+            offset = (s // block_size) * thread_count
             seed = gray_mutation(i, best_theta, offset)
             energies[s] = compute_energy_sparse(seed, G_data, G_rows, G_cols, n)
             seeds[s] = seed
     else:
         for s in prange(seed_count):
-            offset = s // block_size
             i = s % block_size
+            offset = (s // block_size) * thread_count
             seed = gray_mutation(i, best_theta, offset)
             energies[s] = compute_cut_sparse(seed, G_data, G_rows, G_cols, n)
             seeds[s] = seed
