@@ -103,6 +103,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, thre
     return best_energy, best_state
 
 
+@njit(parallel=True)
 def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows, G_cols, n, is_spin_glass):
     seed_count = thread_count * gray_seed_multiple
 
@@ -110,12 +111,12 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows
     energies = np.empty(seed_count, dtype=dtype)
 
     if is_spin_glass:
-        for i in range(seed_count):
+        for i in prange(seed_count):
             seed = gray_mutation(i, best_theta)
             energies[i] = compute_energy_sparse(seed, G_data, G_rows, G_cols, n)
             seeds[i] = seed
     else:
-        for i in range(seed_count):
+        for i in prange(seed_count):
             seed = gray_mutation(i, best_theta)
             energies[i] = compute_cut_sparse(seed, G_data, G_rows, G_cols, n)
             seeds[i] = seed
@@ -132,6 +133,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows
 
     return best_seeds, best_energies
 
+@njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_data, G_rows, G_cols):
     n = len(best_theta)
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
@@ -140,7 +142,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
-        for i in range(thread_count):
+        for i in prange(thread_count):
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
@@ -148,7 +150,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                 if energy > energies[i]:
                     states[i], energies[i] = iterator.copy(), energy
     else:
-        for i in range(thread_count):
+        for i in prange(thread_count):
             iterator = iterators[i]
             for curr_idx in range(thread_iterations):
                 gray_code_next(iterator, curr_idx)
