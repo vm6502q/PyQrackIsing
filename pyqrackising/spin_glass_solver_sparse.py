@@ -1,12 +1,9 @@
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
 from .maxcut_tfim_util import compute_cut_sparse, compute_energy_sparse, get_cut, gray_code_next, gray_mutation, int_to_bitstring, make_G_m_csr_buf, opencl_context, setup_opencl, to_scipy_sparse_upper_triangular
-import itertools
 import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
-import random
-from scipy.sparse import lil_matrix, csr_matrix
 
 
 IS_OPENCL_AVAILABLE = True
@@ -46,33 +43,58 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
 
 
 @njit(parallel=True)
-def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, combos):
+def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, thread_count):
     n = len(best_theta)
-    combo_count = len(combos) >> 1
+    combo_count = (n * (n - 1)) // 2
+    thread_batch = (combo_count + thread_count - 1) // thread_count
 
-    states = np.empty((combo_count, n), dtype=np.bool_)
-    energies = np.empty(combo_count, dtype=dtype)
+    states = np.empty((thread_count, n), dtype=np.bool_)
+    energies = np.empty(thread_count, dtype=dtype)
 
     if is_spin_glass:
-        for c in prange(combo_count):
-            state = best_theta.copy()
-            c2 = c << 1
-            b = combos[c2]
-            state[b] = not state[b]
-            b = combos[c2 + 1]
-            state[b] = not state[b]
+        for t in prange(thread_count):
+            s = int(t)
+            while s < combo_count:
+                c = int(s)
+                i = int(0)
+                lcv = int(n - 1)
+                while c >= lcv:
+                    c -= lcv
+                    i += 1
+                    lcv -= 1
+                    if not lcv:
+                        break
+                j = int(c + i + 1)
 
-            states[c], energies[c] = state, compute_energy_sparse(state, G_data, G_rows, G_cols, n)
+                state = best_theta.copy()
+                state[i] = not state[i]
+                state[j] = not state[j]
+
+                states[t], energies[t] = state, compute_energy_sparse(state, G_data, G_rows, G_cols, n)
+
+                s += thread_batch
     else:
-        for c in prange(combo_count):
-            state = best_theta.copy()
-            c2 = c << 1
-            b = combos[c2]
-            state[b] = not state[b]
-            b = combos[c2 + 1]
-            state[b] = not state[b]
+        for t in prange(thread_count):
+            s = int(t)
+            while s < combo_count:
+                c = int(s)
+                i = int(0)
+                lcv = int(n - 1)
+                while c >= lcv:
+                    c -= lcv
+                    i += 1
+                    lcv -= 1
+                    if not lcv:
+                        break
+                j = int(c + i + 1)
 
-            states[c], energies[c] = state, compute_cut_sparse(state, G_data, G_rows, G_cols, n)
+                state = best_theta.copy()
+                state[i] = not state[i]
+                state[j] = not state[j]
+
+                states[t], energies[t] = state, compute_cut_sparse(state, G_data, G_rows, G_cols, n)
+
+                s += thread_batch
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -275,8 +297,6 @@ def spin_glass_solver_sparse(
 
     max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
 
-    combos2 = np.array(list(itertools.combinations(range(n_qubits), 2))).flatten()
-
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
     if is_opencl:
@@ -305,7 +325,7 @@ def spin_glass_solver_sparse(
             continue
 
         # Double bit flips with O(n^3)
-        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, combos2)
+        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, thread_count)
         if energy > max_energy:
             max_energy = energy
             best_theta = state

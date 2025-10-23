@@ -1,11 +1,9 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
 from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, int_to_bitstring, opencl_context
-import itertools
 import networkx as nx
 import numpy as np
 from numba import njit, prange
 import os
-import random
 
 
 dtype = opencl_context.dtype
@@ -37,33 +35,58 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
 
 
 @njit(parallel=True)
-def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, combos):
+def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count):
     n = len(best_theta)
-    combo_count = len(combos) >> 1
+    combo_count = (n * (n - 1)) // 2
+    thread_batch = (combo_count + thread_count - 1) // thread_count
 
-    states = np.empty((combo_count, n), dtype=np.bool_)
-    energies = np.empty(combo_count, dtype=dtype)
+    states = np.empty((thread_count, n), dtype=np.bool_)
+    energies = np.empty(thread_count, dtype=dtype)
 
     if is_spin_glass:
-        for c in prange(combo_count):
-            state = best_theta.copy()
-            c2 = c << 1
-            b = combos[c2]
-            state[b] = not state[b]
-            b = combos[c2 + 1]
-            state[b] = not state[b]
+        for t in prange(thread_count):
+            s = int(t)
+            while s < combo_count:
+                c = int(s)
+                i = int(0)
+                lcv = int(n - 1)
+                while c >= lcv:
+                    c -= lcv
+                    i += 1
+                    lcv -= 1
+                    if not lcv:
+                        break
+                j = int(c + i + 1)
 
-            states[c], energies[c] = state, compute_energy_streaming(state, G_func, nodes, n)
+                state = best_theta.copy()
+                state[i] = not state[i]
+                state[j] = not state[j]
+
+                states[t], energies[t] = state, compute_energy_streaming(state, G_func, nodes, n)
+
+                s += thread_batch
     else:
-        for c in prange(combo_count):
-            state = best_theta.copy()
-            c2 = c << 1
-            b = combos[c2]
-            state[b] = not state[b]
-            b = combos[c2 + 1]
-            state[b] = not state[b]
+        for t in prange(thread_count):
+            s = int(t)
+            while s < combo_count:
+                c = int(s)
+                i = int(0)
+                lcv = int(n - 1)
+                while c >= lcv:
+                    c -= lcv
+                    i += 1
+                    lcv -= 1
+                    if not lcv:
+                        break
+                j = int(c + i + 1)
 
-            states[c], energies[c] = state, compute_cut_streaming(state, G_func, nodes, n)
+                state = best_theta.copy()
+                state[i] = not state[i]
+                state[j] = not state[j]
+
+                states[t], energies[t] = state, compute_cut_streaming(state, G_func, nodes, n)
+
+                s += thread_batch
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -186,8 +209,6 @@ def spin_glass_solver_streaming(
 
     max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if is_spin_glass else cut_value
 
-    combos2 = np.array(list(itertools.combinations(range(n_qubits), 2))).flatten()
-
     thread_count = os.cpu_count() ** 2
     improved = True
     while improved:
@@ -202,7 +223,7 @@ def spin_glass_solver_streaming(
             continue
 
         # Double bit flips with O(n^3)
-        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, combos2)
+        energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
