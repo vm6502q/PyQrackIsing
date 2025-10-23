@@ -520,7 +520,6 @@ def bit_pick(weights, used, n):
     return node
 
 
-@njit
 def gray_code_next(state, curr_idx):
     prev = curr_idx
     curr = curr_idx + 1
@@ -531,7 +530,6 @@ def gray_code_next(state, curr_idx):
     state[flip_bit] = not state[flip_bit]
 
 
-@njit
 def gray_mutation(index, seed_bits):
     """Apply Gray-code-indexed bit flips to a seed bitstring."""
     n = seed_bits.shape[0]
