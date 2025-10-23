@@ -47,7 +47,7 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
 @njit(parallel=True)
 def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, combos):
     n = len(best_theta)
-    combo_count = (n * (n - 1)) >> 1
+    combo_count = len(combos) >> 1
 
     states = np.empty((combo_count, n), dtype=np.bool_)
     energies = np.empty(combo_count, dtype=dtype)

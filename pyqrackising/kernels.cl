@@ -63,7 +63,7 @@ real1 cut_worker(__global const uint* theta, __global const real1* G_m, const in
 
 __kernel void calculate_cut(
     __global const real1* G_m,
-    __global const uint* theta,
+    __global uint* theta,
     __constant int* args,               // args[0] = n, args[1] = k
     __global real1* max_energy_ptr,     // output: per-group min energy
     __global int* max_index_ptr,        // output: per-group best index (i)
@@ -84,6 +84,65 @@ __kernel void calculate_cut(
     for (; i < shots; i += max_i) {
         const int j = i * n32;
         const real1 energy = cut_worker(theta + j, G_m, n, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+}
+
+inline bool get_const_bit(__constant uint* theta, const size_t u) {
+    return (theta[u >> 5U] >> (u & 31U)) & 1U;
+}
+
+real1 single_bit_flip_worker(__constant uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass, const int k) {
+    real1 energy = ZERO_R1;
+    const size_t n_st = (size_t)n;
+    for (int u = 0; u < n; ++u) {
+        const size_t u_offset = u * n_st;
+        bool u_bit = get_const_bit(theta, u);
+        if (u == k) {
+            u_bit = !u_bit;
+        }
+        for (int v = u + 1; v < n; ++v) {
+            const real1 val = G_m[u_offset + v];
+            bool v_bit = get_const_bit(theta, v);
+            if (v == k) {
+                v_bit = ! v_bit;
+            }
+            if (u_bit != v_bit) {
+                energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
+            }
+        }
+    }
+
+    return energy;
+}
+
+__kernel void single_bit_flips(
+    __global const real1* G_m,
+    __constant uint* best_theta,
+    __constant int* args,               // args[0] = n, args[1] = k
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
+    __local real1* loc_energy,          // local memory buffer
+    __local int* loc_index              // local memory buffer
+) {
+    const int n = args[0];
+    const bool is_spin_glass = args[1];
+
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
+
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < n; i += max_i) {
+        const real1 energy = single_bit_flip_worker(best_theta, G_m, n, is_spin_glass, i);
         if (energy > best_energy) {
             best_energy = energy;
             best_i = i;
@@ -210,6 +269,67 @@ __kernel void calculate_cut_segmented(
     for (; i < shots; i += max_i) {
         const int j = i * n32;
         const real1 energy = cut_worker_segmented(theta[j / theta_segment_size] + (j % theta_segment_size), G_m, n, segment_size, is_spin_glass);
+        if (energy > best_energy) {
+            best_energy = energy;
+            best_i = i;
+        }
+    }
+
+    reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
+}
+
+real1 single_bit_flip_worker_segmented(__constant uint* theta, __global const real1** G_m, const int n, const int segment_size, const bool is_spin_glass, const int k) {
+    real1 energy = ZERO_R1;
+    const size_t n_st = (size_t)n;
+    for (int u = 0; u < n; ++u) {
+        const size_t u_offset = u * n_st;
+        bool u_bit = get_const_bit(theta, u);
+        if (u == k) {
+            u_bit = !u_bit;
+        }
+        for (int v = u + 1; v < n; ++v) {
+            const real1 val = get_G_m(G_m, u_offset + v, segment_size);
+            bool v_bit = get_const_bit(theta, v);
+            if (v == k) {
+                v_bit = ! v_bit;
+            }
+            if (u_bit != v_bit) {
+                energy += val;
+            } else if (is_spin_glass) {
+                energy -= val;
+            }
+        }
+    }
+
+    return energy;
+}
+
+__kernel void single_bit_flips_segmented(
+    __global const real1* G_m0,
+    __global const real1* G_m1,
+    __global const real1* G_m2,
+    __global const real1* G_m3,
+    __constant uint* best_theta,
+    __constant int* args,               // args[0] = n, args[1] = k
+    __global real1* max_energy_ptr,     // output: per-group min energy
+    __global int* max_index_ptr,        // output: per-group best index (i)
+    __local real1* loc_energy,          // local memory buffer
+    __local int* loc_index              // local memory buffer
+) {
+    __global const real1* G_m[4] = { G_m0, G_m1, G_m2, G_m3 };
+
+    const int n = args[0];
+    const bool is_spin_glass = args[1];
+    const int segment_size = args[2];
+
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
+
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+
+    for (; i < n; i += max_i) {
+        const real1 energy = single_bit_flip_worker_segmented(best_theta, G_m, n, segment_size, is_spin_glass, i);
         if (energy > best_energy) {
             best_energy = energy;
             best_i = i;

@@ -142,7 +142,7 @@ def sample_for_opencl(G_m, G_m_buf, shots, thresholds, repulsion_base, is_spin_g
     while improved:
         improved = False
         shot_loop(G_m, thresholds, repulsion_base, n, shots, solutions)
-        solution, energy = run_cut_opencl(best_energy, solutions, G_m_buf, is_segmented, segment_size, is_spin_glass, *opencl_args)
+        solution, energy = run_cut_opencl(best_energy, solutions, G_m_buf, is_segmented, *opencl_args)
         if energy > best_energy:
             best_energy = energy
             best_solution = solution.copy()
@@ -192,7 +192,7 @@ def cpu_footer(shots, thread_count, quality, n_qubits, G_m, nodes, is_spin_glass
     return bit_string, best_value, (l, r)
 
 
-def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, segment_size, is_spin_glass, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_segmented_kernel if is_segmented else opencl_context.calculate_cut_kernel
 
