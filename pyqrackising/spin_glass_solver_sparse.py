@@ -380,6 +380,33 @@ def spin_glass_solver_sparse(
             max_energy = energy
             best_theta = state
             improved = True
+            continue
+
+        # Post-reheat phase
+        reheat_theta = state
+
+        # Single bit flips with O(n^2)
+        if is_opencl:
+            theta_buf = make_best_theta_buf(reheat_theta)
+            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, max_energy, reheat_theta, theta_buf, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, *opencl_args)
+        else:
+            energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            continue
+
+        # Double bit flips with O(n^3)
+        if is_opencl:
+            # theta_buf has not changed
+            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, max_energy, reheat_theta, theta_buf, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, *opencl_args)
+        else:
+            energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, thread_count)
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
