@@ -142,22 +142,32 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
 
     if is_spin_glass:
         for i in prange(thread_count):
-            iterator = iterators[i]
+            iterator = iterators[i].copy()
+            best_energy, best_iterator = -float("inf"), iterator.copy()
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     gray_code_next(iterator, curr_idx, block * 64)
                     energy = compute_energy_streaming(iterator, G_func, nodes, n)
-                    if energy > energies[i]:
-                        states[i], energies[i] = iterator.copy(), energy
+                    if energy > best_energy:
+                        best_iterator, best_energy = iterator.copy(), energy
+                    else:
+                        iterator = best_iterator.copy()
+                if best_energy > energies[i]:
+                    states[i], energies[i] = best_iterator.copy(), best_energy
     else:
         for i in prange(thread_count):
-            iterator = iterators[i]
+            iterator = iterators[i].copy()
+            best_energy, best_iterator = -float("inf"), iterator.copy()
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     gray_code_next(iterator, curr_idx, block * 64)
                     energy = compute_cut_streaming(iterator, G_func, nodes, n)
-                    if energy > energies[i]:
-                        states[i], energies[i] = iterator.copy(), energy
+                    if energy > best_energy:
+                        best_iterator, best_energy = iterator.copy(), energy
+                    else:
+                        iterator = best_iterator.copy()
+                if best_energy > energies[i]:
+                    states[i], energies[i] = best_iterator.copy(), best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
