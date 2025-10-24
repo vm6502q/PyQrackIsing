@@ -132,18 +132,17 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
     return best_seeds, best_energies
 
 @njit(parallel=True)
-def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
+def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
     n = len(best_theta)
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
     blocks = (n + 63) // 64
 
     states = np.empty((thread_count, n), dtype=np.bool_)
-    energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(thread_count):
             iterator = iterators[i].copy()
-            best_energy, best_iterator = -float("inf"), iterator.copy()
+            best_energy, best_iterator = energies[i], iterator.copy()
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     gray_code_next(iterator, curr_idx, block * 64)
@@ -157,7 +156,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     else:
         for i in prange(thread_count):
             iterator = iterators[i].copy()
-            best_energy, best_iterator = -float("inf"), iterator.copy()
+            best_energy, best_iterator = energies[i], iterator.copy()
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     gray_code_next(iterator, curr_idx, block * 64)
@@ -257,7 +256,7 @@ def spin_glass_solver_streaming(
             improved = True
             continue
 
-        energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes)
+        energy, state = run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_func, nodes)
         if energy > max_energy:
             max_energy = energy
             best_theta = state
