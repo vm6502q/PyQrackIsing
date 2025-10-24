@@ -1,7 +1,6 @@
 from .maxcut_tfim_util import binary_search, opencl_context, to_scipy_sparse_upper_triangular
-from .maxcut_tfim import maxcut_tfim
+from .spin_glass_solver import spin_glass_solver
 from concurrent.futures import ProcessPoolExecutor
-import time
 import itertools
 import networkx as nx
 from numba import njit, prange
@@ -639,7 +638,7 @@ def tsp_symmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repulsi
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim(G_m, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                    _, cut_value, bits, _ = spin_glass_solver(G_m, is_spin_glass=False, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
@@ -851,7 +850,7 @@ def tsp_asymmetric_header(G_m, nodes, quality, shots, anneal_t, anneal_h, repuls
             for _ in range(multi_start):
                 bits = ([], [])
                 while (len(bits[0]) == 0) or (len(bits[1]) == 0):
-                    _, cut_value, bits = maxcut_tfim((G_m + G_m.T) / 2, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+                    _, cut_value, bits, _ = spin_glass_solver((G_m + G_m.T) / 2, is_spin_glass=False, quality=quality, shots=shots, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
                 if cut_value > best_cut:
                     best_cut = cut_value
                     a, b = bits
