@@ -111,7 +111,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
             basis_x.append('X')
         elif b == 'Y':
             basis_z.append('I')
-            basis_y.append('X')
+            basis_y.append('Z')
             basis_x.append('I')
         else:
             basis_z.append('I')
