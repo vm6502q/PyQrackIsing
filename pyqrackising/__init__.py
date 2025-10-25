@@ -1,9 +1,11 @@
-from .generate_tfim_samples import generate_tfim_samples
+from .generate_tfim_samples import generate_tfim_samples, get_tfim_hamming_distribution
 from .tfim_magnetization import tfim_magnetization
 from .tfim_square_magnetization import tfim_square_magnetization
+from .otocs import generate_otocs_samples, get_otocs_hamming_distribution
 from .maxcut_tfim import maxcut_tfim
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
+from .maxcut_tfim_util import probability_by_hamming_weight
 from .spin_glass_solver import spin_glass_solver
 from .spin_glass_solver_sparse import spin_glass_solver_sparse
 from .spin_glass_solver_streaming import spin_glass_solver_streaming

@@ -91,7 +91,6 @@ def sample_hamming_weight(thresholds, shots):
 
 @njit
 def fix_cdf(hamming_prob):
-    hamming_prob /= hamming_prob.sum()
     tot_prob = 0.0
     n_bias = len(hamming_prob)
     cum_prob = np.empty(n_bias, dtype=np.float64)
@@ -103,13 +102,19 @@ def fix_cdf(hamming_prob):
     return cum_prob
 
 
+@njit
+def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56):
+    bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+    return bias / bias.sum()
+
+
 def generate_tfim_samples(
     J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100
 ):
     n_rows, n_cols = factor_width(n_qubits)
 
     # First dimension: Hamming weight
-    thresholds = fix_cdf(probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1))
+    thresholds = fix_cdf(get_tfim_hamming_distribution(J, h, z, theta, t, n_qubits + 1))
     hamming_samples = sample_hamming_weight(thresholds, shots)
 
     samples = []

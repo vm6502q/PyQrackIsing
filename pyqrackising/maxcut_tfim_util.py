@@ -411,7 +411,7 @@ def init_thresholds(n_qubits):
 
 
 @njit
-def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
+def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
@@ -434,6 +434,9 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias):
 
     if J > 0.0:
         return bias[::-1]
+
+    if normalized:
+        bias /= bias.sum()
 
     return bias
 
@@ -459,8 +462,8 @@ def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
         t = step * delta_t
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias)
-        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias)
+        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias, False)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias, False)
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 
