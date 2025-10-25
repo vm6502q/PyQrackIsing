@@ -103,8 +103,8 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     for b in pauli_string:
         if b == 'Z':
             basis_z.append('X')
-            basis_y.append('Z')
-            basis_x.append('I')
+            basis_y.append('I')
+            basis_x.append('Z')
         elif b == 'X':
             basis_z.append('Z')
             basis_y.append('I')
@@ -112,7 +112,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
         elif b == 'Y':
             basis_z.append('I')
             basis_y.append('X')
-            basis_x.append('Z')
+            basis_x.append('I')
         else:
             basis_z.append('I')
             basis_y.append('I')
