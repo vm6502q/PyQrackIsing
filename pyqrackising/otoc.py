@@ -4,7 +4,7 @@ import numpy as np
 import random
 
 
-def get_otocs_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55):
+def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
@@ -90,14 +90,14 @@ def take_sample(b, basis, sample, m):
     return sample
 
 
-def generate_otocs_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, measurement_basis='Z' * 56):
+def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, measurement_basis='Z' * 56):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
-        raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
+        raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
     measurement_basis = list(measurement_basis)
     if len(measurement_basis) != n_qubits:
-        raise ValueError("OTOCS measurement_basis must be same length as measurement_basis! (Use 'I' for excluded qubits.)")
+        raise ValueError("OTOC measurement_basis must be same length as measurement_basis! (Use 'I' for excluded qubits.)")
 
     basis_x, basis_y, basis_z = [], [], []
     for b in pauli_string:
@@ -119,7 +119,7 @@ def generate_otocs_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, 
             basis_x.append('Z')
 
     bases = { 'X': basis_x, 'Y': basis_y, 'Z': basis_z }
-    thresholds = { key: fix_cdf(value) for key, value in get_otocs_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
+    thresholds = { key: fix_cdf(value) for key, value in get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
 
     samples_3_axis = {}
     for key, value in thresholds.items():

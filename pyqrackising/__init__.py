@@ -1,7 +1,7 @@
 from .generate_tfim_samples import generate_tfim_samples, get_tfim_hamming_distribution
 from .tfim_magnetization import tfim_magnetization
 from .tfim_square_magnetization import tfim_square_magnetization
-from .otocs import generate_otocs_samples, get_otocs_hamming_distribution
+from .otoc import generate_otoc_samples, get_otoc_hamming_distribution
 from .maxcut_tfim import maxcut_tfim
 from .maxcut_tfim_sparse import maxcut_tfim_sparse
 from .maxcut_tfim_streaming import maxcut_tfim_streaming

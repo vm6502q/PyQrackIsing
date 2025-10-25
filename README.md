@@ -151,6 +151,27 @@ best_partition, best_cut_value = tsp_maxcut_sparse(G, k_neighbors=20, is_optimiz
 
 When `is_optimized=True`, the `spin_glass_solver(G)` is used as a final optimization pass. When `is_optimized=False`, this solver becomes entirely serial and can be parallelized over CPU processing elements by user code, easily.
 
+## Experimental OTOC sampling
+
+```py
+from pyqrackising import generate_tfim_samples
+
+samples = generate_otoc_samples(
+    J=-1.0,
+    h=2.0,
+    z=4,
+    theta=0.174532925199432957,
+    t=5,
+    n_qubits=56,
+    cycles=1,
+    pauli_string = 'X' + 'I' * 55
+    shots=100,
+    measurement_basis='Z' * 56
+)
+```
+
+**This function is experimental. It needs systematic validation.** However, we expose it in the public API while we do of the work of testing its validity at qubit counts that are tractable for exact simulation.
+
 ## Environment Variables
 
 We expose an environment variable, "`PYQRACKISING_MAX_GPU_PROC_ELEM`", for OpenCL-based solvers. The default value (when the variable is not set) is queried from the OpenCL device properties. You might see performance benefit from tuning this manually to several times your device's number of "compute units" (or tune it down to reduce private memory usage).
