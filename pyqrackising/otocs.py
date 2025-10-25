@@ -9,13 +9,13 @@ def get_otocs_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.17453292519943295
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-    fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(-J, -h, z, -theta, t, n_qubits + 1)
+    fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, False)
+    rev = probability_by_hamming_weight(-J, -h, z, -theta, t, n_qubits + 1, False)
     diff_theta = rev - fwd
 
     phi = theta - np.pi / 2
-    fwd = probability_by_hamming_weight(J, h, z, phi, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(-J, -h, z, -phi, t, n_qubits + 1)
+    fwd = probability_by_hamming_weight(J, h, z, phi, t, n_qubits + 1, False)
+    rev = probability_by_hamming_weight(-J, -h, z, -phi, t, n_qubits + 1, False)
     diff_phi = rev - fwd
 
     diff_theta *= cycles
@@ -102,23 +102,23 @@ def generate_otocs_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, 
         raise ValueError("OTOCS measurement_basis must be same length as measurement_basis! (Use 'I' for excluded qubits.)")
 
     basis_x, basis_y, basis_z = [], [], []
-    for b in measurement_basis:
+    for b in pauli_string:
         if b == 'Z':
-            basis_z.append('Z')
-            basis_y.append('X')
+            basis_z.append('X')
+            basis_y.append('Z')
             basis_x.append('I')
         elif b == 'X':
-            basis_z.append('X')
+            basis_z.append('Z')
             basis_y.append('I')
-            basis_x.append('Z')
+            basis_x.append('X')
         elif b == 'Y':
-            basis_z.append('Y')
+            basis_z.append('I')
             basis_y.append('I')
             basis_x.append('X')
         else:
             basis_z.append('I')
-            basis_y.append('I')
-            basis_x.append('I')
+            basis_y.append('X')
+            basis_x.append('Z')
 
     bases = { 'X': basis_x, 'Y': basis_y, 'Z': basis_z }
     thresholds = { key: fix_cdf(value) for key, value in get_otocs_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
