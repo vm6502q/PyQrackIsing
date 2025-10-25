@@ -97,7 +97,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 
     measurement_basis = list(measurement_basis)
     if len(measurement_basis) != n_qubits:
-        raise ValueError("OTOC measurement_basis must be same length as measurement_basis! (Use 'I' for excluded qubits.)")
+        raise ValueError("OTOC measurement_basis must be same length as n_qubits! (Use 'I' for excluded qubits.)")
 
     basis_x, basis_y, basis_z = [], [], []
     for b in pauli_string:
