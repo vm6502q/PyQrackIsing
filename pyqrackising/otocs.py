@@ -22,10 +22,10 @@ def get_otocs_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.17453292519943295
     diff_phi *= cycles
     diff_lam = 0.5 * (diff_theta + diff_phi)
 
-    diff_z = np.zeros(n_qubits + 1, dtype=np.float64)
-    diff_x = np.zeros(n_qubits + 1, dtype=np.float64)
-    diff_y = np.zeros(n_qubits + 1, dtype=np.float64)
-    i_count = 0
+    n_bias = n_qubits + 1
+    diff_z = np.zeros(n_bias, dtype=np.float64)
+    diff_x = np.zeros(n_bias, dtype=np.float64)
+    diff_y = np.zeros(n_bias, dtype=np.float64)
     for b in pauli_string:
         match b:
             case 'X':
@@ -40,16 +40,14 @@ def get_otocs_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.17453292519943295
                 diff_z += diff_lam
                 diff_x += diff_phi
                 diff_y += diff_theta
-            case _:
-                i_count += 1
-
-    diff_z[0] += i_count
-    diff_x[0] += i_count
-    diff_y[0] += i_count
 
     diff_z -= diff_z.min()
     diff_x -= diff_x.min()
     diff_y -= diff_y.min()
+
+    diff_z[0] += n_bias
+    diff_x[0] += n_bias
+    diff_y[0] += n_bias
 
     diff_z /= diff_z.sum()
     diff_x /= diff_x.sum()
