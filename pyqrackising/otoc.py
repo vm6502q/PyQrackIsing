@@ -41,9 +41,9 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
                 diff_z += diff_theta
                 diff_x += diff_phi
 
-    diff_z[0] += n_bias
-    diff_x[0] += n_bias
-    diff_y[0] += n_bias
+    diff_z[0] += n_qubits
+    diff_x[0] += n_qubits
+    diff_y[0] += n_qubits
 
     diff_z /= diff_z.sum()
     diff_x /= diff_x.sum()
