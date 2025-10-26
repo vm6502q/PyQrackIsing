@@ -13,7 +13,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
     rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
     diff_theta = rev - fwd
 
-    phi = theta - np.pi / 2
+    phi = theta + np.pi / 2
     fwd = probability_by_hamming_weight(J, h, z, phi, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-J, -h, z, phi + np.pi, t, n_qubits + 1)
     diff_phi = rev - fwd
