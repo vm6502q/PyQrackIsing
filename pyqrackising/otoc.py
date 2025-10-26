@@ -20,6 +20,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
 
     diff_theta *= cycles
     diff_phi *= cycles
+    diff_lam = diff_phi
 
     n_bias = n_qubits + 1
     diff_z = np.zeros(n_bias, dtype=np.float64)
@@ -29,14 +30,14 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
         match b:
             case 'X':
                 diff_z += diff_theta
-                diff_x += diff_phi
+                diff_x += diff_lam
                 diff_y += diff_phi
             case 'Z':
                 diff_z += diff_phi
                 diff_x += diff_theta
-                diff_y += diff_phi
+                diff_y += diff_lam
             case 'Y':
-                diff_z += diff_phi
+                diff_z += diff_lam
                 diff_x += diff_phi
                 diff_y += diff_theta
 
