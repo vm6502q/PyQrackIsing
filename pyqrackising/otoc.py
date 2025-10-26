@@ -69,7 +69,6 @@ def fix_cdf(hamming_prob):
     return cum_prob
 
 
-@njit
 def take_all(b, basis, sample):
     for i in range(len(basis)):
         if basis[i] == b:
