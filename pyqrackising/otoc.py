@@ -33,16 +33,13 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
         match b:
             case 'X':
                 diff_z += diff_theta
-                # diff_x += diff_lam
                 diff_y += diff_phi
             case 'Z':
-                # diff_z += diff_lam
-                diff_x += diff_theta
-                diff_y += diff_phi
+                diff_x += diff_phi
+                diff_y += diff_theta
             case 'Y':
                 diff_z += diff_theta
                 diff_x += diff_phi
-                # diff_y += diff_lam
 
     diff_z[0] += n_bias
     diff_x[0] += n_bias
