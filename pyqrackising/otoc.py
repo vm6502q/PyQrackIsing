@@ -110,9 +110,9 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
             basis_y.append('I')
             basis_x.append('X')
         elif b == 'Y':
-            basis_z.append('Y')
+            basis_z.append('I')
             basis_y.append('Z')
-            basis_x.append('Y')
+            basis_x.append('I')
         else:
             basis_z.append('I')
             basis_y.append('I')
@@ -142,15 +142,6 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
                 continue
             m -= z_count
             sample_3_axis[key] = take_all('Z', basis, sample_3_axis[key])
-            if m == 0:
-                continue
-
-            y_count = basis.count('Y')
-            if y_count > m:
-                sample_3_axis[key] = take_sample('Y', basis, sample_3_axis[key], m)
-                continue
-            m -= y_count
-            sample_3_axis[key] = take_all('Y', basis, sample_3_axis[key])
             if m == 0:
                 continue
 
