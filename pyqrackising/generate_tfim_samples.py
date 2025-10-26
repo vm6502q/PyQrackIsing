@@ -85,7 +85,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
 def sample_hamming_weight(thresholds, shots):
     hamming_samples = np.zeros(shots, dtype=np.int32)
     for s in range(shots):
-        hamming_samples[s] = sample_mag(thresholds)
+        hamming_samples[s] = sample_mag(thresholds) + 1
 
     return hamming_samples
 

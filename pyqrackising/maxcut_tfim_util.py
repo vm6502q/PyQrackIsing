@@ -488,7 +488,7 @@ def sample_mag(cum_prob):
     while True:
         m = (left + right) >> 1
 
-        if (cum_prob[m] >= p) and ((m == 0) or cum_prob[m - 1] < p):
+        if (cum_prob[m] >= p) and ((m == 0) or (cum_prob[m - 1] < p)):
             break
 
         if cum_prob[m] < p:
@@ -496,7 +496,7 @@ def sample_mag(cum_prob):
         else:
             right = m - 1
 
-    return m + 1
+    return m
 
 
 @njit
