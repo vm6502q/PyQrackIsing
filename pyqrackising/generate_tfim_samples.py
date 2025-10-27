@@ -1,8 +1,12 @@
-from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag
+from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
 import itertools
 import math
+import sys
 import numpy as np
 from numba import njit
+
+
+epsilon = opencl_context.epsilon
 
 
 @njit
@@ -104,6 +108,10 @@ def fix_cdf(hamming_prob):
 
 @njit
 def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56):
+    if h <= epsilon:
+        bias = np.empty(n_qubits + 1, dtype=np.float64)
+        bias[0] = 1.0
+        return bias
     bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     return bias / bias.sum()
 

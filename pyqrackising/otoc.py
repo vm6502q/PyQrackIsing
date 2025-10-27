@@ -1,13 +1,23 @@
-from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag
+from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
 from numba import njit
 import numpy as np
 import random
+import sys
+
+
+epsilon = opencl_context.epsilon
 
 
 def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
+
+    n_bias = n_qubits + 1
+    if h <= epsilon:
+        bias = np.empty(n_bias, dtype=np.float64)
+        bias[0] = 1.0
+        return { 'X': bias, 'Y': bias, 'Z': bias }
 
     fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
@@ -25,7 +35,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
     diff_phi *= cycles
     # diff_lam = diff_phi
 
-    n_bias = n_qubits + 1
     diff_z = np.zeros(n_bias, dtype=np.float64)
     diff_x = np.zeros(n_bias, dtype=np.float64)
     diff_y = np.zeros(n_bias, dtype=np.float64)
