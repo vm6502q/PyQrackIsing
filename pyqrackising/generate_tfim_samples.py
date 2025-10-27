@@ -110,7 +110,10 @@ def fix_cdf(hamming_prob):
 def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56):
     if h <= epsilon:
         bias = np.empty(n_qubits + 1, dtype=np.float64)
-        bias[0] = 1.0
+        if J > 0:
+            bias[-1] = 1.0
+        else:
+            bias[0] = 1.0
         return bias
     bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     return bias / bias.sum()
