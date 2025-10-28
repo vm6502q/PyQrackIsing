@@ -121,46 +121,6 @@ def calc_stats(ideal_probs, patch_probs, depth):
     }
 
 
-# Drafted by Elara (OpenAI custom GPT), improved by Dan Strano
-def closeness_like_bits(perm, n_rows, n_cols):
-    """
-    Compute closeness-of-like-bits metric C(state) for a given bitstring on an LxL toroidal grid.
-
-    Parameters:
-        perm: integer representing basis state, bit-length n_rows * n_cols
-        n_rows: row count of torus
-        n_cols: column count of torus
-
-    Returns:
-        normalized_closeness: float, in [-1, +1]
-            +1 means all neighbors are like-like, -1 means all neighbors are unlike
-    """
-    # reshape the bitstring into LxL grid
-    bitstring = list(int_to_bitstring(perm, n_rows * n_cols))
-    grid = np.array(bitstring).reshape((n_rows, n_cols))
-    total_edges = 0
-    like_count = 0
-
-    # iterate over each site, count neighbors (right and down to avoid double-count)
-    for i in range(n_rows):
-        for j in range(n_cols):
-            s = grid[i, j]
-
-            # right neighbor (wrap around)
-            s_right = grid[i, (j + 1) % n_cols]
-            like_count += 1 if s == s_right else -1
-            total_edges += 1
-
-            # down neighbor (wrap around)
-            s_down = grid[(i + 1) % n_rows, j]
-            like_count += 1 if s == s_down else -1
-            total_edges += 1
-
-    # normalize
-    normalized_closeness = like_count / total_edges
-    return normalized_closeness
-
-
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
     return sum(
