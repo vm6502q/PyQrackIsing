@@ -1,7 +1,6 @@
 from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
 from numba import njit
 import numpy as np
-import random
 import sys
 
 
@@ -82,16 +81,68 @@ def take_all(b, basis, sample):
     return sample
 
 
-def take_sample(b, basis, sample, m):
+def take_sample(b, basis, sample, m, inv_dist):
     indices = []
+    tot_inv_dist = 0.0
     for i in range(len(basis)):
         if basis[i] == b:
             indices.append(i)
-    indices = random.sample(indices, m)
-    for i in indices:
+            tot_inv_dist += inv_dist[i]
+    selected = []
+    for i in range(m):
+        r = tot_inv_dist * np.random.random()
+        p = 0.0
+        idx = 0
+        while p < r:
+            p += inv_dist[indices[idx]]
+            idx += 1
+        i = indices[idx]
+        del indices[idx]
+        selected.append(i)
+        tot_inv_dist -= inv_dist[i]
+    for i in selected:
         sample |= 1 << i
 
     return sample
+
+
+@njit
+def factor_width(width):
+    col_len = np.floor(np.sqrt(width))
+    while ((width // col_len) * col_len) != width:
+        col_len -= 1
+    row_len = width // col_len
+
+    return row_len, col_len
+
+
+# Provided by Google search AI
+def find_all_str_occurrences(main_string, sub_string):
+    indices = []
+    start_index = 0
+    while True:
+        index = main_string.find(sub_string, start_index)
+        if index == -1:
+            break
+        indices.append(index)
+        start_index = index + 1  # Start searching after the found occurrence
+
+    return indices
+
+
+def get_inv_dist(butterfly_idx, n_qubits, row_len):
+    inv_dist = np.zeros(n_qubits, dtype=np.float64)
+    for idx in butterfly_idx:
+        for q in range(n_qubits):
+            b_row = idx // row_len
+            b_col = idx % row_len
+            q_row = q // row_len
+            q_col = q % row_len
+            dist = (q_row - b_row) ** 2 + (q_col - b_col) ** 2
+            if dist > 0:
+                inv_dist[q] += 1.0 / dist
+
+    return inv_dist
 
 
 def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, measurement_basis='Z' * 56):
@@ -125,6 +176,18 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     bases = { 'X': basis_x, 'Y': basis_y, 'Z': basis_z }
     thresholds = { key: fix_cdf(value) for key, value in get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
 
+    row_len, col_len = factor_width(n_qubits)
+    p_string = "".join(pauli_string)
+    butterfly_idx_x = find_all_str_occurrences(p_string, 'X')
+    butterfly_idx_y = find_all_str_occurrences(p_string, 'Y')
+    butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
+
+    inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len)
+    inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len)
+    inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len)
+
+    inv_dist = { 'X': inv_dist_x, 'Y': inv_dist_y, 'Z': inv_dist_z }
+
     samples = []
     for _ in range(shots):
         sample_3_axis = { 'X': 0, 'Y': 0, 'Z': 0 }
@@ -142,7 +205,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
             # Second dimension: permutation within Hamming weight
             z_count = basis.count('Z')
             if z_count > m:
-                sample_3_axis[key] = take_sample('Z', basis, sample_3_axis[key], m)
+                sample_3_axis[key] = take_sample('Z', basis, sample_3_axis[key], m, inv_dist[key])
                 continue
             m -= z_count
             sample_3_axis[key] = take_all('Z', basis, sample_3_axis[key])
@@ -151,14 +214,14 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 
             i_count = basis.count('I')
             if i_count > m:
-                sample_3_axis[key] = take_sample('I', basis, sample_3_axis[key], m)
+                sample_3_axis[key] = take_sample('I', basis, sample_3_axis[key], m, inv_dist[key])
                 continue
             m -= i_count
             sample_3_axis[key] = take_all('I', basis, sample_3_axis[key])
             if m == 0:
                 continue
 
-            sample_3_axis[key] = take_sample('X', basis, sample_3_axis[key], m)
+            sample_3_axis[key] = take_sample('X', basis, sample_3_axis[key], m, inv_dist[key])
 
         sample = 0
         j = 0
