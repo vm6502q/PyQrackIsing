@@ -32,32 +32,23 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
 
     diff_theta *= cycles
     diff_phi *= cycles
-    # diff_lam = diff_phi
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
-    diff_x = np.zeros(n_bias, dtype=np.float64)
-    diff_y = np.zeros(n_bias, dtype=np.float64)
     for b in pauli_string:
         match b:
             case 'X':
                 diff_z += diff_theta
-                diff_y += diff_phi
             case 'Z':
-                diff_x += diff_phi
-                diff_y += diff_theta
+                diff_z += diff_phi
             case 'Y':
-                diff_z += diff_theta
-                diff_x += diff_phi
+                diff_z += diff_theta + diff_phi
+            case _:
+                pass
 
     diff_z[0] += n_qubits
-    diff_x[0] += n_qubits
-    diff_y[0] += n_qubits
-
     diff_z /= diff_z.sum()
-    diff_x /= diff_x.sum()
-    diff_y /= diff_y.sum()
 
-    return { 'X': diff_x, 'Y': diff_y, 'Z': diff_z }
+    return diff_z
 
 
 @njit
@@ -180,7 +171,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-    thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string)['Z'])
+    thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string))
 
     row_len, col_len = factor_width(n_qubits)
     p_string = "".join(pauli_string)

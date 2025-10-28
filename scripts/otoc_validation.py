@@ -194,6 +194,7 @@ def main():
     otoc_dag = otoc.inverse()
     # Add the out-of-time-order perturbation
     otoc.x(0)
+    otoc.z(1)
     # Add the time-reversal of the Trotterization
     otoc = otoc & otoc_dag
     # Compile OTOC for Qiskit Aer
@@ -209,7 +210,7 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=theta, t=dt*depth, shots=shots, pauli_string='X'+'I'*(n_qubits-1))))
+    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=theta, t=dt*depth, shots=shots, pauli_string='XZ'+'I'*(n_qubits-2))))
     experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
 
     print(calc_stats(
