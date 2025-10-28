@@ -136,6 +136,19 @@ def top_n(n, a):
     return np.argsort(a)[-n:]
 
 
+def act_string(otoc, string):
+    for i in range(len(string)):
+        match string[i]:
+            case 'X':
+                otoc.x(i)
+            case 'Y':
+                otoc.y(i)
+            case 'Z':
+                otoc.z(i)
+            case _:
+                pass
+
+
 def main():
     n_qubits = 16
     depth = 16
@@ -151,21 +164,7 @@ def main():
     if len(sys.argv) > 2:
         depth = int(sys.argv[2])
     if len(sys.argv) > 3:
-        dt = float(sys.argv[3])
-    if len(sys.argv) > 4:
-        t1 = float(sys.argv[4])
-    if len(sys.argv) > 5:
-        shots = int(sys.argv[5])
-    else:
-        shots = max(65536, 1 << (n_qubits + 2))
-    if len(sys.argv) > 6:
-        trials = int(sys.argv[6])
-    else:
-        trials = 8 if t1 > 0 else 1
-
-    print("t1: " + str(t1))
-    print("t2: " + str(t2))
-    print("omega / pi: " + str(omega))
+        cycles = int(sys.argv[3])
 
     omega *= math.pi
     n_rows, n_cols = factor_width(n_qubits, False)
@@ -178,19 +177,22 @@ def main():
         trotter_step(ising, qubits, (n_rows, n_cols), J, h, dt)
     ising_dag = ising.inverse()
 
+    # 1/8 butterfly qubits
+    ops = 9 * ['I'] + ['X', 'Y', 'Z']
+    pauli_strings = []
+
     otoc = QuantumCircuit(n_qubits)
     for cycle in range(cycles):
         otoc &= ising
         # Add the out-of-time-order perturbation
-        otoc.x(0)
-        otoc.z(1)
+        string = np.random.choice(ops, size=n_qubits, replace=True)
+        pauli_strings.append("".join(string))
+        act_string(otoc, string)
         # Add the time-reversal of the Trotterization
         otoc &= ising_dag
         # Add the out-of-time-order perturbation
-        otoc.x(0)
-        otoc.z(1)
-    otoc.x(0)
-    otoc.z(1)
+        if cycle < (cycles - 1):
+            act_string(otoc, string)
 
     # Compile OTOC for Qiskit Aer
     control = AerSimulator(method="statevector")
@@ -205,7 +207,7 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=['XZ'+'I'*(n_qubits-2)]*cycles)))
+    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=pauli_strings)))
     experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
 
     print(calc_stats(
