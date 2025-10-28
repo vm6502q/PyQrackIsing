@@ -225,21 +225,19 @@ def main():
     qubits = list(range(n_qubits))
 
     # Set the initial temperature by theta.
-    qc = QuantumCircuit(n_qubits)
-    for q in range(n_qubits):
-        qc.ry(theta, q)
-
-    # The Aer circuit also starts with this initialization
-    qc_aer = qc.copy()
-
-    # Compile OTOC for Qiskit Aer
-    control = AerSimulator(method="statevector")
     otoc = QuantumCircuit(n_qubits)
+    for q in range(n_qubits):
+        otoc.ry(theta, q)
+    # Add the forward-in-time Trotter steps
     for d in range(depth):
         trotter_step(otoc, qubits, (n_rows, n_cols), J, h, dt)
     otoc_dag = otoc.inverse()
+    # Add the out-of-time-order perturbation
     otoc.x(0)
+    # Add the time-reversal of the Trotterization
     otoc = otoc & otoc_dag
+    # Compile OTOC for Qiskit Aer
+    control = AerSimulator(method="statevector")
     otoc = transpile(
         otoc,
         optimization_level=3,
