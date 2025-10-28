@@ -143,21 +143,8 @@ def main():
     t2 = 1
     omega = 1.5
 
-    # Quantinuum settings
     J, h, dt, z = -1.0, 2.0, 0.125, 4
-    theta = math.pi / 18
-
-    # Pure ferromagnetic
-    # J, h, dt, z = -1.0, 0.0, 0.25, 4
-    # theta = 0
-
-    # Pure transverse field
-    # J, h, dt, z = 0.0, 2.0, 0.25, 4
-    # theta = -math.pi / 2
-
-    # Critical point (symmetry breaking)
-    # J, h, dt, z = -1.0, 1.0, 0.25, 4
-    # theta = -math.pi / 4
+    theta = 0.0
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -194,7 +181,7 @@ def main():
     otoc_dag = otoc.inverse()
     # Add the out-of-time-order perturbation
     otoc.x(0)
-    otoc.z(1)
+    # otoc.z(1)
     # Add the time-reversal of the Trotterization
     otoc = otoc & otoc_dag
     # Compile OTOC for Qiskit Aer
@@ -210,7 +197,7 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=theta, t=dt*depth, shots=shots, pauli_string='XZ'+'I'*(n_qubits-2))))
+    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=theta, t=dt*depth, shots=shots, pauli_string='X'+'I'*(n_qubits-1))))
     experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
 
     print(calc_stats(

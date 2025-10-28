@@ -7,7 +7,7 @@ import sys
 epsilon = opencl_context.epsilon
 
 
-def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55):
+def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, cycles=1, pauli_string = 'X' + 'I' * 64):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
@@ -162,7 +162,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
     return inv_dist
 
 
-def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, is_orbifold=True):
+def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, cycles=1, pauli_string = 'X' + 'I' * 64, shots=100, is_orbifold=True):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
