@@ -219,13 +219,6 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
             # Second dimension: permutation within Hamming weight
             sample_3_axis[key] = take_sample(n_qubits, sample_3_axis[key], m, inv_dist[key])
 
-        sample = 0
-        j = 0
-        for i in range(n_qubits):
-            if (sample_3_axis['Z'] >> i) & 1:
-                sample |= 1 << j
-            j += 1
-
-        samples.append(sample)
+        samples.append(sample_3_axis['Z'])
 
     return samples
