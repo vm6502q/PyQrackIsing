@@ -7,45 +7,44 @@ import sys
 epsilon = opencl_context.epsilon
 
 
-def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, cycles=1, pauli_string = 'X' + 'I' * 64):
-    pauli_string = list(pauli_string)
-    if len(pauli_string) != n_qubits:
-        raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
-
+def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64]):
     n_bias = n_qubits + 1
     if h <= epsilon:
         bias = np.empty(n_bias, dtype=np.float64)
         bias[0] = 1.0
-        return { 'X': bias, 'Y': bias, 'Z': bias }
-
-    fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-    diff_theta = rev - fwd
-
-    phi = theta + np.pi / 2
-    fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(h, J, z, phi + np.pi, t, n_qubits + 1)
-    diff_phi = rev - fwd
-
-    # Lambda (Y-axis) is at a right angle to both J and h,
-    # so there is no difference in this dimension.
-
-    diff_theta *= cycles
-    diff_phi *= cycles
+        return bias
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
-    for b in pauli_string:
-        match b:
-            case 'X':
-                diff_z += diff_theta
-            case 'Z':
-                diff_z += diff_phi
-            case 'Y':
-                diff_z += diff_theta + diff_phi
-            case _:
-                pass
+    for pauli_string in pauli_strings:
+        pauli_string = list(pauli_string)
+        if len(pauli_string) != n_qubits:
+            raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-    diff_z[0] += n_qubits
+        fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
+        diff_theta = rev - fwd
+
+        phi = theta + np.pi / 2
+        fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(h, J, z, phi + np.pi, t, n_qubits + 1)
+        diff_phi = rev - fwd
+
+        # Lambda (Y-axis) is at a right angle to both J and h,
+        # so there is no difference in this dimension.
+
+        diff_z[0] += n_qubits
+        for b in pauli_string:
+            match b:
+                case 'X':
+                    diff_z += diff_theta
+                case 'Z':
+                    diff_z += diff_phi
+                case 'Y':
+                    diff_z += diff_theta + diff_phi
+                case _:
+                    pass
+
+    # Normalize:
     diff_z /= diff_z.sum()
 
     return diff_z
@@ -162,22 +161,19 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
     return inv_dist
 
 
-def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, cycles=1, pauli_string = 'X' + 'I' * 64, shots=100, is_orbifold=True):
-    pauli_string = list(pauli_string)
-    if len(pauli_string) != n_qubits:
-        raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
-
-    thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string))
+def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64], shots=100, is_orbifold=True):
+    thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
 
     row_len, col_len = factor_width(n_qubits)
-    p_string = "".join(pauli_string)
-    butterfly_idx_x = find_all_str_occurrences(p_string, 'X')
-    butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
-
-    if is_orbifold:
-        inv_dist = get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
-    else:
-        inv_dist = get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+    inv_dist = np.zeros(n_qubits, dtype=np.float64)
+    for pauli_string in pauli_strings:
+        butterfly_idx_x = find_all_str_occurrences(pauli_string, 'X')
+        butterfly_idx_z = find_all_str_occurrences(pauli_string, 'Z')
+        if is_orbifold:
+            inv_dist += get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+        else:
+            inv_dist += get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+        inv_dist /= 2.0
 
     samples = []
     for _ in range(shots):
