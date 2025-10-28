@@ -184,41 +184,30 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-    thresholds = { key: fix_cdf(value) for key, value in get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
+    thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string)['Z'])
 
     row_len, col_len = factor_width(n_qubits)
     p_string = "".join(pauli_string)
     butterfly_idx_x = find_all_str_occurrences(p_string, 'X')
-    butterfly_idx_y = find_all_str_occurrences(p_string, 'Y')
     butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
-    butterfly_idx_i = find_all_str_occurrences(p_string, 'I')
 
     if is_orbifold:
-        inv_dist_x = get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
-        inv_dist_y = get_inv_dist(butterfly_idx_y, butterfly_idx_i, n_qubits, row_len, col_len)
-        inv_dist_z = get_inv_dist(butterfly_idx_z, butterfly_idx_x, n_qubits, row_len, col_len)
+        inv_dist = get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
     else:
-        inv_dist_x = get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
-        inv_dist_y = get_willow_inv_dist(butterfly_idx_y, butterfly_idx_i, n_qubits, row_len, col_len)
-        inv_dist_z = get_willow_inv_dist(butterfly_idx_z, butterfly_idx_x, n_qubits, row_len, col_len)
-
-    inv_dist = { 'X': inv_dist_x, 'Y': inv_dist_y, 'Z': inv_dist_z }
+        inv_dist = get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
 
     samples = []
     for _ in range(shots):
-        sample_3_axis = { 'X': 0, 'Y': 0, 'Z': 0 }
-        for key, value in thresholds.items():
-            # First dimension: Hamming weight
-            m = sample_mag(value)
-            if m == 0:
-                continue
-            if m >= n_qubits:
-                sample_3_axis[key] = (1 << n_qubits) - 1
-                continue
+        # First dimension: Hamming weight
+        m = sample_mag(thresholds)
+        if m == 0:
+            samples.append(0)
+            continue
+        if m >= n_qubits:
+            samples.append((1 << n_qubits) - 1)
+            continue
 
-            # Second dimension: permutation within Hamming weight
-            sample_3_axis[key] = take_sample(n_qubits, sample_3_axis[key], m, inv_dist[key])
-
-        samples.append(sample_3_axis['Z'])
+        # Second dimension: permutation within Hamming weight
+        samples.append(take_sample(n_qubits, 0, m, inv_dist))
 
     return samples
