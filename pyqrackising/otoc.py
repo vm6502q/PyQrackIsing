@@ -73,10 +73,10 @@ def fix_cdf(hamming_prob):
     return cum_prob
 
 
-def take_sample(basis, sample, m, inv_dist):
-    indices = [i for i in range(len(basis))]
+def take_sample(n_qubits, sample, m, inv_dist):
+    indices = [i for i in range(n_qubits)]
     tot_inv_dist = 0.0
-    for i in range(len(basis)):
+    for i in range(n_qubits):
         tot_inv_dist += inv_dist[i]
     selected = []
     for i in range(m):
@@ -120,7 +120,7 @@ def find_all_str_occurrences(main_string, sub_string):
     return indices
 
 
-def get_inv_dist(basis, butterfly_idx, n_qubits, row_len):
+def get_inv_dist(butterfly_idx, n_qubits, row_len):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for idx in butterfly_idx:
         for q in range(n_qubits):
@@ -130,13 +130,6 @@ def get_inv_dist(basis, butterfly_idx, n_qubits, row_len):
             q_col = q % row_len
             dist = (q_row - b_row) ** 2 + (q_col - b_col) ** 2
             inv_dist[q] += 1.0 / (1.0 + dist)
-
-    for i in range(len(basis)):
-        b = basis[i]
-        if b == 'Z':
-            inv_dist[i] *= 2
-        elif b == 'X':
-            inv_dist[i] *= 0.5
 
     return inv_dist
 
@@ -150,26 +143,6 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     if len(measurement_basis) != n_qubits:
         raise ValueError("OTOC measurement_basis must be same length as n_qubits! (Use 'I' for excluded qubits.)")
 
-    basis_x, basis_y, basis_z = [], [], []
-    for b in pauli_string:
-        if b == 'Z':
-            basis_z.append('X')
-            basis_y.append('I')
-            basis_x.append('Z')
-        elif b == 'X':
-            basis_z.append('Z')
-            basis_y.append('I')
-            basis_x.append('X')
-        elif b == 'Y':
-            basis_z.append('I')
-            basis_y.append('Z')
-            basis_x.append('I')
-        else:
-            basis_z.append('I')
-            basis_y.append('I')
-            basis_x.append('I')
-
-    bases = { 'X': basis_x, 'Y': basis_y, 'Z': basis_z }
     thresholds = { key: fix_cdf(value) for key, value in get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
 
     row_len, col_len = factor_width(n_qubits)
@@ -178,9 +151,9 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     butterfly_idx_y = find_all_str_occurrences(p_string, 'Y')
     butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
 
-    inv_dist_x = get_inv_dist(basis_x, butterfly_idx_x, n_qubits, row_len)
-    inv_dist_y = get_inv_dist(basis_y, butterfly_idx_y, n_qubits, row_len)
-    inv_dist_z = get_inv_dist(basis_z, butterfly_idx_z, n_qubits, row_len)
+    inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len)
+    inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len)
+    inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len)
 
     inv_dist = { 'X': inv_dist_x, 'Y': inv_dist_y, 'Z': inv_dist_z }
 
@@ -188,8 +161,6 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     for _ in range(shots):
         sample_3_axis = { 'X': 0, 'Y': 0, 'Z': 0 }
         for key, value in thresholds.items():
-            basis = bases[key]
-
             # First dimension: Hamming weight
             m = sample_mag(value)
             if m == 0:
@@ -199,7 +170,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
                 continue
 
             # Second dimension: permutation within Hamming weight
-            sample_3_axis[key] = take_sample(basis, sample_3_axis[key], m, inv_dist[key])
+            sample_3_axis[key] = take_sample(n_qubits, sample_3_axis[key], m, inv_dist[key])
 
         sample = 0
         j = 0
