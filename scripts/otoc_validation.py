@@ -144,7 +144,7 @@ def main():
     omega = 1.5
 
     J, h, dt, z = -1.0, 2.0, 0.125, 4
-    cycles = 2
+    cycles = 3
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -183,11 +183,14 @@ def main():
         otoc &= ising
         # Add the out-of-time-order perturbation
         otoc.x(0)
+        otoc.z(1)
         # Add the time-reversal of the Trotterization
         otoc &= ising_dag
         # Add the out-of-time-order perturbation
         otoc.x(0)
+        otoc.z(1)
     otoc.x(0)
+    otoc.z(1)
 
     # Compile OTOC for Qiskit Aer
     control = AerSimulator(method="statevector")
@@ -202,7 +205,7 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=['X'+'I'*(n_qubits-1)]*2)))
+    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=['XZ'+'I'*(n_qubits-2)]*cycles)))
     experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
 
     print(calc_stats(
