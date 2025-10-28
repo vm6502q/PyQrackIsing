@@ -98,7 +98,7 @@ def take_sample(n_qubits, sample, m, inv_dist):
 
 @njit
 def factor_width(width):
-    col_len = np.floor(np.sqrt(width))
+    col_len = int(np.floor(np.sqrt(width)))
     while ((width // col_len) * col_len) != width:
         col_len -= 1
     row_len = width // col_len
@@ -120,15 +120,23 @@ def find_all_str_occurrences(main_string, sub_string):
     return indices
 
 
-def get_inv_dist(butterfly_idx, n_qubits, row_len):
+def get_inv_dist(butterfly_idx, n_qubits, row_len, col_len):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
+    half_row = row_len >> 1
+    half_col = col_len >> 1
     for idx in butterfly_idx:
         for q in range(n_qubits):
             b_row = idx // row_len
             b_col = idx % row_len
             q_row = q // row_len
             q_col = q % row_len
-            dist = (q_row - b_row) ** 2 + (q_col - b_col) ** 2
+            row_d = abs(q_row - b_row)
+            if row_d > half_row:
+                row_d = row_len - row_d
+            col_d = abs(q_col - b_col)
+            if col_d > half_col:
+                col_d = col_len - col_d
+            dist = row_d * row_d + col_d * col_d
             inv_dist[q] += 1.0 / (1.0 + dist)
 
     return inv_dist
@@ -151,9 +159,9 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     butterfly_idx_y = find_all_str_occurrences(p_string, 'Y')
     butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
 
-    inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len)
-    inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len)
-    inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len)
+    inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len)
+    inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len, col_len)
+    inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len, col_len)
 
     inv_dist = { 'X': inv_dist_x, 'Y': inv_dist_y, 'Z': inv_dist_z }
 
