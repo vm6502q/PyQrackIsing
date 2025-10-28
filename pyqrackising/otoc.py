@@ -73,29 +73,6 @@ def fix_cdf(hamming_prob):
     return cum_prob
 
 
-def take_sample(n_qubits, sample, m, inv_dist):
-    indices = [i for i in range(n_qubits)]
-    tot_inv_dist = 0.0
-    for i in range(n_qubits):
-        tot_inv_dist += inv_dist[i]
-    selected = []
-    for i in range(m):
-        r = tot_inv_dist * np.random.random()
-        p = 0.0
-        idx = 0
-        while p < r:
-            p += inv_dist[indices[idx]]
-            idx += 1
-        i = indices[idx]
-        del indices[idx]
-        selected.append(i)
-        tot_inv_dist -= inv_dist[i]
-    for i in selected:
-        sample |= 1 << i
-
-    return sample
-
-
 @njit
 def factor_width(width):
     col_len = int(np.floor(np.sqrt(width)))
@@ -120,35 +97,58 @@ def find_all_str_occurrences(main_string, sub_string):
     return indices
 
 
-def get_willow_inv_dist(butterfly_idx, n_qubits, n_rows, n_cols):
-    inv_dist = np.zeros(n_qubits)
-    for idx in butterfly_idx:
-        b_row, b_col = divmod(idx, n_cols)
-        for q in range(n_qubits):
-            q_row, q_col = divmod(q, n_cols)
-            d = abs(q_row - b_row) + abs(q_col - b_col)
-            inv_dist[q] += 1.0 / (1.0 + d)
+def take_sample(n_qubits, sample, m, inv_dist):
+    indices = [i for i in range(n_qubits)]
+    tot_inv_dist = 0.0
+    for i in range(n_qubits):
+        tot_inv_dist += inv_dist[i]
+    selected = []
+    for i in range(m):
+        r = tot_inv_dist * np.random.random()
+        p = inv_dist[indices[0]]
+        idx = 0
+        while p < r:
+            idx += 1
+            if idx >= len(indices):
+                idx = len(indices) - 1
+                break
+            p += inv_dist[indices[idx]]
+        i = indices[idx]
+        del indices[idx]
+        selected.append(i)
+        tot_inv_dist -= inv_dist[i]
+    for i in selected:
+        sample |= 1 << i
 
-    return inv_dist
+    return sample
 
 
-def get_willow_inv_dist(butterfly_idx, n_qubits, row_len, col_len):
+def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
-    for idx in butterfly_idx:
+    for idx in butterfly_idx_x:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             d = abs(q_row - b_row) + abs(q_col - b_col)
             inv_dist[q] += 1.0 / (1.0 + d)
+    for idx in butterfly_idx_z:
+        b_row, b_col = divmod(idx, row_len)
+        for q in range(n_qubits):
+            q_row, q_col = divmod(q, row_len)
+            d = abs(q_row - b_row) + abs(q_col - b_col)
+            inv_dist[q] -= 1.0 / (1.0 + d)
+    for i in range(n_qubits):
+        if inv_dist[q] < 0:
+            inv_dist[q] = 0
 
     return inv_dist
 
 
-def get_inv_dist(butterfly_idx, n_qubits, row_len, col_len):
+def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     half_row = row_len >> 1
     half_col = col_len >> 1
-    for idx in butterfly_idx:
+    for idx in butterfly_idx_x:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
@@ -160,18 +160,29 @@ def get_inv_dist(butterfly_idx, n_qubits, row_len, col_len):
                 col_d = col_len - col_d
             d = row_d + col_d
             inv_dist[q] += 1.0 / (1.0 + d)
+    for idx in butterfly_idx_z:
+        b_row, b_col = divmod(idx, row_len)
+        for q in range(n_qubits):
+            q_row, q_col = divmod(q, row_len)
+            row_d = abs(q_row - b_row)
+            if row_d > half_row:
+                row_d = row_len - row_d
+            col_d = abs(q_col - b_col)
+            if col_d > half_col:
+                col_d = col_len - col_d
+            d = row_d + col_d
+            inv_dist[q] -= 1.0 / (1.0 + d)
+    for i in range(n_qubits):
+        if inv_dist[q] < 0:
+            inv_dist[q] = 0
 
     return inv_dist
 
 
-def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, measurement_basis='Z' * 56, is_orbifold=True):
+def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, cycles=1, pauli_string = 'X' + 'I' * 55, shots=100, is_orbifold=True):
     pauli_string = list(pauli_string)
     if len(pauli_string) != n_qubits:
         raise ValueError("OTOC pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
-
-    measurement_basis = list(measurement_basis)
-    if len(measurement_basis) != n_qubits:
-        raise ValueError("OTOC measurement_basis must be same length as n_qubits! (Use 'I' for excluded qubits.)")
 
     thresholds = { key: fix_cdf(value) for key, value in get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, cycles, pauli_string).items() }
 
@@ -180,15 +191,16 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     butterfly_idx_x = find_all_str_occurrences(p_string, 'X')
     butterfly_idx_y = find_all_str_occurrences(p_string, 'Y')
     butterfly_idx_z = find_all_str_occurrences(p_string, 'Z')
+    butterfly_idx_i = find_all_str_occurrences(p_string, 'I')
 
     if is_orbifold:
-        inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len)
-        inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len, col_len)
-        inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len, col_len)
+        inv_dist_x = get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+        inv_dist_y = get_inv_dist(butterfly_idx_y, butterfly_idx_i, n_qubits, row_len, col_len)
+        inv_dist_z = get_inv_dist(butterfly_idx_z, butterfly_idx_x, n_qubits, row_len, col_len)
     else:
-        inv_dist_x = get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len)
-        inv_dist_y = get_inv_dist(butterfly_idx_y, n_qubits, row_len, col_len)
-        inv_dist_z = get_inv_dist(butterfly_idx_z, n_qubits, row_len, col_len)
+        inv_dist_x = get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+        inv_dist_y = get_willow_inv_dist(butterfly_idx_y, butterfly_idx_i, n_qubits, row_len, col_len)
+        inv_dist_z = get_willow_inv_dist(butterfly_idx_z, butterfly_idx_x, n_qubits, row_len, col_len)
 
     inv_dist = { 'X': inv_dist_x, 'Y': inv_dist_y, 'Z': inv_dist_z }
 
@@ -210,10 +222,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
         sample = 0
         j = 0
         for i in range(n_qubits):
-            base = measurement_basis[i]
-            if base not in ['X', 'Y', 'Z']:
-                continue
-            if (sample_3_axis[base] >> i) & 1:
+            if (sample_3_axis['Z'] >> i) & 1:
                 sample |= 1 << j
             j += 1
 
