@@ -144,7 +144,7 @@ def main():
     omega = 1.5
 
     J, h, dt, z = -1.0, 2.0, 0.125, 4
-    theta = 0.0
+    cycles = 2
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -172,18 +172,23 @@ def main():
     qubits = list(range(n_qubits))
 
     # Set the initial temperature by theta.
-    otoc = QuantumCircuit(n_qubits)
-    for q in range(n_qubits):
-        otoc.ry(theta, q)
+    ising = QuantumCircuit(n_qubits)
     # Add the forward-in-time Trotter steps
     for d in range(depth):
-        trotter_step(otoc, qubits, (n_rows, n_cols), J, h, dt)
-    otoc_dag = otoc.inverse()
-    # Add the out-of-time-order perturbation
+        trotter_step(ising, qubits, (n_rows, n_cols), J, h, dt)
+    ising_dag = ising.inverse()
+
+    otoc = QuantumCircuit(n_qubits)
+    for cycle in range(cycles):
+        otoc &= ising
+        # Add the out-of-time-order perturbation
+        otoc.x(0)
+        # Add the time-reversal of the Trotterization
+        otoc &= ising_dag
+        # Add the out-of-time-order perturbation
+        otoc.x(0)
     otoc.x(0)
-    # otoc.z(1)
-    # Add the time-reversal of the Trotterization
-    otoc = otoc & otoc_dag
+
     # Compile OTOC for Qiskit Aer
     control = AerSimulator(method="statevector")
     otoc = transpile(
@@ -197,7 +202,7 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=theta, t=dt*depth, shots=shots, pauli_strings=['X'+'I'*(n_qubits-1)])))
+    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=['X'+'I'*(n_qubits-1)]*2)))
     experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
 
     print(calc_stats(
