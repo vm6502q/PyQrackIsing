@@ -129,8 +129,7 @@ def get_inv_dist(basis, butterfly_idx, n_qubits, row_len):
             q_row = q // row_len
             q_col = q % row_len
             dist = (q_row - b_row) ** 2 + (q_col - b_col) ** 2
-            if dist > 0:
-                inv_dist[q] += 1.0 / dist
+            inv_dist[q] += 1.0 / (1.0 + dist)
 
     for i in range(len(basis)):
         b = basis[i]
