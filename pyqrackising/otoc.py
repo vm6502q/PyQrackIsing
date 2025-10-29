@@ -15,6 +15,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
+    max_entropy = np.empty(n_bias, dtype=np.float64)
+    tot_prob = 0
+    p = 1.0
+    for q in range(n_qubits >> 1):
+        max_entropy[q] = p
+        max_entropy[n_bias - (q + 1)] = p
+        tot_prob += 2 * p
+        p = math.comb(n_qubits, q + 1)
+    if n_qubits & 1:
+        max_entropy[n_qubits >> 1] = p
+        tot_prob += p
+    max_entropy /= tot_prob
+
     entropy_frac = 0.0
     diff_z = np.zeros(n_bias, dtype=np.float64)
     for pauli_string in pauli_strings:
@@ -22,21 +35,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
+        entropy_frac += pauli_string.count('Y') + pauli_string.count('Z')
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
         diff_theta = rev - fwd
+        diff_theta[0] += 1.0
 
-        fwd = probability_by_hamming_weight(-h, -J, z, theta, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(h, J, z, theta + np.pi, t, n_qubits + 1)
-        diff_phi = rev - fwd
+        phi = theta + np.pi / 2
+        fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
+        diff_phi = (rev - fwd) + max_entropy
 
         diff_lam = (diff_theta + diff_phi) / 2
-
-        diff_theta[0] += 1.0
-        diff_phi[0] += 1.0
-        diff_lam[0] += 1.0
 
         for b in pauli_string:
             match b:
@@ -52,20 +63,8 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     # Normalize:
     diff_z /= diff_z.sum()
 
-    entropy_frac = np.atan(2 ** (entropy_frac / math.sqrt(n_qubits)) - 1) * 2 / np.pi
-    max_entropy = np.empty(n_bias, dtype=np.float64)
-    tot_prob = 0
-    p = 1.0
-    for q in range(n_qubits >> 1):
-        max_entropy[q] = p
-        max_entropy[n_bias - (q + 1)] = p
-        tot_prob += 2 * p
-        p = math.comb(n_qubits, q + 1)
-    if n_qubits & 1:
-        max_entropy[n_qubits >> 1] = p
-        tot_prob += p
-    max_entropy *= entropy_frac / tot_prob
-    diff_z = max_entropy + (1 - entropy_frac) * diff_z
+    entropy_frac = np.atan(2 ** entropy_frac - 1) * 2 / np.pi
+    diff_z = entropy_frac * max_entropy + (1 - entropy_frac) * diff_z
 
     # Normalize:
     diff_z /= diff_z.sum()
@@ -190,8 +189,8 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
     entropy_frac = 0.0
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
-        entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
-    entropy_frac = np.atan(2 ** (entropy_frac / math.sqrt(n_qubits)) - 1) * 2 / np.pi
+        entropy_frac += pauli_string.count('Y') + pauli_string.count('Z')
+    entropy_frac = np.atan(2 ** entropy_frac - 1) * 2 / np.pi
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
