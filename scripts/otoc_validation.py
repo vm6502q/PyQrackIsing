@@ -161,8 +161,7 @@ def main():
     omega = 1.5
 
     J, h, dt, z = -1.0, 2.0, 0.125, 4
-    cycles = 3
-    butterfly_fraction = 1 / 4
+    cycles = 1
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -172,6 +171,8 @@ def main():
         cycles = int(sys.argv[3])
     if len(sys.argv) > 4:
         butterfly_fraction = float(sys.argv[4])
+    else:
+        butterfly_fraction = 1 / (n_qubits >> 1)
 
     omega *= math.pi
     n_rows, n_cols = factor_width(n_qubits, False)
