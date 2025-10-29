@@ -63,7 +63,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                     pass
 
         entropy_frac /= n_qubits
-        diff_z = (1 - entropy_frac) * diff_z + entropy_frac * max_entropy
+        diff_z = ((1 - entropy_frac) / n_qubits) * diff_z + entropy_frac * max_entropy
 
     # Normalize:
     diff_z /= diff_z.sum()
