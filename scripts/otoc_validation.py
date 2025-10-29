@@ -193,13 +193,16 @@ def main():
     for cycle in range(cycles):
         otoc &= ising
         # Add the out-of-time-order perturbation
-        string = []
-        for q in range(n_qubits):
-            if np.random.random() < butterfly_fraction:
-                string += np.random.choice(ops)
-            else:
-                string += ['I']
-        pauli_strings.append("".join(string))
+        string = 'I' * n_qubits
+        while string == ('I' * n_qubits):
+            string_list = []
+            for q in range(n_qubits):
+                if np.random.random() < butterfly_fraction:
+                    string_list += np.random.choice(ops)
+                else:
+                    string_list += ['I']
+            string = "".join(string_list)
+        pauli_strings.append(string)
         act_string(otoc, string)
         # Add the time-reversal of the Trotterization
         otoc &= ising_dag
