@@ -1,4 +1,5 @@
 from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
+import math
 from numba import njit
 import numpy as np
 import sys
@@ -13,6 +14,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias = np.empty(n_bias, dtype=np.float64)
         bias[0] = 1.0
         return bias
+
+    max_entropy = np.empty(n_bias, dtype=np.float64)
+    tot_prob = 0
+    p = 1.0
+    for q in range(n_qubits // 2):
+        max_entropy[q] = p
+        max_entropy[n_bias - (q + 1)] = p
+        tot_prob += 2 * p
+        p = math.comb(n_qubits, q + 1)
+    if n_qubits & 1:
+        max_entropy[q - 1] = p
+        tot_prob += p
+    max_entropy /= tot_prob
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
     for pauli_string in pauli_strings:
@@ -33,16 +47,23 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         # so there is no difference in this dimension.
 
         diff_z[0] += n_qubits
+        entropy_frac = 0
         for b in pauli_string:
             match b:
                 case 'X':
                     diff_z += diff_theta
+                    entropy_frac += 1
                 case 'Z':
                     diff_z += diff_phi
+                    entropy_frac += 1
                 case 'Y':
                     diff_z += diff_theta + diff_phi
+                    entropy_frac += 1
                 case _:
                     pass
+
+        entropy_frac /= n_qubits
+        diff_z = (1 - entropy_frac) * diff_z + entropy_frac * max_entropy
 
     # Normalize:
     diff_z /= diff_z.sum()

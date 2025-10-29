@@ -389,22 +389,57 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
     return theta
 
 
+# From Google Search AI
+@njit
+def factorial(num):
+    """Calculates the factorial of a non-negative integer."""
+    if num == 0:
+        return 1
+
+    result = 1
+    for i in range(1, num + 1):
+        result *= i
+
+    return result
+
+
+# From Google Search AI
+@njit
+def comb(n, k):
+    """
+    Calculates the number of combinations (n choose k) from scratch.
+    n: The total number of items.
+    k: The number of items to choose.
+    """
+    # Optimize by choosing the smaller of k and (n-k)
+    # This reduces the number of multiplications in the factorial calculation
+    k = min(k, n - k)
+
+    # Calculate the numerator: n * (n-1) * ... * (n-k+1)
+    numerator = 1
+    for i in range(k):
+        numerator *= (n - i)
+
+    # Calculate the denominator: k!
+    denominator = factorial(k)
+
+    return numerator // denominator
+
+
 @njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
     thresholds = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
-    p = 1.0
-    if n_qubits & 1:
-        q = n_qubits // 2
-        thresholds[q - 1] = p
-        tot_prob = p
-        p /= 2
+    p = n_qubits
     for q in range(1, n_qubits // 2):
         thresholds[q - 1] = p
         thresholds[n_bias - q] = p
         tot_prob += 2 * p
-        p /= 2
+        p = comb(n_qubits, q + 1)
+    if n_qubits & 1:
+        thresholds[q - 1] = p
+        tot_prob += p
     thresholds /= tot_prob
 
     return thresholds
