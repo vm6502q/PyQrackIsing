@@ -184,6 +184,12 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
 def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64], shots=100, is_orbifold=True):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
 
+    entropy_frac = 0.0
+    for pauli_string in pauli_strings:
+        pauli_string = list(pauli_string)
+        entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
+    entropy_frac /= n_qubits * len(pauli_strings)
+
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for pauli_string in pauli_strings:
@@ -195,6 +201,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
             inv_dist += get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
         inv_dist /= 2.0
 
+    qubit_pows = [1 << q for q in range(n_qubits)]
     samples = []
     for _ in range(shots):
         # First dimension: Hamming weight
@@ -207,6 +214,13 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
             continue
 
         # Second dimension: permutation within Hamming weight
-        samples.append(take_sample(n_qubits, 0, m, inv_dist))
+        if np.random.random() < entropy_frac:
+            bit_pows = np.random.choice(qubit_pows, size=m, replace=False)
+            sample = 0
+            for bit_pow in bit_pows:
+                sample |= bit_pow
+            samples.append(sample)
+        else:
+            samples.append(take_sample(n_qubits, 0, m, inv_dist))
 
     return samples
