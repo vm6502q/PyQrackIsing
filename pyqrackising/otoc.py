@@ -15,24 +15,14 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    max_entropy = np.empty(n_bias, dtype=np.float64)
-    tot_prob = 0
-    p = 1.0
-    for q in range(n_qubits // 2):
-        max_entropy[q] = p
-        max_entropy[n_bias - (q + 1)] = p
-        tot_prob += 2 * p
-        p = math.comb(n_qubits, q + 1)
-    if n_qubits & 1:
-        max_entropy[q - 1] = p
-        tot_prob += p
-    max_entropy /= tot_prob
-
+    entropy_frac = 0.0
     diff_z = np.zeros(n_bias, dtype=np.float64)
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
+
+        entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
@@ -49,10 +39,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         diff_phi[0] += 1.0
         diff_lam[0] += 1.0
 
-        diff_theta += max_entropy
-        diff_phi += max_entropy
-        diff_lam += max_entropy
-
         for b in pauli_string:
             match b:
                 case 'X':
@@ -63,6 +49,24 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                     diff_z += diff_lam
                 case _:
                     diff_z[0] += 1.0
+
+    # Normalize:
+    diff_z /= diff_z.sum()
+
+    entropy_frac = np.atan2(entropy_frac, n_qubits)
+    max_entropy = np.empty(n_bias, dtype=np.float64)
+    tot_prob = 0
+    p = 1.0
+    for q in range(n_qubits >> 1):
+        max_entropy[q] = p
+        max_entropy[n_bias - (q + 1)] = p
+        tot_prob += 2 * p
+        p = math.comb(n_qubits, q + 1)
+    if n_qubits & 1:
+        max_entropy[n_qubits >> 1] = p
+        tot_prob += p
+    max_entropy *= entropy_frac / tot_prob
+    diff_z = max_entropy + (1 - entropy_frac) * diff_z
 
     # Normalize:
     diff_z /= diff_z.sum()
@@ -145,7 +149,7 @@ def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
-    inv_dist += 1.0 - inv_dist.min()
+    inv_dist -= inv_dist.min()
 
     return inv_dist
 
@@ -176,7 +180,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] += row_d + col_d
-    inv_dist += 1.0 - inv_dist.min()
+    inv_dist -= inv_dist.min()
 
     return inv_dist
 

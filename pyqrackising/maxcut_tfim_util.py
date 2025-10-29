@@ -394,13 +394,13 @@ def init_thresholds(n_qubits):
     thresholds = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
     p = n_qubits
-    for q in range(1, n_qubits // 2):
+    for q in range(1, n_qubits >> 1):
         thresholds[q - 1] = p
         thresholds[n_bias - q] = p
         tot_prob += 2 * p
         p = math.comb(n_qubits, q + 1)
     if n_qubits & 1:
-        thresholds[q - 1] = p
+        thresholds[n_qubits >> 1] = p
         tot_prob += p
     thresholds /= tot_prob
 
