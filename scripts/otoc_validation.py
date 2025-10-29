@@ -229,6 +229,8 @@ def main():
         depth
     ))
 
+    print(pauli_strings)
+
     return 0
 
 
