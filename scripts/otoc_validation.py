@@ -90,10 +90,12 @@ def calc_stats(ideal_probs, patch_probs, depth):
     n = int(round(math.log2(n_pow)))
     threshold = statistics.median(ideal_probs)
     u_u = statistics.mean(ideal_probs)
+    uniform = 1 / n_pow
     numer = 0
     denom = 0
     hog_prob = 0
     l2_dist = 0
+    l2_dist_random = 0
     for b in range(n_pow):
         ideal = ideal_probs[b]
         patch = patch_probs[b] if b in patch_probs.keys() else 0
@@ -109,6 +111,7 @@ def calc_stats(ideal_probs, patch_probs, depth):
 
         # L2 dist
         l2_dist += (ideal - patch) ** 2
+        l2_dist_random += (ideal - uniform) ** 2
 
     xeb = numer / denom
 
@@ -117,7 +120,8 @@ def calc_stats(ideal_probs, patch_probs, depth):
         "depth": depth,
         "xeb": float(xeb),
         "hog_prob": float(hog_prob),
-        "l2_dist": float(l2_dist)
+        "l2_dist": float(l2_dist),
+        "l2_dist_vs_uniform_random": float(l2_dist_random)
     }
 
 
@@ -158,6 +162,7 @@ def main():
 
     J, h, dt, z = -1.0, 2.0, 0.125, 4
     cycles = 3
+    butterfly_fraction = 1 / 4
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -165,6 +170,8 @@ def main():
         depth = int(sys.argv[2])
     if len(sys.argv) > 3:
         cycles = int(sys.argv[3])
+    if len(sys.argv) > 4:
+        butterfly_fraction = float(sys.argv[4])
 
     omega *= math.pi
     n_rows, n_cols = factor_width(n_qubits, False)
@@ -178,14 +185,19 @@ def main():
     ising_dag = ising.inverse()
 
     # 1/8 butterfly qubits
-    ops = 9 * ['I'] + ['X', 'Y', 'Z']
+    ops = ['X', 'Y', 'Z']
     pauli_strings = []
 
     otoc = QuantumCircuit(n_qubits)
     for cycle in range(cycles):
         otoc &= ising
         # Add the out-of-time-order perturbation
-        string = np.random.choice(ops, size=n_qubits, replace=True)
+        string = []
+        for q in range(n_qubits):
+            if np.random.random() < butterfly_fraction:
+                string += np.random.choice(ops)
+            else:
+                string += ['I']
         pauli_strings.append("".join(string))
         act_string(otoc, string)
         # Add the time-reversal of the Trotterization
