@@ -141,13 +141,14 @@ def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
-            inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
+            inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
     for idx in butterfly_idx_z:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
-            inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
+            inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
     inv_dist -= inv_dist.min()
+    inv_dist = 1.0 / (1.0 + inv_dist)
 
     return inv_dist
 
@@ -166,7 +167,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
             col_d = abs(q_col - b_col)
             if col_d > half_col:
                 col_d = col_len - col_d
-            inv_dist[q] -= row_d + col_d
+            inv_dist[q] += row_d + col_d
     for idx in butterfly_idx_z:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
@@ -177,8 +178,9 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
             col_d = abs(q_col - b_col)
             if col_d > half_col:
                 col_d = col_len - col_d
-            inv_dist[q] += row_d + col_d
+            inv_dist[q] -= row_d + col_d
     inv_dist -= inv_dist.min()
+    inv_dist = 1.0 / (1.0 + inv_dist)
 
     return inv_dist
 
