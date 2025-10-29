@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, init_thresholds, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -187,17 +187,6 @@ def init_J_and_z(G_m, repulsion_base):
     return J_eff, degrees
 
 
-@njit
-def cpu_footer(J_eff, degrees, shots, thread_count, quality, n_qubits, G_data, G_rows, G_cols, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
-
-    best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, thread_count, hamming_prob, repulsion_base, is_spin_glass)
-
-    bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
-
-    return bit_string, best_value, (l, r)
-
-
 def run_cut_opencl(best_energy, samples, G_data_buf, G_rows_buf, G_cols_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_sparse_segmented_kernel if is_segmented else opencl_context.calculate_cut_sparse_kernel
@@ -319,35 +308,23 @@ def maxcut_tfim_sparse(
     if repulsion_base is None:
         repulsion_base = 5.0
 
-    J_eff, degrees = init_J_and_z(G_m, repulsion_base)
-
     n_qubits = G_m.shape[0]
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
-
-    if not is_opencl:
-        thread_count = os.cpu_count() ** 2
-
-        bit_string, best_value, partition = cpu_footer(J_eff, degrees, shots, thread_count, quality, n_qubits, G_m.data, G_m.indptr, G_m.indices, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
-
-        if best_value < 0.0:
-            # Best cut is trivial partition, all/empty
-            return '0' * n_qubits, 0.0, (nodes, [])
-
-        return bit_string, best_value, partition
-
-    segment_size = (G_m.data.shape[0] + 3) >> 2
-    theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
-    is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((theta_segment_size << 3) > opencl_context.max_alloc)
-
-    G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
-
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
+    J_eff, degrees = init_J_and_z(G_m, repulsion_base)
+    cum_prob = maxcut_hamming_cdf(init_thresholds(n_qubits), n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, shots, hamming_prob, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    if is_maxcut_gpu and IS_OPENCL_AVAILABLE:
+        segment_size = (G_m.data.shape[0] + 3) >> 2
+        theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
+        is_segmented = (G_m.data.nbytes << 1) > opencl_context.max_alloc or ((theta_segment_size << 3) > opencl_context.max_alloc)
+        G_data_buf, G_rows_buf, G_cols_buf = make_G_m_csr_buf(G_m, is_segmented, segment_size)
+        best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, shots, cum_prob, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    else:
+        thread_count = os.cpu_count() ** 2
+        best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, thread_count, cum_prob, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

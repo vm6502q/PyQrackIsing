@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
+from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -177,21 +177,6 @@ def init_J_and_z(G_m, repulsion_base):
     return J_eff, degrees
 
 
-@njit
-def cpu_footer(shots, thread_count, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base):
-    J_eff, degrees = init_J_and_z(G_m, repulsion_base)
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
-
-    degrees = None
-    J_eff = None
-
-    best_solution, best_value = sample_measurement(G_m, shots, thread_count, hamming_prob, repulsion_base, is_spin_glass)
-
-    bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
-
-    return bit_string, best_value, (l, r)
-
-
 def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
     calculate_cut_kernel = opencl_context.calculate_cut_segmented_kernel if is_segmented else opencl_context.calculate_cut_kernel
@@ -253,6 +238,7 @@ def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, local_size, glob
 
     return samples[max_index_host[best_x]], energy
 
+
 def maxcut_tfim(
     G,
     quality=None,
@@ -308,31 +294,21 @@ def maxcut_tfim(
     if repulsion_base is None:
         repulsion_base = 5.0
 
-    is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
-
-    if not is_opencl:
-        thread_count = os.cpu_count() ** 2
-
-        bit_string, best_value, partition = cpu_footer(shots, thread_count, quality, n_qubits, G_m, nodes, is_spin_glass, anneal_t, anneal_h, repulsion_base)
-
-        if best_value < 0.0:
-            # Best cut is trivial partition, all/empty
-            return '0' * n_qubits, 0.0, (nodes, [])
-
-        return bit_string, best_value, partition
-
-    segment_size = (G_m.shape[0] * G_m.shape[1] + 3) >> 2
-    theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
-    is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((theta_segment_size << 3) > opencl_context.max_alloc)
-    G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
-
     J_eff, degrees = init_J_and_z(G_m, repulsion_base)
-    hamming_prob = maxcut_hamming_cdf(n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
+    cum_prob = maxcut_hamming_cdf(init_thresholds(n_qubits), n_qubits, J_eff, degrees, quality, anneal_t, anneal_h)
 
     degrees = None
     J_eff = None
 
-    best_solution, best_value = sample_for_opencl(G_m, G_m_buf, shots, hamming_prob, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    if is_maxcut_gpu and IS_OPENCL_AVAILABLE:
+        segment_size = (G_m.shape[0] * G_m.shape[1] + 3) >> 2
+        theta_segment_size = (((n_qubits + 31) >> 5) * (((shots + wgs - 1) // wgs) * wgs) + 3) >> 2
+        is_segmented = ((G_m.nbytes << 1) > opencl_context.max_alloc) or ((theta_segment_size << 3) > opencl_context.max_alloc)
+        G_m_buf = make_G_m_buf(G_m, is_segmented, segment_size)
+        best_solution, best_value = sample_for_opencl(G_m, G_m_buf, shots, cum_prob, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
+    else:
+        thread_count = os.cpu_count() ** 2
+        best_solution, best_value = sample_measurement(G_m, shots, thread_count, cum_prob, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

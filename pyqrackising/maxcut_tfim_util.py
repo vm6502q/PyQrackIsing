@@ -389,44 +389,6 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
     return theta
 
 
-# From Google Search AI
-@njit
-def factorial(num):
-    """Calculates the factorial of a non-negative integer."""
-    if num == 0:
-        return 1
-
-    result = 1
-    for i in range(1, num + 1):
-        result *= i
-
-    return result
-
-
-# From Google Search AI
-@njit
-def comb(n, k):
-    """
-    Calculates the number of combinations (n choose k) from scratch.
-    n: The total number of items.
-    k: The number of items to choose.
-    """
-    # Optimize by choosing the smaller of k and (n-k)
-    # This reduces the number of multiplications in the factorial calculation
-    k = min(k, n - k)
-
-    # Calculate the numerator: n * (n-1) * ... * (n-k+1)
-    numerator = 1
-    for i in range(k):
-        numerator *= (n - i)
-
-    # Calculate the denominator: k!
-    denominator = factorial(k)
-
-    return numerator // denominator
-
-
-@njit
 def init_thresholds(n_qubits):
     n_bias = n_qubits - 1
     thresholds = np.empty(n_bias, dtype=np.float64)
@@ -436,7 +398,7 @@ def init_thresholds(n_qubits):
         thresholds[q - 1] = p
         thresholds[n_bias - q] = p
         tot_prob += 2 * p
-        p = comb(n_qubits, q + 1)
+        p = math.comb(n_qubits, q + 1)
     if n_qubits & 1:
         thresholds[q - 1] = p
         tot_prob += p
@@ -477,9 +439,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True):
 
 
 @njit(parallel=True)
-def maxcut_hamming_cdf(n_qubits, J_func, degrees, quality, tot_t, h_mult):
-    hamming_prob = init_thresholds(n_qubits)
-
+def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult):
     n_steps = 1 << quality
     delta_t = tot_t / n_steps
     n_bias = n_qubits + 1
