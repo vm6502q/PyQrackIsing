@@ -53,7 +53,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     # Normalize:
     diff_z /= diff_z.sum()
 
-    entropy_frac = np.atan2(2 ** entropy_frac, math.sqrt(n_qubits)) * 2 / np.pi
+    entropy_frac = np.atan(2 ** (entropy_frac / math.sqrt(n_qubits)) - 1) * 2 / np.pi
     max_entropy = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
     p = 1.0
@@ -192,7 +192,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
-    entropy_frac = np.atan2(2 ** entropy_frac, math.sqrt(n_qubits)) * 2 / np.pi
+    entropy_frac = np.atan(2 ** (entropy_frac / math.sqrt(n_qubits)) - 1) * 2 / np.pi
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
