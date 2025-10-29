@@ -161,7 +161,7 @@ def main():
     omega = 1.5
 
     J, h, dt, z = -1.0, 2.0, 0.125, 4
-    cycles = 1
+    cycles = 3
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
@@ -172,7 +172,11 @@ def main():
     if len(sys.argv) > 4:
         butterfly_fraction = float(sys.argv[4])
     else:
-        butterfly_fraction = 1 / (n_qubits >> 1)
+        butterfly_fraction = 1 / n_qubits
+
+    butterfly_count = int(np.round(butterfly_fraction * n_qubits))
+    if butterfly_count < 1:
+        raise ValueError("Butterfly fraction would select 0 qubits!")
 
     omega *= math.pi
     n_rows, n_cols = factor_width(n_qubits, False)
@@ -193,16 +197,11 @@ def main():
     for cycle in range(cycles):
         otoc &= ising
         # Add the out-of-time-order perturbation
-        string = 'I' * n_qubits
-        while string == ('I' * n_qubits):
-            string_list = []
-            for q in range(n_qubits):
-                if np.random.random() < butterfly_fraction:
-                    string_list += np.random.choice(ops)
-                else:
-                    string_list += ['I']
-            string = "".join(string_list)
-        pauli_strings.append(string)
+        string = ['I'] * n_qubits
+        butterfly_qubits = np.random.choice(qubits, size=butterfly_count, replace=False)
+        for b in butterfly_qubits:
+            string[b] = np.random.choice(ops)
+        pauli_strings.append("".join(string))
         act_string(otoc, string)
         # Add the time-reversal of the Trotterization
         otoc &= ising_dag
