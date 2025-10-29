@@ -28,14 +28,14 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         tot_prob += p
     max_entropy /= tot_prob
 
-    entropy_frac = 0.0
+    signal_frac = 0.0
     diff_z = np.zeros(n_bias, dtype=np.float64)
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        entropy_frac += pauli_string.count('Y') + pauli_string.count('Z')
+        signal_frac -= pauli_string.count('Y') + pauli_string.count('Z')
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
@@ -63,8 +63,8 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     # Normalize:
     diff_z /= diff_z.sum()
 
-    entropy_frac = 1 - 2 ** -entropy_frac
-    diff_z = entropy_frac * max_entropy + (1 - entropy_frac) * diff_z
+    signal_frac = 2 ** signal_frac
+    diff_z = signal_frac * diff_z + (1 - signal_frac) * max_entropy
 
     # Normalize:
     diff_z /= diff_z.sum()
@@ -186,11 +186,11 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
 def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64], shots=100, is_orbifold=True):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
 
-    entropy_frac = 0.0
+    signal_frac = 0.0
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
-        entropy_frac += pauli_string.count('Y') + pauli_string.count('Z')
-    entropy_frac = 1 - 2 ** -entropy_frac
+        signal_frac -= pauli_string.count('Y') + pauli_string.count('Z')
+    signal_frac = 2 ** signal_frac
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
@@ -216,13 +216,13 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
             continue
 
         # Second dimension: permutation within Hamming weight
-        if np.random.random() < entropy_frac:
+        if np.random.random() < signal_frac:
+            samples.append(take_sample(n_qubits, 0, m, inv_dist))
+        else:
             bit_pows = np.random.choice(qubit_pows, size=m, replace=False)
             sample = 0
             for bit_pow in bit_pows:
                 sample |= bit_pow
             samples.append(sample)
-        else:
-            samples.append(take_sample(n_qubits, 0, m, inv_dist))
 
     return samples
