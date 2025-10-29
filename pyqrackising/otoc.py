@@ -188,7 +188,7 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         entropy_frac += pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')
-    entropy_frac /= n_qubits * len(pauli_strings)
+    entropy_frac = np.atan2(entropy_frac, n_qubits)
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
