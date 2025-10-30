@@ -30,6 +30,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
 
     signal_frac = 0.0
     diff_z = np.zeros(n_bias, dtype=np.float64)
+    diff_z[0] = n_qubits
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
@@ -44,12 +45,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
         diff_theta = rev - fwd
-        diff_theta[0] += 1.0
 
         phi = theta + np.pi / 2
         fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
         rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
-        diff_phi = (rev - fwd) + max_entropy
+        diff_phi = rev - fwd
 
         diff_lam = (diff_theta + diff_phi) / 2
 
@@ -60,9 +60,9 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case 'Z':
                     diff_z += diff_phi
                 case 'Y':
-                    diff_z += diff_lam
+                    diff_z += diff_theta + diff_phi
                 case _:
-                    diff_z[0] += 1.0
+                    pass
 
     # Normalize:
     diff_z /= diff_z.sum()
