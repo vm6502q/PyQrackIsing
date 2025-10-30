@@ -141,7 +141,7 @@ def take_sample(n_qubits, sample, m, inv_dist):
     return sample
 
 
-def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
+def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for idx in butterfly_idx_x:
         b_row, b_col = divmod(idx, row_len)
@@ -153,12 +153,12 @@ def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
-    inv_dist = 2 ** inv_dist
+    inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
 
 
-def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
+def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     half_row = row_len >> 1
     half_col = col_len >> 1
@@ -184,7 +184,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] -= row_d + col_d
-    inv_dist = 2 ** inv_dist
+    inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
 
@@ -200,9 +200,9 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
         butterfly_idx_x = find_all_str_occurrences(pauli_string, 'X')
         butterfly_idx_z = find_all_str_occurrences(pauli_string, 'Z')
         if is_orbifold:
-            inv_dist += get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+            inv_dist += get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t)
         else:
-            inv_dist += get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len)
+            inv_dist += get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t)
         inv_dist /= 2.0
 
     qubit_pows = [1 << q for q in range(n_qubits)]
