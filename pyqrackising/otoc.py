@@ -15,18 +15,18 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    max_entropy = np.empty(n_bias, dtype=np.float64)
+    diff_x = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
     p = 1.0
     for q in range(n_qubits >> 1):
-        max_entropy[q] = p
-        max_entropy[n_bias - (q + 1)] = p
+        diff_x[q] = p
+        diff_x[n_bias - (q + 1)] = p
         tot_prob += 2 * p
         p = math.comb(n_qubits, q + 1)
     if n_qubits & 1:
-        max_entropy[n_qubits >> 1] = p
+        diff_x[n_qubits >> 1] = p
         tot_prob += p
-    max_entropy /= tot_prob
+    diff_x *= n_qubits / tot_prob
 
     signal_frac = 0.0
     diff_z = np.zeros(n_bias, dtype=np.float64)
@@ -58,17 +58,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case 'X':
                     diff_z += diff_theta
                 case 'Z':
-                    diff_z += diff_phi
+                    diff_x += diff_phi
                 case 'Y':
-                    diff_z += diff_theta + diff_phi
+                    diff_z += diff_theta
+                    diff_x += diff_phi
                 case _:
                     pass
 
     # Normalize:
     diff_z /= diff_z.sum()
+    diff_x /= diff_x.sum()
 
     signal_frac = 2 ** signal_frac
-    diff_z = signal_frac * diff_z + (1 - signal_frac) * max_entropy
+    diff_z = signal_frac * diff_z + (1 - signal_frac) * diff_x
 
     # Normalize:
     diff_z /= diff_z.sum()
