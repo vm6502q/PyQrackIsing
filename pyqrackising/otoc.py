@@ -151,8 +151,7 @@ def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
-    inv_dist -= inv_dist.min()
-    inv_dist = 1.0 / (1.0 + inv_dist)
+    inv_dist = 2 ** inv_dist
 
     return inv_dist
 
@@ -183,20 +182,13 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len):
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] -= row_d + col_d
-    inv_dist -= inv_dist.min()
-    inv_dist = 1.0 / (1.0 + inv_dist)
+    inv_dist = 2 ** inv_dist
 
     return inv_dist
 
 
 def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64], shots=100, is_orbifold=True):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
-
-    signal_frac = 0.0
-    for pauli_string in pauli_strings:
-        pauli_string = list(pauli_string)
-        signal_frac -= 0.5 * pauli_string.count('X') + pauli_string.count('Z') + 1.5 * pauli_string.count('Y')
-    signal_frac = 2 ** signal_frac
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
@@ -224,13 +216,6 @@ def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli
             continue
 
         # Second dimension: permutation within Hamming weight
-        if np.random.random() < signal_frac:
-            samples.append(take_sample(n_qubits, 0, m, inv_dist))
-        else:
-            bit_pows = np.random.choice(qubit_pows, size=m, replace=False)
-            sample = 0
-            for bit_pow in bit_pows:
-                sample |= bit_pow
-            samples.append(sample)
+        samples.append(take_sample(n_qubits, 0, m, inv_dist))
 
     return samples
