@@ -324,7 +324,7 @@ def maxcut_tfim_sparse(
         best_solution, best_value = sample_for_opencl(G_m.data, G_m.indptr, G_m.indices, G_data_buf, G_rows_buf, G_cols_buf, shots, cum_prob, repulsion_base, is_spin_glass, is_segmented, segment_size, theta_segment_size)
     else:
         thread_count = os.cpu_count() ** 2
-        best_solution, best_value = sample_measurement(G_data, G_rows, G_cols, shots, thread_count, cum_prob, repulsion_base, is_spin_glass)
+        best_solution, best_value = sample_measurement(G_m.data, G_m.indptr, G_m.indices, shots, thread_count, cum_prob, repulsion_base, is_spin_glass)
 
     bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 

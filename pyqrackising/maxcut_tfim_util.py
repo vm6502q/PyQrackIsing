@@ -390,13 +390,13 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
 
 
 def init_thresholds(n_qubits):
-    n_bias = n_qubits - 1
+    n_bias = n_qubits + 1
     thresholds = np.empty(n_bias, dtype=np.float64)
     tot_prob = 0
-    p = n_qubits
-    for q in range(1, n_qubits >> 1):
-        thresholds[q - 1] = p
-        thresholds[n_bias - q] = p
+    p = 1
+    for q in range(n_qubits >> 1):
+        thresholds[q] = p
+        thresholds[n_bias - (q + 1)] = p
         tot_prob += 2 * p
         p = math.comb(n_qubits, q + 1)
     if n_qubits & 1:
@@ -438,7 +438,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True):
     return bias
 
 
-@njit(parallel=True)
+@njit
 def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult):
     n_steps = 1 << quality
     delta_t = tot_t / n_steps
@@ -446,7 +446,7 @@ def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, 
 
     theta = init_theta(h_mult, n_qubits, J_func, degrees)
 
-    for qc in prange(n_qubits, n_steps * n_qubits):
+    for qc in range(n_qubits, n_steps * n_qubits):
         step = qc // n_qubits
         q = qc % n_qubits
         J_eff = J_func[q]
