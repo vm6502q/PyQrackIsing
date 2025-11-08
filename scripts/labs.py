@@ -83,6 +83,6 @@ if __name__ == "__main__":
     G_m, labels = generate_labs_qubo(n_nodes)
     best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver(G_m, quality=quality, is_spin_glass=False)
 
-    print(f"Ground State Energy: {best_energy}")
+    print(f"Best cut: {best_cut_value}")
     print(f"Length {n_nodes} solution: {best_bitstring}")
     print(f"Labels: {labels}")
