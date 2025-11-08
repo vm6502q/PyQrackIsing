@@ -392,17 +392,19 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
 def init_thresholds(n_qubits):
     n_bias = n_qubits + 1
     thresholds = np.empty(n_bias, dtype=np.float64)
-    tot_prob = 0
+    normalizer = 0
+    for q in range(n_qubits >> 1):
+        normalizer += math.comb(n_qubits, q) << 1
+    if n_qubits & 1:
+        normalizer += math.comb(n_qubits, n_qubits >> 1)
     p = 1
     for q in range(n_qubits >> 1):
-        thresholds[q] = p
-        thresholds[n_bias - (q + 1)] = p
-        tot_prob += 2 * p
+        val = p / normalizer
+        thresholds[q] = val
+        thresholds[n_bias - (q + 1)] = val
         p = math.comb(n_qubits, q + 1)
     if n_qubits & 1:
-        thresholds[n_qubits >> 1] = p
-        tot_prob += p
-    thresholds /= tot_prob
+        thresholds[n_qubits >> 1] = p / normalizer
 
     return thresholds
 
