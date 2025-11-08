@@ -15,6 +15,9 @@ def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_bas
     # Select node
     used[node] = True
 
+    if abs(1.0 - repulsion_base) <= epsilon:
+        return
+
     # Repulsion: penalize neighbors
     for nbr in range(n):
         if used[nbr]:
