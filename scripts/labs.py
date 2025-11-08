@@ -79,9 +79,9 @@ def generate_labs_qubo(N, lam=10.0):
 
 if __name__ == "__main__":
     n_nodes = int(sys.argv[2]) if len(sys.argv) > 2 else 32
-    quality = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+    quality = int(sys.argv[3]) if len(sys.argv) > 3 else None
     G_m, labels = generate_labs_qubo(n_nodes)
-    best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver(G_m, quality=quality, is_spin_glass=False)
+    best_bitstring, best_cut_value, best_cut = spin_glass_solver(G_m, quality=quality, is_spin_glass=False, anneal_t=64.0, anneal_h=64.0, repulsion_base=1.0)
 
     print(f"Best cut: {best_cut_value}")
     print(f"Length {n_nodes} solution: {best_bitstring}")
