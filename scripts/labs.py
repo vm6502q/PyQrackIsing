@@ -34,12 +34,12 @@ def generate_labs_maxcut(N, seed=None):
 
 
 if __name__ == "__main__":
-    n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
-    quality = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
+    seed = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    n_nodes = int(sys.argv[2]) if len(sys.argv) > 2 else 64
+    quality = int(sys.argv[3]) if len(sys.argv) > 3 else None
     G_m, s = generate_labs_maxcut(n_nodes, seed)
     best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver(G_m, quality=quality)
 
     print(f"Ground State Energy: {best_energy}")
     if not (seed is None):
-        print(f"Seed {seed} solution: {best_bitstring}")
+        print(f"Seed {seed}, length {n_nodes} solution: {best_bitstring}")
