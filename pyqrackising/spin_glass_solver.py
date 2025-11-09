@@ -308,7 +308,7 @@ def spin_glass_solver(
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if gray_iterations is None:
-        gray_iterations = n_qubits * os.cpu_count()
+        gray_iterations = n_qubits * n_qubits * os.cpu_count()
 
     if gray_seed_multiple is None:
         gray_seed_multiple = os.cpu_count()
