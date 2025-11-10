@@ -312,10 +312,10 @@ def spin_glass_solver_sparse(
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
 
     if gray_iterations is None:
-        gray_iterations = n_qubits * os.cpu_count()
+        gray_iterations = n_qubits * n_qubits
 
     if gray_seed_multiple is None:
-        gray_seed_multiple = n_qubits
+        gray_seed_multiple = os.cpu_count()
 
     max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
 
