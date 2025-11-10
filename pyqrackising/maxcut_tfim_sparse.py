@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, init_thresholds, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
+from .maxcut_tfim_util import binary_search, compute_cut_sparse, compute_energy_sparse, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold_sparse, init_thresholds, make_G_m_csr_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick, to_scipy_sparse_upper_triangular
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -256,6 +256,69 @@ def run_cut_opencl(best_energy, samples, G_data_buf, G_rows_buf, G_cols_buf, is_
     return samples[max_index_host[best_x]], energy
 
 
+@njit
+def exact_maxcut(G_data, G_rows, G_cols):
+    """Brute-force exact MAXCUT solver using Numba JIT."""
+    n = G_rows.shape[0] - 1
+    max_cut = -1.0
+    best_mask = 0
+
+    # Enumerate all 2^n possible bitstrings
+    for mask in range(1 << n):
+        cut = 0.0
+        for i in range(n):
+            bi = (mask >> i) & 1
+            for j in range(i + 1, n):
+                if bi != ((mask >> j) & 1):
+                    u, v = (i, j) if i < j else (j, i)
+                    start = G_rows[u]
+                    end = G_rows[u + 1]
+                    k = binary_search(G_cols[start:end], v) + start
+                    if k < end:
+                        cut += G_data[k]
+        if cut > max_cut:
+            max_cut = cut
+            best_mask = mask
+
+    # Reconstruct best bitstring
+    best_bits = np.zeros(n, dtype=np.bool_)
+    for i in range(n):
+        best_bits[i] = (best_mask >> i) & 1
+
+    return best_bits, max_cut
+
+
+@njit
+def exact_spin_glass(G_data, G_rows, G_cols):
+    """Brute-force exact spin-glass solver using Numba JIT."""
+    n = G_rows.shape[0] - 1
+    max_cut = -1.0
+    best_mask = 0
+
+    # Enumerate all 2^n possible bitstrings
+    for mask in range(1 << n):
+        cut = 0.0
+        for i in range(n):
+            bi = (mask >> i) & 1
+            for j in range(i + 1, n):
+                u, v = (i, j) if i < j else (j, i)
+                start = G_rows[u]
+                end = G_rows[u + 1]
+                k = binary_search(G_cols[start:end], v) + start
+                if k < end:
+                    val = G_data[k]
+                    cut += val if bi == ((mask >> j) & 1) else -val
+        if cut > max_cut:
+            max_cut = cut
+            best_mask = mask
+
+    # Reconstruct best bitstring
+    best_bits = np.zeros(n, dtype=np.bool_)
+    for i in range(n):
+        best_bits[i] = (best_mask >> i) & 1
+
+    return best_bits, max_cut
+
 
 def maxcut_tfim_sparse(
     G,
@@ -281,19 +344,15 @@ def maxcut_tfim_sparse(
         nodes = list(range(n_qubits))
         G_m = G
 
-    if n_qubits < 3:
-        if n_qubits == 0:
-            return "", 0, ([], [])
+    if n_qubits < heuristic_threshold_sparse:
+        best_solution, best_value = exact_spin_glass(G_m.data, G_m.indptr, G_m.indices) if is_spin_glass else exact_maxcut(G_m.data, G_m.indptr, G_m.indices)
+        bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
-        if n_qubits == 1:
-            return "0", 0, (nodes, [])
+        if best_value < 0.0:
+            # Best cut is trivial partition, all/empty
+            return '0' * n_qubits, 0.0, (nodes, [])
 
-        if n_qubits == 2:
-            weight = G_m[0, 1]
-            if weight < 0.0:
-                return "00", 0, (nodes, [])
-
-            return "01", weight, ([nodes[0]], [nodes[1]])
+        return bit_string, best_value, (l, r)
 
     if quality is None:
         quality = 6

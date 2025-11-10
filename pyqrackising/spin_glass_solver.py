@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, int_to_bitstring, make_G_m_buf, make_best_theta_buf, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -296,6 +296,9 @@ def spin_glass_solver(
 
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight
 
+    if n_qubits < heuristic_threshold:
+        best_guess = None
+
     bitstring = ""
     if isinstance(best_guess, str):
         bitstring = best_guess
@@ -305,15 +308,26 @@ def spin_glass_solver(
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
         bitstring, cut_value, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_maxcut_gpu, is_nested=True)
+
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
+
+    if n_qubits < heuristic_threshold:
+        bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
+        if is_spin_glass:
+            cut_value = compute_cut(best_theta, G_m, n_qubits)
+            min_energy = -max_energy
+        else:
+            cut_value = max_energy
+            min_energy = compute_energy(best_theta, G_m, n_qubits)
+
+        return bitstring, float(cut_value), (l, r), float(min_energy)
 
     if gray_iterations is None:
         gray_iterations = n_qubits * n_qubits
 
     if gray_seed_multiple is None:
         gray_seed_multiple = os.cpu_count()
-
-    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
 
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 

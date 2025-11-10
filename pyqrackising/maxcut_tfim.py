@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
+from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -242,6 +242,60 @@ def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, local_size, glob
     return samples[max_index_host[best_x]], energy
 
 
+@njit
+def exact_maxcut(G):
+    """Brute-force exact MAXCUT solver using Numba JIT."""
+    n = G.shape[0]
+    max_cut = -1.0
+    best_mask = 0
+
+    # Enumerate all 2^n possible bitstrings
+    for mask in range(1 << n):
+        cut = 0.0
+        for i in range(n):
+            bi = (mask >> i) & 1
+            for j in range(i + 1, n):
+                if bi != ((mask >> j) & 1):
+                    cut += G[i, j]
+        if cut > max_cut:
+            max_cut = cut
+            best_mask = mask
+
+    # Reconstruct best bitstring
+    best_bits = np.zeros(n, dtype=np.bool_)
+    for i in range(n):
+        best_bits[i] = (best_mask >> i) & 1
+
+    return best_bits, max_cut
+
+
+@njit
+def exact_spin_glass(G):
+    """Brute-force exact spin-glass solver using Numba JIT."""
+    n = G.shape[0]
+    max_cut = -1.0
+    best_mask = 0
+
+    # Enumerate all 2^n possible bitstrings
+    for mask in range(1 << n):
+        cut = 0.0
+        for i in range(n):
+            bi = (mask >> i) & 1
+            for j in range(i + 1, n):
+                val = G[i, j]
+                cut += val if bi == ((mask >> j) & 1) else -val
+        if cut > max_cut:
+            max_cut = cut
+            best_mask = mask
+
+    # Reconstruct best bitstring
+    best_bits = np.zeros(n, dtype=np.bool_)
+    for i in range(n):
+        best_bits[i] = (best_mask >> i) & 1
+
+    return best_bits, max_cut
+
+
 def maxcut_tfim(
     G,
     quality=None,
@@ -264,22 +318,15 @@ def maxcut_tfim(
 
     n_qubits = len(G_m)
 
-    if n_qubits < 3:
-        empty = [nodes[0]]
-        empty.clear()
+    if n_qubits < heuristic_threshold:
+        best_solution, best_value = exact_spin_glass(G_m) if is_spin_glass else exact_maxcut(G_m)
+        bit_string, l, r = get_cut(best_solution, nodes, n_qubits)
 
-        if n_qubits == 0:
-            return "", 0, (empty, empty.copy())
+        if best_value < 0.0:
+            # Best cut is trivial partition, all/empty
+            return '0' * n_qubits, 0.0, (nodes, [])
 
-        if n_qubits == 1:
-            return "0", 0, (nodes, empty)
-
-        if n_qubits == 2:
-            weight = G_m[0, 1]
-            if weight < 0.0:
-                return "00", 0, (nodes, empty)
-
-            return "01", weight, ([nodes[0]], [nodes[1]])
+        return bit_string, best_value, (l, r)
 
     if quality is None:
         quality = 6

@@ -121,6 +121,8 @@ except ImportError:
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
 opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_sparse_kernel, double_bit_flips_segmented_kernel, double_bit_flips_sparse_segmented_kernel)
+heuristic_threshold = 24
+heuristic_threshold_sparse = 23
 
 
 def setup_opencl(l, g, args_np):
