@@ -222,7 +222,7 @@ def spin_glass_solver_streaming(
         gray_iterations = n_qubits * os.cpu_count()
 
     if gray_seed_multiple is None:
-        gray_seed_multiple = os.cpu_count()
+        gray_seed_multiple = n_qubits
 
     max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if is_spin_glass else cut_value
 
