@@ -10,7 +10,7 @@ epsilon = opencl_context.epsilon
 
 def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64]):
     n_bias = n_qubits + 1
-    if h <= epsilon:
+    if (abs(h) <= epsilon) or (abs(t) <= epsilon):
         bias = np.empty(n_bias, dtype=np.float64)
         bias[0] = 1.0
         return bias
