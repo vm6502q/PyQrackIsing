@@ -116,7 +116,7 @@ def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
 
         return bias / bias.sum()
 
-    if h <= epsilon:
+    if abs(h) <= epsilon:
         bias = np.empty(n_qubits + 1, dtype=np.float64)
         if J > 0:
             bias[-1] = 1.0
