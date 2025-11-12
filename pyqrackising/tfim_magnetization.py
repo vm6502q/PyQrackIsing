@@ -1,5 +1,8 @@
-from .maxcut_tfim_util import probability_by_hamming_weight
+from .maxcut_tfim_util import probability_by_hamming_weight, opencl_context
 from numba import njit
+
+
+epsilon = opencl_context.epsilon
 
 
 @njit
