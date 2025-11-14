@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -255,6 +255,52 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
     return energy, theta
 
 
+def run_gray_search_opencl(n, kernel, best_energy, theta, theta_buf, G_m_buf, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
+    queue = opencl_context.queue
+
+    # Set kernel args
+    kernel.set_args(
+        G_m_buf,
+        theta_buf,
+        args_buf,
+        max_theta_buf,
+        max_energy_buf
+    )
+
+    cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
+
+    # Read results
+    cl.enqueue_copy(queue, max_energy_host, max_energy_buf)
+    queue.finish()
+
+    # Queue read for results we might not need
+    cl.enqueue_copy(queue, max_theta_host, max_theta_buf)
+
+    # Find global minimum
+    best_x = np.argmax(max_energy_host)
+    energy = max_energy_host[best_x]
+
+    if energy <= best_energy:
+        # No improvement: we can exit early
+        return best_energy, theta
+
+    # We need the best index
+    queue.finish()
+
+    blocks = (n + 63) // 64
+    offset = best_x * blocks
+    for b in range(blocks):
+        s = max_theta_host[best_x]
+        b_offset = b << 6
+        for i in range(64):
+            j = b_offset + i
+            if j >= n:
+                break
+            theta[j] = (s >> i) & 1
+
+    return energy, theta
+
+
 def spin_glass_solver(
     G,
     quality=None,
@@ -338,8 +384,11 @@ def spin_glass_solver(
 
         local_work_group_size = min(wgs, n_qubits)
         global_work_group_size = n_qubits
+        gray_work_group_size = opencl_context.MAX_GPU_PROC_ELEM
         opencl_args = setup_opencl(local_work_group_size, global_work_group_size, np.array([n_qubits, is_spin_glass, segment_size]))
+        gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size]), True)
 
+        gray_kernel = opencl_context.gray_kernel
         if is_segmented:
             single_bit_flips_kernel = opencl_context.single_bit_flips_segmented_kernel
             double_bit_flips_kernel = opencl_context.double_bit_flips_segmented_kernel
@@ -376,21 +425,25 @@ def spin_glass_solver(
             improved = True
             continue
 
-        # Gray code with default O(n^3)
-        iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
-        energy, state = energies[0], iterators[0]
-        if energy > max_energy:
-            max_energy = energy
-            best_theta = state
-            improved = True
-            continue
+        if is_opencl and not is_segmented:
+            theta_buf_64 = make_best_theta_buf_64(best_theta)
+            energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, *gray_args)
+        else:
+            # Gray code with default O(n^3)
+            iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
+            energy, state = energies[0], iterators[0]
+            if energy > max_energy:
+                max_energy = energy
+                best_theta = state
+                improved = True
+                continue
 
-        energy, state = run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_m)
-        if energy > max_energy:
-            max_energy = energy
-            best_theta = state
-            improved = True
-            continue
+            energy, state = run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_m)
+            if energy > max_energy:
+                max_energy = energy
+                best_theta = state
+                improved = True
+                continue
 
         # Post-reheat phase
         reheat_theta = state

@@ -7,7 +7,7 @@ from scipy.sparse import lil_matrix
 
 
 class OpenCLContext:
-    def __init__(self, a, b, g, d, e, f, c, q, i, j, k, l, m, n, o, p, x, y, z, w):
+    def __init__(self, a, b, g, d, e, f, c, q, i, j, k, l, m, n, o, p, x, y, z, w, s):
         self.MAX_GPU_PROC_ELEM = a
         self.IS_OPENCL_AVAILABLE = b
         self.work_group_size = g
@@ -28,6 +28,7 @@ class OpenCLContext:
         self.double_bit_flips_sparse_kernel = y
         self.double_bit_flips_segmented_kernel = z
         self.double_bit_flips_sparse_segmented_kernel = w
+        self.gray_kernel = s
 
 IS_OPENCL_AVAILABLE = True
 ctx = None
@@ -49,6 +50,7 @@ double_bit_flips_kernel = None
 double_bit_flips_sparse_kernel = None
 double_bit_flips_segmented_kernel = None
 double_bit_flips_sparse_segmented_kernel = None
+gray_kernel = None
 
 dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
 kernel_src = ''
@@ -109,6 +111,7 @@ try:
     double_bit_flips_sparse_kernel = program.double_bit_flips_sparse
     double_bit_flips_segmented_kernel = program.double_bit_flips_segmented
     double_bit_flips_sparse_segmented_kernel = program.double_bit_flips_sparse_segmented
+    gray_kernel = program.gray
 
     work_group_size = calculate_cut_kernel.get_work_group_info(
         cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
@@ -120,12 +123,12 @@ except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_sparse_kernel, double_bit_flips_segmented_kernel, double_bit_flips_sparse_segmented_kernel)
+opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_sparse_kernel, double_bit_flips_segmented_kernel, double_bit_flips_sparse_segmented_kernel, gray_kernel)
 heuristic_threshold = 24
 heuristic_threshold_sparse = 23
 
 
-def setup_opencl(l, g, args_np):
+def setup_opencl(l, g, args_np, is_gray=False):
     ctx = opencl_context.ctx
     queue = opencl_context.queue
     dtype = opencl_context.dtype
@@ -140,15 +143,21 @@ def setup_opencl(l, g, args_np):
     max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((g + local_size - 1) // local_size) * local_size, max_global_size)
 
+    max_energy_host = np.empty(global_size // local_size, dtype=dtype)
+    max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
+
+    if is_gray:
+        max_theta_host = np.empty(((args_np[0] + 63) // 64) * (global_size // local_size), dtype=np.int64)
+        max_theta_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_theta_host.nbytes)
+
+        return local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf
+
     # Local memory allocation (1 float per work item)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
     local_index_buf = cl.LocalMemory(np.dtype(np.int32).itemsize * local_size)
 
     # Allocate max_energy and max_index result buffers per workgroup
-    max_energy_host = np.empty(global_size // local_size, dtype=dtype)
     max_index_host = np.empty(global_size // local_size, dtype=np.int32)
-
-    max_energy_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_energy_host.nbytes)
     max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_index_host.nbytes)
 
     return local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf
@@ -222,6 +231,19 @@ def make_best_theta_buf(theta):
     for i in range(n):
         if theta[i]:
             theta_np[(i >> 5)] |= 1 << (i & 31)
+
+    mf = cl.mem_flags
+    theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta_np)
+
+    return theta_buf
+
+def make_best_theta_buf_64(theta):
+    n = theta.shape[0]
+    n64 = (n + 63) >> 6
+    theta_np = np.zeros(n64, dtype=np.uint64)
+    for i in range(n):
+        if theta[i]:
+            theta_np[(i >> 6)] |= 1 << (i & 63)
 
     mf = cl.mem_flags
     theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta_np)

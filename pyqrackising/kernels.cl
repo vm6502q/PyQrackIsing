@@ -855,3 +855,121 @@ __kernel void double_bit_flips_sparse_segmented(
 
     reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
+
+void reduce_energy_index_block(real1 energy, int i, int block, __local real1* loc_energy, __local int* loc_index, __local int* loc_block, __global real1* max_energy_ptr, __global int* max_index_ptr, __global int* max_block_ptr) {
+    const int lt_id = get_local_id(0);
+    const int lt_size = get_local_size(0);
+
+    loc_energy[lt_id] = energy;
+    loc_index[lt_id] = i;
+    loc_block[lt_id] = block;
+
+    // Reduce within workgroup
+    for (int offset = lt_size >> 1; offset > 0; offset >>= 1) {
+        barrier(CLK_LOCAL_MEM_FENCE);
+        real1 hid_energy, lid_energy;
+        if (lt_id < offset) {
+            hid_energy = loc_energy[lt_id + offset];
+            lid_energy = loc_energy[lt_id];
+            if (hid_energy > lid_energy) {
+                loc_energy[lt_id] = hid_energy;
+                loc_index[lt_id] = loc_index[lt_id + offset];
+                loc_block[lt_id] = loc_block[lt_id + offset];
+            }
+        }
+    }
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // Write out per-group result
+    if (lt_id == 0) {
+        max_energy_ptr[get_group_id(0)] = loc_energy[0];
+        max_index_ptr[get_group_id(0)] = loc_index[0];
+        max_block_ptr[get_group_id(0)] = loc_block[0];
+    }
+}
+
+inline bool get_local_bit(ulong* theta, const size_t u) {
+    return (theta[u >> 6U] >> (u & 63U)) & 1U;
+}
+
+inline size_t gray_code_next(ulong* theta, const size_t curr_idx, const size_t offset) {
+    size_t prev = curr_idx;
+    size_t curr = curr_idx + 1U;
+    prev = prev ^ (prev >> 1U);
+    curr = curr ^ (curr >> 1U);
+    size_t diff = prev ^ curr;
+    size_t flip_bit = 0;
+    while (!((diff >> flip_bit) & 1U)) {
+        ++flip_bit;
+    }
+    flip_bit += offset;
+    theta[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
+
+    return flip_bit;
+}
+
+__kernel void gray(
+    __global const real1* G_m,
+    __constant ulong* theta,
+    __constant int* args,
+    __global ulong* theta_out,
+    __global real1* energy_out
+) {
+    const int n = args[0];
+    const bool is_spin_glass = args[1];
+    const int gray_iterations = args[2];
+    const int blocks = (n + 63) / 64;
+    const int last_block = blocks - 1;
+
+    int i = get_global_id(0);
+    const int max_i = get_global_size(0);
+
+    ulong theta_local[1024];
+    for (int b = 0; b < blocks; ++b) {
+        theta_local[b] = theta[b];
+    }
+
+    // Initialize different seed per thread
+    const int seed = i ^ (i >> 1);
+    for (int b = 0; b < 64; ++b) {
+        theta_local[last_block] ^= (seed >> (63U - b)) << b;
+    }
+
+    real1 best_energy = -INFINITY;
+    int best_i = i;
+    int best_block = 0U;
+    for (; i < gray_iterations; i += max_i) {
+        for (int block = 0; block < blocks; ++block) {
+            const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
+            real1 energy = ZERO_R1;
+            for (uint u = 0; u < n; u++) {
+                const size_t u_offset = u * n;
+                int bit_u = get_local_bit(theta_local, u);
+                for (uint v = u + 1; v < n; v++) {
+                    const int bit_v = get_local_bit(theta_local, v);
+                    const real1 val = G_m[u_offset + v];
+                    if (bit_u != bit_v) {
+                        energy += val;
+                    } else if (is_spin_glass) {
+                        energy -= val;
+                    }
+                }
+            }
+
+            if (energy > best_energy) {
+                best_energy = energy;
+                best_i = i;
+            } else {
+                theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
+            }
+        }
+    }
+
+    i = get_global_id(0);
+    const size_t offset = i * blocks;
+    for (int b = 0; b < blocks; ++b) {
+        theta_out[offset + b] = theta_local[b];
+    }
+    energy_out[i] = best_energy;
+}
