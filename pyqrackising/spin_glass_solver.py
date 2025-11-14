@@ -15,6 +15,7 @@ except ImportError:
 
 dtype = opencl_context.dtype
 wgs = opencl_context.work_group_size
+gnl = opencl_context.GRAY_NODE_LIMIT
 
 
 @njit(parallel=True)
@@ -396,9 +397,7 @@ def spin_glass_solver(
 
         local_work_group_size = min(wgs, n_qubits)
         global_work_group_size = n_qubits
-        gray_work_group_size = opencl_context.MAX_GPU_PROC_ELEM
         opencl_args = setup_opencl(local_work_group_size, global_work_group_size, np.array([n_qubits, is_spin_glass, segment_size]))
-        gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size, segment_size]), True)
 
         if is_segmented:
             single_bit_flips_kernel = opencl_context.single_bit_flips_segmented_kernel
@@ -408,6 +407,11 @@ def spin_glass_solver(
             single_bit_flips_kernel = opencl_context.single_bit_flips_kernel
             double_bit_flips_kernel = opencl_context.double_bit_flips_kernel
             gray_kernel = opencl_context.gray_kernel
+
+        if n_qubits <= gnl:
+            gray_work_group_size = opencl_context.MAX_GPU_PROC_ELEM
+            gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size, segment_size]), True)
+            gray_kernel = opencl_context.gray_segmented_kernel if is_segmented else opencl_context.gray_kernel
 
     thread_count = os.cpu_count() ** 2
     improved = True
@@ -438,7 +442,7 @@ def spin_glass_solver(
             improved = True
             continue
 
-        if is_opencl:
+        if is_opencl and (n_qubits <= gnl):
             theta_buf_64 = make_best_theta_buf_64(best_theta)
             energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
         else:

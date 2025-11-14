@@ -925,7 +925,7 @@ __kernel void gray(
     int i = get_global_id(0);
     const int max_i = get_global_size(0);
 
-    ulong theta_local[1024];
+    ulong theta_local[2048];
     for (int b = 0; b < blocks; ++b) {
         theta_local[b] = theta[b];
     }

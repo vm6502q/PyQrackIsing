@@ -8,6 +8,7 @@ from scipy.sparse import lil_matrix
 
 class OpenCLContext:
     def __init__(self, a, b, g, d, e, f, c, q, i, j, k, l, m, n, o, p, x, y, z, w, s, t):
+        self.GRAY_NODE_LIMIT = 131072
         self.MAX_GPU_PROC_ELEM = a
         self.IS_OPENCL_AVAILABLE = b
         self.work_group_size = g
