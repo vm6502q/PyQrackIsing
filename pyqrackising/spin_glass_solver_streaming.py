@@ -145,12 +145,13 @@ def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thre
             best_energy, best_iterator = energies[i], iterators[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
-                    gray_code_next(iterator, curr_idx, block << 6)
+                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_energy_streaming(iterator, G_func, nodes, n)
                     if energy > best_energy:
                         best_iterator, best_energy = iterator.copy(), energy
                     else:
-                        iterator = best_iterator.copy()
+                        # Revert iterator
+                        iterator[flip_bit] = not iterator[flip_bit]
                 if best_energy > energies[i]:
                     states[i], energies[i] = best_iterator.copy(), best_energy
     else:
@@ -159,12 +160,13 @@ def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thre
             best_energy, best_iterator = energies[i], iterators[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
-                    gray_code_next(iterator, curr_idx, block << 6)
+                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_cut_streaming(iterator, G_func, nodes, n)
                     if energy > best_energy:
                         best_iterator, best_energy = iterator.copy(), energy
                     else:
-                        iterator = best_iterator.copy()
+                        # Revert iterator
+                        iterator[flip_bit] = not iterator[flip_bit]
                 if best_energy > energies[i]:
                     states[i], energies[i] = best_iterator.copy(), best_energy
 

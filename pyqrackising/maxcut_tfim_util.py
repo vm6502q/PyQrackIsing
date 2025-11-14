@@ -529,8 +529,10 @@ def gray_code_next(state, curr_idx, offset):
     prev = prev ^ (prev >> 1)
     curr = curr ^ (curr >> 1)
     diff = prev ^ curr
-    flip_bit = int(np.log2(diff))
-    state[offset + flip_bit] = not state[offset + flip_bit]
+    flip_bit = int(np.log2(diff)) + offset
+    state[flip_bit] = not state[flip_bit]
+
+    return flip_bit
 
 
 @njit
