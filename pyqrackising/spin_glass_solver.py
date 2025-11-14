@@ -255,17 +255,29 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
     return energy, theta
 
 
-def run_gray_search_opencl(n, kernel, best_energy, theta, theta_buf, G_m_buf, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
+def run_gray_search_opencl(n, kernel, best_energy, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
     queue = opencl_context.queue
 
     # Set kernel args
-    kernel.set_args(
-        G_m_buf,
-        theta_buf,
-        args_buf,
-        max_theta_buf,
-        max_energy_buf
-    )
+    if is_segmented:
+        kernel.set_args(
+            G_m_buf[0],
+            G_m_buf[1],
+            G_m_buf[2],
+            G_m_buf[3],
+            theta_buf,
+            args_buf,
+            max_theta_buf,
+            max_energy_buf
+        )
+    else:
+        kernel.set_args(
+            G_m_buf,
+            theta_buf,
+            args_buf,
+            max_theta_buf,
+            max_energy_buf
+        )
 
     cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
 
@@ -386,15 +398,16 @@ def spin_glass_solver(
         global_work_group_size = n_qubits
         gray_work_group_size = opencl_context.MAX_GPU_PROC_ELEM
         opencl_args = setup_opencl(local_work_group_size, global_work_group_size, np.array([n_qubits, is_spin_glass, segment_size]))
-        gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size]), True)
+        gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size, segment_size]), True)
 
-        gray_kernel = opencl_context.gray_kernel
         if is_segmented:
             single_bit_flips_kernel = opencl_context.single_bit_flips_segmented_kernel
             double_bit_flips_kernel = opencl_context.double_bit_flips_segmented_kernel
+            gray_kernel = opencl_context.gray_segmented_kernel
         else:
             single_bit_flips_kernel = opencl_context.single_bit_flips_kernel
             double_bit_flips_kernel = opencl_context.double_bit_flips_kernel
+            gray_kernel = opencl_context.gray_kernel
 
     thread_count = os.cpu_count() ** 2
     improved = True
@@ -425,9 +438,9 @@ def spin_glass_solver(
             improved = True
             continue
 
-        if is_opencl and not is_segmented:
+        if is_opencl:
             theta_buf_64 = make_best_theta_buf_64(best_theta)
-            energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, *gray_args)
+            energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
         else:
             # Gray code with default O(n^3)
             iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
