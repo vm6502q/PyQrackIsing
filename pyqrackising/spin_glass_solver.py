@@ -145,42 +145,40 @@ def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thre
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
     blocks = (n + 63) >> 6
 
-    states = np.empty((thread_count, n), dtype=np.bool_)
-
     if is_spin_glass:
         for i in prange(thread_count):
-            iterator = iterators[i].copy()
-            best_energy, best_iterator = energies[i], iterators[i]
+            iterator = iterators[i]
+            best_energy = energies[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_energy(iterator, G_m, n)
                     if energy > best_energy:
-                        best_iterator, best_energy = iterator.copy(), energy
+                        best_energy = energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
                 if best_energy > energies[i]:
-                    states[i], energies[i] = best_iterator.copy(), best_energy
+                    energies[i] = best_energy
     else:
         for i in prange(thread_count):
-            iterator = iterators[i].copy()
-            best_energy, best_iterator = energies[i], iterators[i]
+            iterator = iterators[i]
+            best_energy = energies[i]
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_cut(iterator, G_m, n)
                     if energy > best_energy:
-                        best_iterator, best_energy = iterator.copy(), energy
+                        best_energy = energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
                 if best_energy > energies[i]:
-                    states[i], energies[i] = best_iterator.copy(), best_energy
+                    energies[i] = best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
-    best_state = states[best_index]
+    best_state = iterators[best_index]
 
     return best_energy, best_state
 
