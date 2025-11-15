@@ -504,26 +504,24 @@ __kernel void calculate_cut_segmented(
 }
 
 real1 single_bit_flip_worker_segmented(__constant uint* theta, __global const real1** G_m, const int n, const int segment_size, const bool is_spin_glass, const int k) {
+    const size_t k_offset = k * (size_t)n;
+    const bool k_bit = !get_const_bit(theta, k);
     real1 energy = ZERO_R1;
-    const size_t n_st = (size_t)n;
-    for (int u = 0; u < n; ++u) {
-        const size_t u_offset = u * n_st;
-        bool u_bit = get_const_bit(theta, u);
-        if (u == k) {
-            u_bit = !u_bit;
+    for (int v = 0; v < k; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = get_G_m(G_m, k_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
         }
-        for (int v = u + 1; v < n; ++v) {
-            const real1 val = get_G_m(G_m, u_offset + v, segment_size);
-            bool v_bit = get_const_bit(theta, v);
-            if (v == k) {
-                v_bit = ! v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+        energy += (k_bit != v_bit) ? val : -val;
+    }
+    for (int v = k + 1; v < n; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = get_G_m(G_m, k_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
         }
+        energy += (k_bit != v_bit) ? val : -val;
     }
 
     return energy;
@@ -564,27 +562,55 @@ __kernel void single_bit_flips_segmented(
     reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
-real1 double_bit_flip_worker_segmented(__constant uint* theta, __global const real1** G_m, const int n, const int segment_size, const bool is_spin_glass, const int k, const int l) {
+real1 double_bit_flip_worker_segmented(__constant uint* theta, __global const real1** G_m, const int n, const int segment_size, const bool is_spin_glass, int k, int l) {
+    if (l < k) {
+        int t = k;
+        k = l;
+        l = t;
+    }
+    const size_t k_offset = k * (size_t)n;
+    const bool k_bit = !get_const_bit(theta, k);
+    const size_t l_offset = l * (size_t)n;
+    const bool l_bit = !get_const_bit(theta, l);
     real1 energy = ZERO_R1;
-    const size_t n_st = (size_t)n;
-    for (int u = 0; u < n; ++u) {
-        const size_t u_offset = u * n_st;
-        bool u_bit = get_const_bit(theta, u);
-        if ((u == k) || (u == l)) {
-            u_bit = !u_bit;
+    for (int v = 0; v < k; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = get_G_m(G_m, k_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
         }
-        for (int v = u + 1; v < n; ++v) {
-            const real1 val = get_G_m(G_m, u_offset + v, segment_size);
-            bool v_bit = get_const_bit(theta, v);
-            if ((v == k) || (v == l)) {
-                v_bit = ! v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = get_G_m(G_m, l_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
         }
+        energy += (l_bit != v_bit) ? val : -val;
+    }
+    for (int v = k + 1; v < l; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = get_G_m(G_m, k_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = get_G_m(G_m, l_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (l_bit != v_bit) ? val : -val;
+    }
+    for (int v = l + 1; v < n; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = get_G_m(G_m, k_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = get_G_m(G_m, l_offset + v, segment_size);
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (l_bit != v_bit) ? val : -val;
     }
 
     return energy;
@@ -959,7 +985,7 @@ __kernel void gray(
     real1 best_energy = ZERO_R1;
     for (uint u = 0; u < n; u++) {
         const size_t u_offset = u * n;
-        int u_bit = get_local_bit(theta_local, u);
+        const bool u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; v++) {
             const bool v_bit = get_local_bit(theta_local, v);
             const real1 val = G_m[u_offset + v];
@@ -977,7 +1003,7 @@ __kernel void gray(
             real1 energy = ZERO_R1;
             for (uint u = 0; u < n; u++) {
                 const size_t u_offset = u * n;
-                int u_bit = get_local_bit(theta_local, u);
+                const bool u_bit = get_local_bit(theta_local, u);
                 for (uint v = u + 1; v < n; v++) {
                     const bool v_bit = get_local_bit(theta_local, v);
                     const real1 val = G_m[u_offset + v];
@@ -1041,7 +1067,7 @@ __kernel void gray_segmented(
     real1 best_energy = ZERO_R1;
     for (uint u = 0; u < n; u++) {
         const size_t u_offset = u * n;
-        int u_bit = get_local_bit(theta_local, u);
+        const bool u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; v++) {
             const bool v_bit = get_local_bit(theta_local, v);
             const real1 val = get_G_m(G_m, u_offset + v, segment_size);
@@ -1059,7 +1085,7 @@ __kernel void gray_segmented(
             real1 energy = ZERO_R1;
             for (uint u = 0; u < n; u++) {
                 const size_t u_offset = u * n;
-                int u_bit = get_local_bit(theta_local, u);
+                const bool u_bit = get_local_bit(theta_local, u);
                 for (uint v = u + 1; v < n; v++) {
                     const bool v_bit = get_local_bit(theta_local, v);
                     const real1 val = get_G_m(G_m, u_offset + v, segment_size);
@@ -1118,7 +1144,7 @@ __kernel void gray_sparse(
 
     real1 best_energy = ZERO_R1;
     for (uint u = 0; u < n; u++) {
-        int u_bit = get_local_bit(theta_local, u);
+        const bool u_bit = get_local_bit(theta_local, u);
         const size_t mCol = G_rows[u + 1];
         for (int col = G_rows[u]; col < mCol; ++col) {
             const int v = G_cols[col];
@@ -1137,7 +1163,7 @@ __kernel void gray_sparse(
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
             real1 energy = ZERO_R1;
             for (uint u = 0; u < n; u++) {
-                int u_bit = get_local_bit(theta_local, u);
+                const bool u_bit = get_local_bit(theta_local, u);
                 const size_t mCol = G_rows[u + 1];
                 for (int col = G_rows[u]; col < mCol; ++col) {
                     const int v = G_cols[col];
@@ -1205,7 +1231,7 @@ __kernel void gray_sparse_segmented(
     real1 best_energy = ZERO_R1;
     for (uint u = 0; u < n; u++) {
         const size_t u_offset = u * n;
-        int u_bit = get_local_bit(theta_local, u);
+        const bool u_bit = get_local_bit(theta_local, u);
         const uint row_end = G_rows[u + 1];
         for (uint col = G_rows[u]; col < row_end; ++col) {
             const int v = G_cols[col];
@@ -1225,7 +1251,7 @@ __kernel void gray_sparse_segmented(
             real1 energy = ZERO_R1;
             for (uint u = 0; u < n; u++) {
                 const size_t u_offset = u * n;
-                int u_bit = get_local_bit(theta_local, u);
+                const bool u_bit = get_local_bit(theta_local, u);
                 const uint row_end = G_rows[u + 1];
                 for (uint col = G_rows[u]; col < row_end; ++col) {
                     const int v = G_cols[col];
