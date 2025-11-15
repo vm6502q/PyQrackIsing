@@ -225,7 +225,7 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
     best_x = np.argmax(max_energy_host)
     energy = max_energy_host[best_x]
 
-    if energy <= 0:
+    if energy <= 0.0:
         # No improvement: we can exit early
         return best_energy, theta
 

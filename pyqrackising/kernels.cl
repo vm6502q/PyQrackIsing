@@ -956,9 +956,21 @@ __kernel void gray(
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
 
-    real1 best_energy = -INFINITY;
-    int best_i = i;
-    int best_block = 0U;
+    real1 best_energy = ZERO_R1;
+    for (uint u = 0; u < n; u++) {
+        const size_t u_offset = u * n;
+        int u_bit = get_local_bit(theta_local, u);
+        for (uint v = u + 1; v < n; v++) {
+            const bool v_bit = get_local_bit(theta_local, v);
+            const real1 val = G_m[u_offset + v];
+            if (u_bit != v_bit) {
+                best_energy += val;
+            } else if (is_spin_glass) {
+                best_energy -= val;
+            }
+        }
+    }
+
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
@@ -967,7 +979,7 @@ __kernel void gray(
                 const size_t u_offset = u * n;
                 int u_bit = get_local_bit(theta_local, u);
                 for (uint v = u + 1; v < n; v++) {
-                    const int v_bit = get_local_bit(theta_local, v);
+                    const bool v_bit = get_local_bit(theta_local, v);
                     const real1 val = G_m[u_offset + v];
                     if (u_bit != v_bit) {
                         energy += val;
@@ -979,7 +991,6 @@ __kernel void gray(
 
             if (energy > best_energy) {
                 best_energy = energy;
-                best_i = i;
             } else {
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
@@ -1027,9 +1038,21 @@ __kernel void gray_segmented(
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
 
-    real1 best_energy = -INFINITY;
-    int best_i = i;
-    int best_block = 0U;
+    real1 best_energy = ZERO_R1;
+    for (uint u = 0; u < n; u++) {
+        const size_t u_offset = u * n;
+        int u_bit = get_local_bit(theta_local, u);
+        for (uint v = u + 1; v < n; v++) {
+            const bool v_bit = get_local_bit(theta_local, v);
+            const real1 val = get_G_m(G_m, u_offset + v, segment_size);
+            if (u_bit != v_bit) {
+                best_energy += val;
+            } else if (is_spin_glass) {
+                best_energy -= val;
+            }
+        }
+    }
+
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
@@ -1038,7 +1061,7 @@ __kernel void gray_segmented(
                 const size_t u_offset = u * n;
                 int u_bit = get_local_bit(theta_local, u);
                 for (uint v = u + 1; v < n; v++) {
-                    const int v_bit = get_local_bit(theta_local, v);
+                    const bool v_bit = get_local_bit(theta_local, v);
                     const real1 val = get_G_m(G_m, u_offset + v, segment_size);
                     if (u_bit != v_bit) {
                         energy += val;
@@ -1050,7 +1073,6 @@ __kernel void gray_segmented(
 
             if (energy > best_energy) {
                 best_energy = energy;
-                best_i = i;
             } else {
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
@@ -1094,9 +1116,22 @@ __kernel void gray_sparse(
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
 
-    real1 best_energy = -INFINITY;
-    int best_i = i;
-    int best_block = 0U;
+    real1 best_energy = ZERO_R1;
+    for (uint u = 0; u < n; u++) {
+        int u_bit = get_local_bit(theta_local, u);
+        const size_t mCol = G_rows[u + 1];
+        for (int col = G_rows[u]; col < mCol; ++col) {
+            const int v = G_cols[col];
+            const real1 val = G_data[col];
+            const bool v_bit = get_local_bit(theta_local, v);
+            if (u_bit != v_bit) {
+                best_energy += val;
+            } else if (is_spin_glass) {
+                best_energy -= val;
+            }
+        }
+    }
+
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
@@ -1107,7 +1142,7 @@ __kernel void gray_sparse(
                 for (int col = G_rows[u]; col < mCol; ++col) {
                     const int v = G_cols[col];
                     const real1 val = G_data[col];
-                    bool v_bit = get_local_bit(theta_local, v);
+                    const bool v_bit = get_local_bit(theta_local, v);
                     if (u_bit != v_bit) {
                         energy += val;
                     } else if (is_spin_glass) {
@@ -1118,7 +1153,6 @@ __kernel void gray_sparse(
 
             if (energy > best_energy) {
                 best_energy = energy;
-                best_i = i;
             } else {
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
@@ -1168,9 +1202,23 @@ __kernel void gray_sparse_segmented(
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
 
-    real1 best_energy = -INFINITY;
-    int best_i = i;
-    int best_block = 0U;
+    real1 best_energy = ZERO_R1;
+    for (uint u = 0; u < n; u++) {
+        const size_t u_offset = u * n;
+        int u_bit = get_local_bit(theta_local, u);
+        const uint row_end = G_rows[u + 1];
+        for (uint col = G_rows[u]; col < row_end; ++col) {
+            const int v = G_cols[col];
+            const real1 val = get_G_m(G_data, col, segment_size);
+            const bool v_bit = get_local_bit(theta_local, v);
+            if (u_bit != v_bit) {
+                best_energy += val;
+            } else if (is_spin_glass) {
+                best_energy -= val;
+            }
+        }
+    }
+
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
@@ -1193,7 +1241,6 @@ __kernel void gray_sparse_segmented(
 
             if (energy > best_energy) {
                 best_energy = energy;
-                best_i = i;
             } else {
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
