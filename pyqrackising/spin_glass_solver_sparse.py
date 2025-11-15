@@ -462,11 +462,11 @@ def spin_glass_solver_sparse(
                 continue
 
             energy, state = run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
-            if energy > max_energy:
-                max_energy = energy
-                best_theta = state
-                improved = True
-                continue
+        if energy > max_energy:
+            max_energy = energy
+            best_theta = state
+            improved = True
+            continue
 
         # Post-reheat phase
         reheat_theta = state
