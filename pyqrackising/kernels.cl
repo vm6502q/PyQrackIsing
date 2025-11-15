@@ -1169,7 +1169,7 @@ __kernel void gray_sparse(
     }
 
     // Initialize different seed per thread
-    const int seed = i ^ (i >> 1);
+    const ulong seed = i ^ (i >> 1);
     for (int b = 0; b < 64; ++b) {
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
@@ -1255,7 +1255,7 @@ __kernel void gray_sparse_segmented(
     }
 
     // Initialize different seed per thread
-    const int seed = i ^ (i >> 1);
+    const ulong seed = i ^ (i >> 1);
     for (int b = 0; b < 64; ++b) {
         theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
