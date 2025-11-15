@@ -225,9 +225,11 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
     best_x = np.argmax(max_energy_host)
     energy = max_energy_host[best_x]
 
-    if energy <= best_energy:
+    if energy <= 0:
         # No improvement: we can exit early
         return best_energy, theta
+
+    energy += best_energy
 
     # We need the best index
     queue.finish()
@@ -445,6 +447,11 @@ def spin_glass_solver(
         if is_opencl and (n_qubits <= gnl):
             theta_buf_64 = make_best_theta_buf_64(best_theta)
             energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
+            if energy > max_energy:
+                max_energy = energy
+                best_theta = state
+                improved = True
+                continue
         else:
             # Gray code with default O(n^3)
             iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)

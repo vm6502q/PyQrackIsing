@@ -98,26 +98,24 @@ inline bool get_const_bit(__constant uint* theta, const size_t u) {
 }
 
 real1 single_bit_flip_worker(__constant uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass, const int k) {
+    const size_t k_offset = k * (size_t)n;
+    const bool k_bit = !get_const_bit(theta, k);
     real1 energy = ZERO_R1;
-    const size_t n_st = (size_t)n;
-    for (int u = 0; u < n; ++u) {
-        const size_t u_offset = u * n_st;
-        bool u_bit = get_const_bit(theta, u);
-        if (u == k) {
-            u_bit = !u_bit;
+    for (int v = 0; v < k; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = G_m[k_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
         }
-        for (int v = u + 1; v < n; ++v) {
-            const real1 val = G_m[u_offset + v];
-            bool v_bit = get_const_bit(theta, v);
-            if (v == k) {
-                v_bit = ! v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+        energy += (k_bit != v_bit) ? val : -val;
+    }
+    for (int v = k + 1; v < n; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = G_m[k_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
         }
+        energy += (k_bit != v_bit) ? val : -val;
     }
 
     return energy;
@@ -152,27 +150,55 @@ __kernel void single_bit_flips(
     reduce_energy_index(best_energy, best_i, loc_energy, loc_index, max_energy_ptr, max_index_ptr);
 }
 
-real1 double_bit_flip_worker(__constant uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass, const int k, const int l) {
+real1 double_bit_flip_worker(__constant uint* theta, __global const real1* G_m, const int n, const bool is_spin_glass, int k, int l) {
+    if (l < k) {
+        int t = k;
+        k = l;
+        l = t;
+    }
+    const size_t k_offset = k * (size_t)n;
+    const bool k_bit = !get_const_bit(theta, k);
+    const size_t l_offset = l * (size_t)n;
+    const bool l_bit = !get_const_bit(theta, l);
     real1 energy = ZERO_R1;
-    const size_t n_st = (size_t)n;
-    for (int u = 0; u < n; ++u) {
-        const size_t u_offset = u * n_st;
-        bool u_bit = get_const_bit(theta, u);
-        if ((u == k) || (u == l)) {
-            u_bit = !u_bit;
+    for (int v = 0; v < k; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = G_m[k_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
         }
-        for (int v = u + 1; v < n; ++v) {
-            const real1 val = G_m[u_offset + v];
-            bool v_bit = get_const_bit(theta, v);
-            if ((v == k) || (v == l)) {
-                v_bit = ! v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = G_m[l_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
         }
+        energy += (l_bit != v_bit) ? val : -val;
+    }
+    for (int v = k + 1; v < l; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = G_m[k_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = G_m[l_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (l_bit != v_bit) ? val : -val;
+    }
+    for (int v = l + 1; v < n; ++v) {
+        const bool v_bit = get_const_bit(theta, v);
+        real1 val = G_m[k_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (k_bit != v_bit) ? val : -val;
+        val = G_m[l_offset + v];
+        if (is_spin_glass) {
+            val *= 2;
+        }
+        energy += (l_bit != v_bit) ? val : -val;
     }
 
     return energy;

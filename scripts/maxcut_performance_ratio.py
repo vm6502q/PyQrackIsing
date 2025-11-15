@@ -81,9 +81,8 @@ def evaluate_cut_value(G, partition):
     """Compute cut value directly from graph and bitstring."""
     cut = 0
     for u, v, data in G.edges(data=True):
-        w = data.get("weight", 1.0)
         if (u in partition[0]) == (v in partition[1]):  # different sides of partition
-            cut += w
+            cut += data.get("weight", 1.0)
     return cut
 
 
