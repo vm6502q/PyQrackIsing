@@ -253,6 +253,8 @@ def main():
         dt = float(sys.argv[3])
     if len(sys.argv) > 4:
         t1 = float(sys.argv[4])
+    else:
+        t1 = dt
     if len(sys.argv) > 5:
         shots = int(sys.argv[5])
     else:
@@ -289,24 +291,6 @@ def main():
 
     # If we're using conventional simulation in the approximation model, collect samples over the depth series.
     experiment_probs = [{}] * (depth + 1)
-    if t1 > 0:
-        for trial in range(trials):
-            experiment = QrackSimulator(n_qubits)
-            experiment.run_qiskit_circuit(qc)
-            for d in range(1, depth + 1):
-                experiment.run_qiskit_circuit(step)
-
-                counts = dict(Counter(experiment.measure_shots(qubits, shots)))
-
-                for key, value in counts.items():
-                    experiment_probs[d][key] = (
-                        experiment_probs[d].get(key, 0) + value / shots
-                    )
-
-        for experiment in experiment_probs:
-            for key in experiment.keys():
-                experiment[key] /= trials
-
     experiment = QrackSimulator(n_qubits)
     experiment.run_qiskit_circuit(qc)
     counts = dict(Counter(experiment.measure_shots(qubits, shots)))
@@ -340,15 +324,15 @@ def main():
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
 
-    magnetization, sqr_magnetization = 0, 0
+    magnetization_0, sqr_magnetization_0 = 0, 0
     for key, value in experiment_probs[0].items():
         m = 0
         for _ in range(n_qubits):
             m += -1 if (key & 1) else 1
             key >>= 1
         m /= n_qubits
-        magnetization += value * m
-        sqr_magnetization += value * m * m
+        magnetization_0 += value * m
+        sqr_magnetization_0 += value * m * m
 
     c_magnetization, c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
@@ -363,7 +347,7 @@ def main():
 
     # Save the sum of squares and sum of square residuals on the magnetization curve values.
     ss = c_sqr_magnetization**2
-    ssr = (c_sqr_magnetization - sqr_magnetization) ** 2
+    ssr = (c_sqr_magnetization - sqr_magnetization_0) ** 2
 
     r_squared = 0
     ss = 0
@@ -455,26 +439,9 @@ def main():
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2
 
-        if model < 0.99:
-            # Mix in the conventional simulation component.
-            magnetization, sqr_magnetization = 0, 0
-            for key, value in experiment_probs[d].items():
-                m = 0
-                for _ in range(n_qubits):
-                    m += -1 if (key & 1) else 1
-                    key >>= 1
-                m /= n_qubits
-                magnetization += value * m
-                sqr_magnetization += value * m * m
-
-            magnetization = model * d_magnetization + (1 - model) * magnetization
-            sqr_magnetization = (
-                model * d_sqr_magnetization + (1 - model) * sqr_magnetization
-            )
-        else:
-            # Rely entirely on the (n+1)-dimensional model.
-            magnetization = d_magnetization
-            sqr_magnetization = d_sqr_magnetization
+        # Mix in the initial state component.
+        magnetization = model * d_magnetization + (1 - model) * magnetization_0
+        sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # Calculate the "control-case" magnetization values, from Aer's samples.
         c_magnetization, c_sqr_magnetization = 0, 0
