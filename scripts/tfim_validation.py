@@ -247,7 +247,7 @@ def main():
     if len(sys.argv) > 4:
         t1 = float(sys.argv[4])
     else:
-        t1 = dt * dt
+        t1 = dt * dt * dt
     if len(sys.argv) > 5:
         shots = int(sys.argv[5])
     else:
@@ -343,7 +343,7 @@ def main():
         # Additionally, this same mean-field exponent is the amplitude of time-dependent oscillation (also in the geometric series exponent).
         t = d * dt
         # Determine how to weight closed-form vs. conventional simulation contributions:
-        model = (1 - 1 / math.exp(t / t1)) if (t1 > 0) else 1
+        model = (1 - 1 / math.exp(t / t1)) if (t1 > 0) and ((t / t1) < 709) else 1
         d_magnetization = 0
         d_sqr_magnetization = 0
 
