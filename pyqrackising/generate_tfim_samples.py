@@ -5,6 +5,8 @@ import sys
 import numpy as np
 from numba import njit
 
+from collections import Counter
+
 
 epsilon = opencl_context.epsilon
 
@@ -151,20 +153,22 @@ def generate_tfim_samples(
     # First dimension: Hamming weight
     bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
     thresholds = fix_cdf(bias)
-    hamming_samples = sample_hamming_weight(thresholds, shots)
+    hamming_samples = dict(Counter(sample_hamming_weight(thresholds, shots)))
 
-    for h_weight in hamming_samples:
+    for h_weight, count in hamming_samples.items():
         if h_weight == 0:
-            samples.append(0)
+            samples += count * [0]
             continue
 
         if h_weight == n_qubits:
-            samples.append((1 << n_qubits) - 1)
+            samples += count * [(1 << n_qubits) - 1]
             continue
 
-        p = np.random.random()
+        rands = [np.random.random() for _ in range(count)]
+        rands.sort()
         state_int = 0
         tot_prob = 0
+        s = 0
         # How closely grouped are "like" bits to "like"?
         expected_closeness = expected_closeness_weight(n_rows, n_cols, h_weight)
         h_weight_combos = math.comb(n_qubits, h_weight)
@@ -175,9 +179,15 @@ def generate_tfim_samples(
             # Use a normalized weighted average that favors the (n+1)-dimensional model at later times.
             # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
             tot_prob += normed_closeness / h_weight_combos
-            if (p <= tot_prob):
+            while (rands[s] <= tot_prob):
                 samples.append(state_int)
+                s += 1
+                if s == count:
+                    break
+            if s == count:
                 break
+        if s < count:
+            samples += (count - s) * [state_int]
 
 
     np.random.shuffle(samples)
