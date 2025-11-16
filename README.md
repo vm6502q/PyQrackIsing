@@ -3,7 +3,7 @@ Fast MAXCUT, TSP, and sampling heuristics from near-ideal transverse field Ising
 
 (It's "the **Ising** on top.")
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17583944.svg)](https://doi.org/10.5281/zenodo.17583944) [![PyPI Downloads](https://static.pepy.tech/badge/pyqrackising)](https://pepy.tech/projects/pyqrackising)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17618663.svg)](https://doi.org/10.5281/zenodo.17618663) [![PyPI Downloads](https://static.pepy.tech/badge/pyqrackising)](https://pepy.tech/projects/pyqrackising)
 
 ## Copyright and license
 (c) Daniel Strano and the Qrack contributors 2025. All rights reserved.
