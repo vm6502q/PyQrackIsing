@@ -270,7 +270,7 @@ def main():
     for q in range(n_qubits):
         qc_aer.ry(theta, q)
 
-    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=4, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
+    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
     for key in qrack_probs.keys():
         qrack_probs[key] /= shots
 
@@ -385,13 +385,22 @@ def main():
                     result *= factor
                     m = (n_qubits - (q << 1)) / n_qubits
                     d_magnetization += result * m
-                    d_sqr_magnetization += result * m * m
                     bias[q] = result
                     tot_n += result
                 # Normalize the results for 1.0 total marginal probability.
                 d_magnetization /= tot_n
-                d_sqr_magnetization /= tot_n
                 bias /= tot_n
+
+                qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)))
+                for key in qrack_probs.keys():
+                    qrack_probs[key] /= shots
+                for key, value in qrack_probs.items():
+                    m = 0
+                    for _ in range(n_qubits):
+                        m += -1 if key & 1 else 1
+                        key >>= 1
+                    m /= n_qubits
+                    d_sqr_magnetization += value * m * m
 
         if J > 0:
             # This is antiferromagnetism.

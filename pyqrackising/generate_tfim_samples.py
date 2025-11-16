@@ -89,7 +89,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
 def sample_hamming_weight(thresholds, shots):
     hamming_samples = np.zeros(shots, dtype=np.int32)
     for s in range(shots):
-        hamming_samples[s] = sample_mag(thresholds) + 1
+        hamming_samples[s] = sample_mag(thresholds)
 
     return hamming_samples
 
@@ -101,7 +101,7 @@ def fix_cdf(hamming_prob):
     for i in range(n_bias):
         tot_prob += hamming_prob[i]
         cum_prob[i] = tot_prob
-    cum_prob[-1] = 2.0
+    cum_prob[-1] = 1.0
 
     return cum_prob
 
@@ -149,32 +149,36 @@ def generate_tfim_samples(
     n_rows, n_cols = factor_width(n_qubits)
 
     # First dimension: Hamming weight
-    thresholds = fix_cdf(get_tfim_hamming_distribution(J, h, z, theta, t, n_qubits + 1))
+    bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
+    thresholds = fix_cdf(bias)
     hamming_samples = sample_hamming_weight(thresholds, shots)
 
-    for m in range(len(hamming_samples)):
-        # Second dimension: permutation within Hamming weight
-        # (Written with help from Elara, the custom OpenAI GPT)
-        hs = hamming_samples[m]
-        rands = []
-        for s in range(hs):
-            rands.append(np.random.random())
-        rands.sort()
+    for h_weight in hamming_samples:
+        if h_weight == 0:
+            samples.append(0)
+            continue
+
+        if h_weight == n_qubits:
+            samples.append((1 << n_qubits) - 1)
+            continue
+
+        p = np.random.random()
         state_int = 0
         tot_prob = 0
-        s = 0
-        for combo in itertools.combinations(range(n_qubits), m):
+        # How closely grouped are "like" bits to "like"?
+        expected_closeness = expected_closeness_weight(n_rows, n_cols, h_weight)
+        h_weight_combos = math.comb(n_qubits, h_weight)
+        for combo in itertools.combinations(range(n_qubits), h_weight):
             state_int = sum(1 << pos for pos in combo)
-            tot_prob += (1.0 + closeness_like_bits(state_int, n_rows, n_cols)) / (
-                1.0 + expected_closeness_weight(n_rows, n_cols, m)
-            )
-            while (s < hs) and (rands[s] <= tot_prob):
+            # When we add all "closeness" possibilities for the particular Hamming weight, we should maintain the (n+1) mean probability dimensions.
+            normed_closeness = (1 + closeness_like_bits(state_int, n_rows, n_cols)) / (1 + expected_closeness)
+            # Use a normalized weighted average that favors the (n+1)-dimensional model at later times.
+            # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
+            tot_prob += normed_closeness / h_weight_combos
+            if (p <= tot_prob):
                 samples.append(state_int)
-                s += 1
-            if s == hs:
                 break
-        for r in range(hs - s):
-            samples.append(state_int)
+
 
     np.random.shuffle(samples)
 
