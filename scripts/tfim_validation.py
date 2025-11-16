@@ -295,7 +295,7 @@ def main():
         m /= n_qubits
         sqr_magnetization_0 += value * m * m
 
-    c_magnetization, c_sqr_magnetization = 0, 0
+    c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
         perm = p
         m = 0
@@ -303,7 +303,6 @@ def main():
             m += -1 if (perm & 1) else 1
             perm >>= 1
         m /= n_qubits
-        c_magnetization += control_probs[p] * m
         c_sqr_magnetization += control_probs[p] * m * m
 
     # Save the sum of squares and sum of square residuals on the magnetization curve values.
