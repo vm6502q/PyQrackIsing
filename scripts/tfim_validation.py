@@ -17,7 +17,7 @@ from qiskit_aer.backends import AerSimulator
 from qiskit.quantum_info import Statevector
 from qiskit.transpiler import CouplingMap
 
-from pyqrack import QrackSimulator
+from pyqrackising import generate_tfim_samples
 
 
 # Factor the qubit width for torus dimensions that are close as possible to square
@@ -266,18 +266,13 @@ def main():
     qubits = list(range(n_qubits))
 
     # Set the initial temperature by theta.
-    qc = QuantumCircuit(n_qubits)
+    qc_aer = QuantumCircuit(n_qubits)
     for q in range(n_qubits):
-        qc.ry(theta, q)
+        qc_aer.ry(theta, q)
 
-    experiment = QrackSimulator(n_qubits)
-    experiment.run_qiskit_circuit(qc)
-    qrack_probs = dict(Counter(experiment.measure_shots(qubits, shots)))
+    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=4, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
     for key in qrack_probs.keys():
         qrack_probs[key] /= shots
-
-    # The Aer circuit also starts with this initialization
-    qc_aer = qc.copy()
 
     control = AerSimulator(method="statevector")
     qc_aer = transpile(
