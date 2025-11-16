@@ -343,7 +343,7 @@ def main():
         # Additionally, this same mean-field exponent is the amplitude of time-dependent oscillation (also in the geometric series exponent).
         t = d * dt
         # Determine how to weight closed-form vs. conventional simulation contributions:
-        model = math.exp(-t / t1) if (t1 > 0) else 0
+        model = (1 - math.exp(-t / t1)) if (t1 > 0) else 1
         d_magnetization = 0
         d_sqr_magnetization = 0
 
@@ -392,9 +392,9 @@ def main():
             d_magnetization = -d_magnetization
 
         # Mix in the initial state component.
-        bias = (1 - model) * bias + model * bias_0
-        magnetization = (1 - model) * d_magnetization + model * magnetization_0
-        sqr_magnetization = (1 - model) * d_sqr_magnetization + model * sqr_magnetization_0
+        bias = model * bias + (1 - model) * bias_0
+        magnetization = model * d_magnetization + (1 - model) * magnetization_0
+        sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # The full 2^n marginal probabilities will be produced in the statistics calculation,
         # but notice that the global magnetization value only requires (n+1) dimensions of marginal probability,
