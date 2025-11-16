@@ -17,7 +17,7 @@ from qiskit_aer.backends import AerSimulator
 from qiskit.quantum_info import Statevector
 from qiskit.transpiler import CouplingMap
 
-from pyqrackising import generate_tfim_samples
+from pyqrackising import generate_tfim_samples, get_tfim_hamming_distribution
 
 
 # Factor the qubit width for torus dimensions that are close as possible to square
@@ -270,10 +270,6 @@ def main():
     for q in range(n_qubits):
         qc_aer.ry(theta, q)
 
-    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
-    for key in qrack_probs.keys():
-        qrack_probs[key] /= shots
-
     control = AerSimulator(method="statevector")
     qc_aer = transpile(
         qc_aer,
@@ -285,22 +281,19 @@ def main():
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
     n_bias = n_qubits + 1
-    bias_0 = np.zeros(n_bias, dtype=float)
-    magnetization_0, sqr_magnetization_0 = 0, 0
+    bias_0 = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits)
+    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
+    for key in qrack_probs.keys():
+        qrack_probs[key] /= shots
+
+    sqr_magnetization_0 = 0
     for key, value in qrack_probs.items():
         m = 0
-        h = 0
         for _ in range(n_qubits):
-            if key & 1:
-                h += 1
-                m -= 1
-            else:
-                m += 1
+            m += -1 if key & 1 else 1
             key >>= 1
         m /= n_qubits
-        magnetization_0 += value * m
         sqr_magnetization_0 += value * m * m
-        bias_0[h] += value
 
     c_magnetization, c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
@@ -351,8 +344,6 @@ def main():
         t = d * dt
         # Determine how to weight closed-form vs. conventional simulation contributions:
         model = (1 - math.exp(-t / t1)) if (t1 > 0) else 1
-        d_magnetization = 0
-        d_sqr_magnetization = 0
 
         # "p" is the exponent of the geometric series weighting, for (n+1) dimensions of Hamming weight.
         # Notice that the expected symmetries are respected under reversal of signs of J and/or h.
@@ -360,56 +351,22 @@ def main():
         theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) <= sys.float_info.epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
-        bias = np.zeros(n_bias, dtype=np.float64)
-        if h <= sys.float_info.epsilon:
-            # This agrees with small perturbations away from h = 0.
-            d_magnetization = 1
-            d_sqr_magnetization = 1
-            bias[0] = 1.0
-        else:
-            p = (
-                2.0 ** (abs(J / h) - 1.0)
-                * (1.0 + math.sin(theta - theta_c) * math.cos(omega * J * t + theta) / (1.0 + math.sqrt(t)))
-                - 0.5
-            )
+        bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
+        qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)))
+        for key in qrack_probs.keys():
+            qrack_probs[key] /= shots
 
-            factor = 2.0 ** -(p / n_bias)
-            if factor <= sys.float_info.epsilon:
-                d_magnetization = 1
-                d_sqr_magnetization = 1
-                bias[0] = 1.0
-            else:
-                result = 1.0
-                tot_n = 0
-                for q in range(n_bias):
-                    result *= factor
-                    m = (n_qubits - (q << 1)) / n_qubits
-                    d_magnetization += result * m
-                    bias[q] = result
-                    tot_n += result
-                # Normalize the results for 1.0 total marginal probability.
-                d_magnetization /= tot_n
-                bias /= tot_n
-
-                qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)))
-                for key in qrack_probs.keys():
-                    qrack_probs[key] /= shots
-                for key, value in qrack_probs.items():
-                    m = 0
-                    for _ in range(n_qubits):
-                        m += -1 if key & 1 else 1
-                        key >>= 1
-                    m /= n_qubits
-                    d_sqr_magnetization += value * m * m
-
-        if J > 0:
-            # This is antiferromagnetism.
-            bias = bias[::-1]
-            d_magnetization = -d_magnetization
+        d_sqr_magnetization = 0
+        for key, value in qrack_probs.items():
+            m = 0
+            for _ in range(n_qubits):
+                m += -1 if key & 1 else 1
+                key >>= 1
+            m /= n_qubits
+            d_sqr_magnetization += value * m * m
 
         # Mix in the initial state component.
         bias = model * bias + (1 - model) * bias_0
-        magnetization = model * d_magnetization + (1 - model) * magnetization_0
         sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # The full 2^n marginal probabilities will be produced in the statistics calculation,
