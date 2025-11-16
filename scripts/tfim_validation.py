@@ -17,7 +17,7 @@ from qiskit_aer.backends import AerSimulator
 from qiskit.quantum_info import Statevector
 from qiskit.transpiler import CouplingMap
 
-from pyqrack import QrackSimulator
+from pyqrackising import get_tfim_hamming_distribution
 
 
 # Factor the qubit width for torus dimensions that are close as possible to square
@@ -83,7 +83,7 @@ def trotter_step(circ, qubits, lattice_shape, J, h, dt):
 
 
 # Calculate various statistics based on comparison between ideal (Trotterized) and approximate (continuum) measurement distributions.
-def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
+def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
     # For QV, we compare probabilities of (ideal) "heavy outputs."
     # If the probability is above 2/3, the protocol certifies/passes the qubit width.
     n = n_rows * n_cols
@@ -99,22 +99,16 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
     # hamming_bias = [0.0] * (n + 1)
     for i in range(n_pow):
         ideal = ideal_probs[i]
-        count = counts[i] if i in counts else 0
-        exp = count / shots
 
         # How many bits are 1, in the basis state?
         hamming_weight = hamming_distance(i, 0, n)
-        if model:
-            # How closely grouped are "like" bits to "like"?
-            expected_closeness = expected_closeness_weight(n_rows, n_cols, hamming_weight)
-            # When we add all "closeness" possibilities for the particular Hamming weight, we should maintain the (n+1) mean probability dimensions.
-            normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (1 + expected_closeness)
-            # If we're also using conventional simulation, use a normalized weighted average that favors the (n+1)-dimensional model at later times.
-            # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
-            count = (1 - model) * exp + model * normed_closeness * bias[hamming_weight] / math.comb(n, hamming_weight)
-        else:
-            count = exp
-        exp = count / shots
+        # How closely grouped are "like" bits to "like"?
+        expected_closeness = expected_closeness_weight(n_rows, n_cols, hamming_weight)
+        # When we add all "closeness" possibilities for the particular Hamming weight, we should maintain the (n+1) mean probability dimensions.
+        normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (1 + expected_closeness)
+        # Use a normalized weighted average that favors the (n+1)-dimensional model at later times.
+        # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
+        count = normed_closeness * bias[hamming_weight] / math.comb(n, hamming_weight)
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
@@ -124,17 +118,16 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
             sum_hog_counts += count
 
         # L2 distance
-        diff_sqr += (ideal - exp) ** 2
-        z_fidelity += exp if ideal > exp else ideal
-        # hamming_bias[hamming_weight] += (ideal - exp) ** 2
+        diff_sqr += (ideal - count) ** 2
+        z_fidelity += count if ideal > count else ideal
+        # hamming_bias[hamming_weight] += (ideal - count) ** 2
 
         # XEB / EPLG
         ideal_centered = ideal - u_u
         denom += ideal_centered * ideal_centered
-        numer += ideal_centered * (exp - u_u)
+        numer += ideal_centered * (count - u_u)
 
     l2_difference = diff_sqr ** (1 / 2)
-    hog_prob = sum_hog_counts / shots
     xeb = numer / denom
 
     # This should be ~1.0, if we're properly normalized.
@@ -146,7 +139,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         "depth": depth,
         "l2_difference": float(l2_difference),
         "z_fidelity": float(z_fidelity),
-        "hog_prob": hog_prob,
+        "hog_prob": sum_hog_counts,
         "xeb": xeb,
     }
 
@@ -254,7 +247,7 @@ def main():
     if len(sys.argv) > 4:
         t1 = float(sys.argv[4])
     else:
-        t1 = dt
+        t1 = dt * dt
     if len(sys.argv) > 5:
         shots = int(sys.argv[5])
     else:
@@ -280,25 +273,8 @@ def main():
     # The Aer circuit also starts with this initialization
     qc_aer = qc.copy()
 
-    # Compile a single Trotter step for QrackSimulator.
-    step = QuantumCircuit(n_qubits)
-    trotter_step(step, qubits, (n_rows, n_cols), J, h, dt)
-    step = transpile(
-        step,
-        optimization_level=3,
-        basis_gates=QrackSimulator.get_qiskit_basis_gates(),
-    )
-
     # If we're using conventional simulation in the approximation model, collect samples over the depth series.
-    experiment_probs = [{}] * (depth + 1)
-    experiment = QrackSimulator(n_qubits)
-    experiment.run_qiskit_circuit(qc)
-    counts = dict(Counter(experiment.measure_shots(qubits, shots)))
-
-    for key, value in counts.items():
-        experiment_probs[0][key] = (
-            experiment_probs[0].get(key, 0) + value / shots
-        )
+    bias_0 = get_tfim_hamming_distribution(J=J, h=h, z=4, theta=theta, t=0, n_qubits=n_qubits)
 
     control = AerSimulator(method="statevector")
     qc_aer = transpile(
@@ -314,33 +290,21 @@ def main():
         n_rows,
         n_cols,
         control_probs,
-        experiment_probs[0],
-        [],
-        0,
-        shots,
-        0,
+        bias_0,
+        0
     )
 
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
 
     n_bias = n_qubits + 1
+    mid = n_qubits / 2
     bias_0 = np.zeros(n_bias, dtype=np.float64)
     magnetization_0, sqr_magnetization_0 = 0, 0
-    for key, value in experiment_probs[0].items():
-        m = 0
-        h = 0
-        for _ in range(n_qubits):
-            if key & 1:
-                m -= 1
-                h += 1
-            else:
-                m += 1
-            key >>= 1
-        m /= n_qubits
+    for key, value in enumerate(bias_0):
+        m = key - mid
         magnetization_0 += value * m
         sqr_magnetization_0 += value * m * m
-        bias_0[h] += value
 
     c_magnetization, c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
@@ -437,11 +401,8 @@ def main():
             n_rows,
             n_cols,
             control_probs,
-            experiment_probs[d],
             bias,
-            model,
-            shots,
-            d,
+            d
         )
 
         # Add up the square residuals:
