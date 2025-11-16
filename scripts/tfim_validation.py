@@ -324,15 +324,23 @@ def main():
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
 
+    n_bias = n_qubits + 1
+    bias_0 = np.zeros(n_bias, dtype=np.float64)
     magnetization_0, sqr_magnetization_0 = 0, 0
     for key, value in experiment_probs[0].items():
         m = 0
+        h = 0
         for _ in range(n_qubits):
-            m += -1 if (key & 1) else 1
+            if key & 1:
+                m -= 1
+                h += 1
+            else:
+                m += 1
             key >>= 1
         m /= n_qubits
         magnetization_0 += value * m
         sqr_magnetization_0 += value * m * m
+        bias_0[h] += value
 
     c_magnetization, c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
@@ -381,8 +389,7 @@ def main():
         theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) <= sys.float_info.epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
-        n_bias = n_qubits + 1
-        bias = [0] * n_bias
+        bias = np.zeros(n_bias, dtype=np.float64)
         if h <= sys.float_info.epsilon:
             # This agrees with small perturbations away from h = 0.
             d_magnetization = 1
@@ -413,13 +420,14 @@ def main():
                 # Normalize the results for 1.0 total marginal probability.
                 d_magnetization /= tot_n
                 d_sqr_magnetization /= tot_n
-                for q in range(n_qubits + 1):
-                    bias[q] /= tot_n
+                bias /= tot_n
 
         if J > 0:
             # This is antiferromagnetism.
-            bias.reverse()
+            bias = bias[::-1]
             d_magnetization = -d_magnetization
+
+        bias = model * bias + (1 - model) * bias_0
 
         # The full 2^n marginal probabilities will be produced in the statistics calculation,
         # but notice that the global magnetization value only requires (n+1) dimensions of marginal probability,
