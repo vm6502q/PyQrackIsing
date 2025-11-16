@@ -391,7 +391,10 @@ def main():
             bias = bias[::-1]
             d_magnetization = -d_magnetization
 
+        # Mix in the initial state component.
         bias = model * bias + (1 - model) * bias_0
+        magnetization = model * d_magnetization + (1 - model) * magnetization_0
+        sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # The full 2^n marginal probabilities will be produced in the statistics calculation,
         # but notice that the global magnetization value only requires (n+1) dimensions of marginal probability,
@@ -407,10 +410,6 @@ def main():
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2
-
-        # Mix in the initial state component.
-        magnetization = model * d_magnetization + (1 - model) * magnetization_0
-        sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # Calculate the "control-case" magnetization values, from Aer's samples.
         c_magnetization, c_sqr_magnetization = 0, 0
