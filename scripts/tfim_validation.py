@@ -17,7 +17,7 @@ from qiskit_aer.backends import AerSimulator
 from qiskit.quantum_info import Statevector
 from qiskit.transpiler import CouplingMap
 
-from pyqrackising import get_tfim_hamming_distribution
+from pyqrack import QrackSimulator
 
 
 # Factor the qubit width for torus dimensions that are close as possible to square
@@ -247,7 +247,7 @@ def main():
     if len(sys.argv) > 4:
         t1 = float(sys.argv[4])
     else:
-        t1 = dt * dt * dt
+        t1 = dt
     if len(sys.argv) > 5:
         shots = int(sys.argv[5])
     else:
@@ -270,11 +270,14 @@ def main():
     for q in range(n_qubits):
         qc.ry(theta, q)
 
+    experiment = QrackSimulator(n_qubits)
+    experiment.run_qiskit_circuit(qc)
+    qrack_probs = dict(Counter(experiment.measure_shots(qubits, shots)))
+    for key in qrack_probs.keys():
+        qrack_probs[key] /= shots
+
     # The Aer circuit also starts with this initialization
     qc_aer = qc.copy()
-
-    # If we're using conventional simulation in the approximation model, collect samples over the depth series.
-    bias_0 = get_tfim_hamming_distribution(J=J, h=h, z=4, theta=theta, t=0, n_qubits=n_qubits)
 
     control = AerSimulator(method="statevector")
     qc_aer = transpile(
@@ -286,25 +289,23 @@ def main():
     job = control.run(qc_aer_sv)
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
-    result = calc_stats(
-        n_rows,
-        n_cols,
-        control_probs,
-        bias_0,
-        0
-    )
-
-    # Add up the square residuals:
-    r_squared = result["l2_difference"] ** 2
-
     n_bias = n_qubits + 1
-    mid = n_qubits / 2
-    bias_0 = np.zeros(n_bias, dtype=np.float64)
+    bias_0 = np.zeros(n_bias, dtype=float)
     magnetization_0, sqr_magnetization_0 = 0, 0
-    for key, value in enumerate(bias_0):
-        m = key - mid
+    for key, value in qrack_probs.items():
+        m = 0
+        h = 0
+        for _ in range(n_qubits):
+            if key & 1:
+                h += 1
+                m -= 1
+            else:
+                m += 1
+            key >>= 1
+        m /= n_qubits
         magnetization_0 += value * m
         sqr_magnetization_0 += value * m * m
+        bias_0[h] += value
 
     c_magnetization, c_sqr_magnetization = 0, 0
     for p in range(1 << n_qubits):
@@ -320,6 +321,17 @@ def main():
     # Save the sum of squares and sum of square residuals on the magnetization curve values.
     ss = c_sqr_magnetization**2
     ssr = (c_sqr_magnetization - sqr_magnetization_0) ** 2
+
+    result = calc_stats(
+        n_rows,
+        n_cols,
+        control_probs,
+        bias_0,
+        0
+    )
+
+    # Add up the square residuals:
+    r_squared = result["l2_difference"] ** 2
 
     r_squared = 0
     ss = 0
