@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_cut_diff, compute_cut_diff_2, compute_energy, compute_energy_diff, compute_energy_diff_2, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -28,12 +28,12 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_m):
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            energies[i] = compute_energy(state, G_m, n)
+            energies[i] = compute_energy_diff(i, state, G_m, n)
     else:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            energies[i] = compute_cut(state, G_m, n)
+            energies[i] = compute_cut_diff(i, state, G_m, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -71,7 +71,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count):
                 state[i] = not state[i]
                 state[j] = not state[j]
 
-                states[t], energies[t] = state, compute_energy(state, G_m, n)
+                states[t], energies[t] = state, compute_energy_diff_2(i, j, state, G_m, n)
 
                 s += thread_batch
     else:
@@ -93,7 +93,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count):
                 state[i] = not state[i]
                 state[j] = not state[j]
 
-                states[t], energies[t] = state, compute_cut(state, G_m, n)
+                states[t], energies[t] = state, compute_cut_diff_2(i, j, state, G_m, n)
 
                 s += thread_batch
 
@@ -184,7 +184,7 @@ def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thre
     return best_energy, best_state
 
 
-def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
     queue = opencl_context.queue
 
     # Set kernel args
@@ -227,9 +227,7 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
 
     if energy <= 0.0:
         # No improvement: we can exit early
-        return best_energy, theta
-
-    energy += best_energy
+        return 0.0, theta
 
     # We need the best index
     queue.finish()
@@ -425,11 +423,11 @@ def spin_glass_solver(
         # Single bit flips with O(n^2)
         if is_opencl:
             theta_buf = make_best_theta_buf(best_theta)
-            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -437,11 +435,11 @@ def spin_glass_solver(
         # Double bit flips with O(n^3)
         if is_opencl:
             # theta_buf has not changed
-            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, max_energy, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -472,11 +470,11 @@ def spin_glass_solver(
         # Single bit flips with O(n^2)
         if is_opencl:
             theta_buf = make_best_theta_buf(reheat_theta)
-            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, max_energy, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -484,11 +482,11 @@ def spin_glass_solver(
         # Double bit flips with O(n^3)
         if is_opencl:
             # theta_buf has not changed
-            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, max_energy, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
 
