@@ -141,41 +141,42 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
     return best_seeds, best_energies
 
 @njit(parallel=True)
-def run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_m):
+def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m):
     n = len(best_theta)
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
     blocks = (n + 63) >> 6
+    energies = np.empty(thread_count, dtype=dtype)
 
     if is_spin_glass:
         for i in prange(thread_count):
             iterator = iterators[i]
-            best_energy = energies[i]
+            best_energy = 0.0
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_energy(iterator, G_m, n)
+                    energy = compute_energy_diff(flip_bit, iterator, G_m, n)
                     if energy > best_energy:
                         best_energy = energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > energies[i]:
-                    energies[i] = best_energy
+                if best_energy > 0.0:
+                    energies[i] += best_energy
     else:
         for i in prange(thread_count):
             iterator = iterators[i]
-            best_energy = energies[i]
+            best_energy = 0.0
             for curr_idx in range(thread_iterations):
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_cut(iterator, G_m, n)
+                    energy = compute_cut_diff(flip_bit, iterator, G_m, n)
                     if energy > best_energy:
                         best_energy = energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > energies[i]:
-                    energies[i] = best_energy
+                if best_energy > 0.0:
+                    energies[i] += best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -295,9 +296,7 @@ def run_gray_search_opencl(n, kernel, best_energy, theta, theta_buf, G_m_buf, is
 
     if energy <= 0.0:
         # No improvement: we can exit early
-        return best_energy, theta
-
-    energy += best_energy
+        return 0.0, theta
 
     # We need the best index
     queue.finish()
@@ -457,9 +456,10 @@ def spin_glass_solver(
                 improved = True
                 continue
 
-            energy, state = run_gray_optimization(best_theta, iterators, energies, gray_iterations, thread_count, is_spin_glass, G_m)
-        if energy > max_energy:
-            max_energy = energy
+            energies = None
+            energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m)
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue

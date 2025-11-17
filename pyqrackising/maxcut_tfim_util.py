@@ -744,4 +744,5 @@ def gray_mutation(index, seed_bits, offset):
     bits = seed_bits.copy()
     for i in range(n):
         bits[n - offset - 1 - i] ^= (gray >> i) & 1
+
     return bits
