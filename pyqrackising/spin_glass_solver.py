@@ -464,8 +464,13 @@ def spin_glass_solver(
             improved = True
             continue
 
+        if max_energy == float("inf"):
+            # We no way to compare for improvement.
+            break
+
         # Post-reheat phase
         reheat_theta = state
+        reheat_energy = energy
 
         # Single bit flips with O(n^2)
         if is_opencl:
@@ -473,7 +478,7 @@ def spin_glass_solver(
             energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m)
-        if energy > 0.0:
+        if energy > (max_energy - reheat_energy):
             max_energy += energy
             best_theta = state
             improved = True
@@ -485,7 +490,7 @@ def spin_glass_solver(
             energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m, thread_count)
-        if energy > 0.0:
+        if energy > (max_energy - reheat_energy):
             max_energy += energy
             best_theta = state
             improved = True

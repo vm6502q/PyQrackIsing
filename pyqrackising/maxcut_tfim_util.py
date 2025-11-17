@@ -433,6 +433,90 @@ def compute_cut_streaming(sample, G_func, nodes, n_qubits):
 
 
 @njit
+def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
+    energy = 0.0
+    u_bit = sample[u]
+    for v in range(u):
+        val = 2 * G_func(nodes[u], nodes[v])
+        energy += val if u_bit == sample[v] else -val
+    for v in range(u + 1, n_qubits):
+        val = 2 * G_func(nodes[u], nodes[v])
+        energy += val if u_bit == sample[v] else -val
+
+    return -energy
+
+
+@njit
+def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
+    energy = 0.0
+    u_bit = sample[u]
+    for v in range(u):
+        val = G_func(nodes[u], nodes[v])
+        energy += -val if u_bit == sample[v] else val
+    for v in range(u + 1, n_qubits):
+        val = G_func(nodes[u], nodes[v])
+        energy += -val if u_bit == sample[v] else val
+
+    return energy
+
+
+@njit
+def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
+    if l < k:
+        t = k
+        k = l
+        l = t
+    energy = 0.0
+    k_bit = sample[k]
+    l_bit = sample[l]
+    for v in range(k):
+        val = 2 * G_func(nodes[k], nodes[v])
+        energy += val if k_bit == sample[v] else -val
+        val = 2 * G_func(nodes[l], nodes[v])
+        energy += val if l_bit == sample[v] else -val
+    for v in range(k + 1, l):
+        val = 2 * G_func(nodes[k], nodes[v])
+        energy += val if k_bit == sample[v] else -val
+        val = 2 * G_func(nodes[l], nodes[v])
+        energy += val if l_bit == sample[v] else -val
+    for v in range(l + 1, n_qubits):
+        val = 2 * G_func(nodes[k], nodes[v])
+        energy += val if k_bit == sample[v] else -val
+        val = 2 * G_func(nodes[l], nodes[v])
+        energy += val if l_bit == sample[v] else -val
+
+    return -energy
+
+
+@njit
+def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
+    if l < k:
+        t = k
+        k = l
+        l = t
+    energy = 0.0
+    k_bit = sample[k]
+    l_bit = sample[l]
+    for v in range(k):
+        val = G_func(nodes[k], nodes[v])
+        energy += -val if k_bit == sample[v] else val
+        val = G_func(nodes[l], nodes[v])
+        energy += -val if l_bit == sample[v] else val
+    for v in range(k + 1, l):
+        val = G_func(nodes[k], nodes[v])
+        energy += -val if k_bit == sample[v] else val
+        val = G_func(nodes[l], nodes[v])
+        energy += -val if l_bit == sample[v] else val
+    for v in range(l + 1, n_qubits):
+        val = G_func(nodes[k], nodes[v])
+        energy += -val if k_bit == sample[v] else val
+        val = G_func(nodes[l], nodes[v])
+        energy += -val if l_bit == sample[v] else val
+
+    return energy
+
+
+@njit
 def get_cut(solution, nodes, n):
     bit_string = ""
     l, r = [], []

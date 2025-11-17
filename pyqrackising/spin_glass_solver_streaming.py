@@ -1,5 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
+from .maxcut_tfim_util import compute_cut_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_energy_streaming, compute_energy_diff_streaming, compute_energy_diff_2_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -19,12 +19,12 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            energies[i] = compute_energy_streaming(state, G_func, nodes, n)
+            energies[i] = compute_energy_diff_streaming(i, state, G_func, nodes, n)
     else:
         for i in prange(n):
             state = best_theta.copy()
             state[i] = not state[i]
-            energies[i] = compute_cut_streaming(state, G_func, nodes, n)
+            energies[i] = compute_cut_diff_streaming(i, state, G_func, nodes, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -62,7 +62,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
                 state[i] = not state[i]
                 state[j] = not state[j]
 
-                states[t], energies[t] = state, compute_energy_streaming(state, G_func, nodes, n)
+                states[t], energies[t] = state, compute_energy_diff_2_streaming(i, j, state, G_func, nodes, n)
 
                 s += thread_batch
     else:
@@ -84,7 +84,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
                 state[i] = not state[i]
                 state[j] = not state[j]
 
-                states[t], energies[t] = state, compute_cut_streaming(state, G_func, nodes, n)
+                states[t], energies[t] = state, compute_cut_diff_2_streaming(i, j, state, G_func, nodes, n)
 
                 s += thread_batch
 
@@ -247,16 +247,16 @@ def spin_glass_solver_streaming(
 
         # Single bit flips with O(n^2)
         energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
 
         # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -277,21 +277,26 @@ def spin_glass_solver_streaming(
             improved = True
             continue
 
+        if max_energy == float("inf"):
+            # We no way to compare for improvement.
+            break
+
         # Post-reheat phase
         reheat_theta = state
+        reheat_energy = energy
 
         # Single bit flips with O(n^2)
         energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_func, nodes)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > (max_energy - reheat_energy):
+            max_energy += energy
             best_theta = state
             improved = True
             continue
 
         # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_func, nodes, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > (max_energy - reheat_energy):
+            max_energy += energy
             best_theta = state
             improved = True
 
