@@ -477,7 +477,7 @@ def spin_glass_solver(
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m)
         if energy > (max_energy - reheat_energy):
-            max_energy += energy
+            max_energy = reheat_energy + energy
             best_theta = state
             improved = True
             continue
@@ -489,7 +489,7 @@ def spin_glass_solver(
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m, thread_count)
         if energy > (max_energy - reheat_energy):
-            max_energy += energy
+            max_energy = reheat_energy + energy
             best_theta = state
             improved = True
 
