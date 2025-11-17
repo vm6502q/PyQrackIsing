@@ -463,7 +463,7 @@ def spin_glass_solver(
             continue
 
         if max_energy == float("inf"):
-            # We no way to compare for improvement.
+            # We have no way to compare for improvement.
             break
 
         # Post-reheat phase
