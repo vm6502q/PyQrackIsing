@@ -150,8 +150,8 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     if is_spin_glass:
         for i in prange(thread_count):
             iterator = iterators[i]
-            best_energy = 0.0
             for curr_idx in range(thread_iterations):
+                best_energy = 0.0
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_energy_diff(flip_bit, iterator, G_m, n)
@@ -160,13 +160,12 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > 0.0:
-                    energies[i] += best_energy
+                energies[i] += best_energy
     else:
         for i in prange(thread_count):
             iterator = iterators[i]
-            best_energy = 0.0
             for curr_idx in range(thread_iterations):
+                best_energy = 0.0
                 for block in range(blocks):
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_cut_diff(flip_bit, iterator, G_m, n)
@@ -175,8 +174,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > 0.0:
-                    energies[i] += best_energy
+                energies[i] += best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
