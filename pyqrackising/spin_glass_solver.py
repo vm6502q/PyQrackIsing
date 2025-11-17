@@ -156,7 +156,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_energy_diff(flip_bit, iterator, G_m, n)
                     if energy > best_energy:
-                        best_energy = energy
+                        best_energy += energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
@@ -170,7 +170,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
                     flip_bit = gray_code_next(iterator, curr_idx, block << 6)
                     energy = compute_cut_diff(flip_bit, iterator, G_m, n)
                     if energy > best_energy:
-                        best_energy = energy
+                        best_energy += energy
                     else:
                         # Revert iterator
                         iterator[flip_bit] = not iterator[flip_bit]
