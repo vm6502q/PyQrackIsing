@@ -291,6 +291,7 @@ def spin_glass_solver_streaming(
 
         if energy > 0.0:
             reheat_theta = state
+            reheat_energy += energy
 
         # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_func, nodes, thread_count)

@@ -480,6 +480,7 @@ def spin_glass_solver(
 
         if energy > 0.0:
             reheat_theta = state
+            reheat_energy += energy
 
         # Double bit flips with O(n^3)
         if is_opencl:
