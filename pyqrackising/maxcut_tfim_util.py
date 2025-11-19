@@ -565,6 +565,57 @@ def compute_energy_diff_between(o_theta, n_theta, G_m, n):
 
     return best_energy
 
+
+@njit
+def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
+    diff_mask = np.logical_xor(o_theta, n_theta)
+    best_energy = 0.0
+    for b in range(n):
+        if not diff_mask[b]:
+            continue
+        o_bit = o_theta[b]
+        n_bit = n_theta[b]
+        deltaE_b = 0.0
+        for v in range(b):
+            v_bit = o_theta[v]
+            val = G_func(nodes[b], nodes[v])
+            deltaE_b += -val if o_bit != v_bit else val
+            deltaE_b += val if n_bit != v_bit else -val
+        for v in range(b + 1, n):
+            v_bit = o_theta[v]
+            val = G_func(nodes[b], nodes[v])
+            deltaE_b += -val if o_bit != v_bit else val
+            deltaE_b += val if n_bit != v_bit else -val
+        best_energy += deltaE_b
+
+    return best_energy
+
+
+@njit
+def compute_energy_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
+    diff_mask = np.logical_xor(o_theta, n_theta)
+    best_energy = 0.0
+    for b in range(n):
+        if not diff_mask[b]:
+            continue
+        o_bit = o_theta[b]
+        n_bit = n_theta[b]
+        deltaE_b = 0.0
+        for v in range(b):
+            v_bit = o_theta[v]
+            val = 2.0 * G_func(nodes[b], nodes[v])
+            deltaE_b += -val if o_bit != v_bit else val
+            deltaE_b += val if n_bit != v_bit else -val
+        for v in range(b + 1, n):
+            v_bit = o_theta[v]
+            val = 2.0 * G_func(nodes[b], nodes[v])
+            deltaE_b += -val if o_bit != v_bit else val
+            deltaE_b += val if n_bit != v_bit else -val
+        best_energy += deltaE_b
+
+    return best_energy
+
+
 @njit
 def get_cut(solution, nodes, n):
     bit_string = ""

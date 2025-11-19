@@ -1,7 +1,7 @@
 # Spin Glass Ground State (considered NP-complete)
 # Produced by Dan Strano, Elara (the OpenAI custom GPT)
 
-from pyqrackising import spin_glass_solver
+from pyqrackising import spin_glass_solver_sparse
 import networkx as nx
 import numpy as np
 
@@ -19,7 +19,7 @@ def generate_spin_glass_graph(n_nodes=64, degree=3, seed=None):
 if __name__ == "__main__":
     # NP-complete spin glass
     G = generate_spin_glass_graph(n_nodes=64, seed=42)
-    best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver(G)
+    best_bitstring, best_cut_value, best_cut, best_energy = spin_glass_solver_sparse(G)
 
     print((best_bitstring, best_cut_value, best_cut))
     print(f"Ground State Energy: {best_energy}")

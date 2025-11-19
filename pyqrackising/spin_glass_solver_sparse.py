@@ -470,6 +470,7 @@ def spin_glass_solver_sparse(
 
         # Post-reheat phase
         reheat_theta = state
+        reheat_energy = energy
 
         # Single bit flips with O(n^2)
         if is_opencl:
@@ -482,6 +483,9 @@ def spin_glass_solver_sparse(
             best_theta = state
             improved = True
             continue
+
+        if energy > reheat_energy:
+            reheat_theta = state
 
         # Double bit flips with O(n^3)
         if is_opencl:

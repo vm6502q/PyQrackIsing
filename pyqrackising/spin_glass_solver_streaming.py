@@ -1,5 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import compute_cut_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_energy_streaming, compute_energy_diff_streaming, compute_energy_diff_2_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
+from .maxcut_tfim_util import compute_cut_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_cut_diff_between_streaming, compute_energy_streaming, compute_energy_diff_streaming, compute_energy_diff_2_streaming, compute_energy_diff_between_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -109,14 +109,14 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
             i = s % block_size
             offset = (s // block_size) << 6
             seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_energy_streaming(seed, G_func, nodes, n)
+            energies[s] = compute_energy_diff_between_streaming(best_theta, seed, G_func, nodes, n)
             seeds[s] = seed
     else:
         for s in prange(seed_count):
             i = s % block_size
             offset = (s // block_size) << 6
             seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_cut_streaming(seed, G_func, nodes, n)
+            energies[s] = compute_cut_diff_between_streaming(best_theta, seed, G_func, nodes, n)
             seeds[s] = seed
 
     indices = np.argsort(energies)[::-1]
@@ -263,8 +263,8 @@ def spin_glass_solver_streaming(
         # Gray code with default O(n^3)
         iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes, n_qubits, is_spin_glass)
         energy, state = energies[0], iterators[0]
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -288,6 +288,9 @@ def spin_glass_solver_streaming(
             best_theta = state
             improved = True
             continue
+
+        if energy > 0.0:
+            reheat_theta = state
 
         # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_func, nodes, thread_count)
