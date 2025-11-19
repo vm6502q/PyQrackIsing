@@ -377,7 +377,7 @@ def spin_glass_solver_sparse(
         bitstring, cut_value, _ = maxcut_tfim_sparse(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_maxcut_gpu, is_nested=True)
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
+    max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
 
     if n_qubits < heuristic_threshold_sparse:
         bitstring, l, r = get_cut(best_theta, nodes, n_qubits)

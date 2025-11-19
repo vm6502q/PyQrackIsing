@@ -255,7 +255,7 @@ def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_seg
     return energy, theta
 
 
-def run_gray_search_opencl(n, kernel, best_energy, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
+def run_gray_search_opencl(n, kernel, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
     queue = opencl_context.queue
 
     # Set kernel args
@@ -443,7 +443,7 @@ def spin_glass_solver(
 
         if is_opencl and (n_qubits <= gnl):
             theta_buf_64 = make_best_theta_buf_64(best_theta)
-            energy, state = run_gray_search_opencl(n_qubits, gray_kernel, max_energy, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
+            energy, state = run_gray_search_opencl(n_qubits, gray_kernel, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
         else:
             # Gray code with default O(n^3)
             iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
@@ -462,10 +462,6 @@ def spin_glass_solver(
             improved = True
             continue
 
-        if max_energy == float("inf"):
-            # We have no way to compare for improvement.
-            break
-
         # Post-reheat phase
         reheat_theta = state
         reheat_energy = energy
@@ -476,8 +472,8 @@ def spin_glass_solver(
             energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m)
-        if energy > (max_energy - reheat_energy):
-            max_energy = reheat_energy + energy
+        if (energy + reheat_energy) > 0.0:
+            max_energy += reheat_energy + energy
             best_theta = state
             improved = True
             continue
@@ -488,8 +484,8 @@ def spin_glass_solver(
             energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m, thread_count)
-        if energy > (max_energy - reheat_energy):
-            max_energy = reheat_energy + energy
+        if (energy + reheat_energy) > 0.0:
+            max_energy += reheat_energy + energy
             best_theta = state
             improved = True
 

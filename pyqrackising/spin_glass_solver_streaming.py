@@ -277,26 +277,22 @@ def spin_glass_solver_streaming(
             improved = True
             continue
 
-        if max_energy == float("inf"):
-            # We have no way to compare for improvement.
-            break
-
         # Post-reheat phase
         reheat_theta = state
         reheat_energy = energy
 
         # Single bit flips with O(n^2)
         energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_func, nodes)
-        if energy > (max_energy - reheat_energy):
-            max_energy = reheat_energy + energy
+        if (energy + reheat_energy) > 0.0:
+            max_energy += reheat_energy + energy
             best_theta = state
             improved = True
             continue
 
         # Double bit flips with O(n^3)
         energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_func, nodes, thread_count)
-        if energy > (max_energy - reheat_energy):
-            max_energy = reheat_energy + energy
+        if (energy + reheat_energy) > 0.0:
+            max_energy += reheat_energy + energy
             best_theta = state
             improved = True
 

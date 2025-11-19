@@ -939,6 +939,10 @@ inline bool get_local_bit(ulong* theta, const size_t u) {
     return (theta[u >> 6U] >> (u & 63U)) & 1U;
 }
 
+inline bool get_const_long_bit(__constant ulong* theta, const size_t u) {
+    return (theta[u >> 6U] >> (u & 63U)) & 1U;
+}
+
 inline size_t gray_code_next(ulong* theta, const size_t curr_idx, const size_t offset) {
     size_t prev = curr_idx;
     size_t curr = curr_idx + 1U;
@@ -980,31 +984,37 @@ __kernel void gray(
     const ulong seed = i ^ (i >> 1);
     int b;
     for (b = 0; b < 64; ++b) {
-        if (seed >> (63U - b)) {
-            break;
-        }
+        theta_local[last_block] ^= (seed >> (63U - b)) << b;
     }
-    theta_local[last_block] ^= (seed >> (63U - b)) << b;
 
-    const size_t b_offset = b * n;
-    const bool b_bit = get_local_bit(theta_local, b);
-
+    const ulong diff_mask = theta[last_block] ^ theta_local[last_block];
     real1 best_energy = ZERO_R1;
-    for (uint v = 0; v < b; v++) {
-        const bool v_bit = get_local_bit(theta_local, v);
-        real1 val = G_m[b_offset + v];
-        if (is_spin_glass) {
-            val *= 2;
+    for (int b = 0; b < 64; ++b) {
+        const size_t b_offset = b * n;
+        const bool o_bit = get_const_long_bit(theta, b);
+        const bool n_bit = get_local_bit(theta_local, b);
+        if ((diff_mask >> b) & 1UL) {
+            real1 deltaE_b = 0.0;
+            for (uint v = 0; v < b; ++v) {
+                bool v_bit = get_const_long_bit(theta, v);
+                real1 val = G_m[b * n + v];
+                if (is_spin_glass) {
+                    val *= 2.0;
+                }
+                deltaE_b += (o_bit != v_bit) ? -val : val;
+                deltaE_b += (n_bit != v_bit) ? val : -val;
+            }
+            for (uint v = b + 1; v < n; ++v) {
+                bool v_bit = get_const_long_bit(theta, v);
+                real1 val = G_m[b * n + v];
+                if (is_spin_glass) {
+                    val *= 2.0;
+                }
+                deltaE_b += (o_bit != v_bit) ? -val : val;
+                deltaE_b += (n_bit != v_bit) ? val : -val;
+            }
+            best_energy += deltaE_b;
         }
-        best_energy += (b_bit != v_bit) ? val : -val;
-    }
-    for (uint v = b + 1; v < n; v++) {
-        const bool v_bit = get_local_bit(theta_local, v);
-        real1 val = G_m[b_offset + v];
-        if (is_spin_glass) {
-            val *= 2;
-        }
-        best_energy += (b_bit != v_bit) ? val : -val;
     }
 
     for (; i < gray_iterations; i += max_i) {
