@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_cut_diff, compute_cut_diff_2, compute_energy, compute_energy_diff, compute_energy_diff_2, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_cut_diff, compute_cut_diff_2, compute_cut_diff_between, compute_energy, compute_energy_diff, compute_energy_diff_2, compute_energy_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -118,14 +118,14 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
             i = s % block_size
             offset = (s // block_size) << 6
             seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_energy(seed, G_m, n)
+            energies[s] = compute_energy_diff_between(best_theta, seed, G_m, n)
             seeds[s] = seed
     else:
         for s in prange(seed_count):
             i = s % block_size
             offset = (s // block_size) << 6
             seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_cut(seed, G_m, n)
+            energies[s] = compute_cut_diff_between(best_theta, seed, G_m, n)
             seeds[s] = seed
 
     indices = np.argsort(energies)[::-1]
@@ -448,8 +448,8 @@ def spin_glass_solver(
             # Gray code with default O(n^3)
             iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
             energy, state = energies[0], iterators[0]
-            if energy > max_energy:
-                max_energy = energy
+            if energy > 0.0:
+                max_energy += energy
                 best_theta = state
                 improved = True
                 continue
