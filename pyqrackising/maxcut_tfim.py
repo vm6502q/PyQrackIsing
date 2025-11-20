@@ -107,7 +107,7 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
                     best_indices.append(idx)
             best_index = best_indices[0]
             for idx in best_indices[1:]:
-                e = compute_cut_diff_between(solutions[best_index], solutions[idx], G_func, nodes, n)
+                e = compute_cut_diff_between(solutions[best_index], solutions[idx], G_m, n)
                 if e > 0.0:
                     best_index = idx
                     improved = True
