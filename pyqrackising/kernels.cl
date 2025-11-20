@@ -135,8 +135,8 @@ __kernel void single_bit_flips(
 
     for (; i < n; i += max_i) {
         real1 energy = single_bit_flip_worker(best_theta, G_m, n, i);
-        if (!is_spin_glass) {
-            energy /= 2;
+        if (is_spin_glass) {
+            energy *= 2.0;
         }
         if (energy > best_energy) {
             best_energy = energy;
@@ -218,8 +218,8 @@ __kernel void double_bit_flips(
         const int l = c + k + 1;
 
         real1 energy = double_bit_flip_worker(best_theta, G_m, n, k, l);
-        if (!is_spin_glass) {
-            energy /= 2;
+        if (is_spin_glass) {
+            energy *= 2.0;
         }
         if (energy > best_energy) {
             best_energy = energy;
@@ -529,8 +529,8 @@ __kernel void single_bit_flips_segmented(
 
     for (; i < n; i += max_i) {
         real1 energy = single_bit_flip_worker_segmented(best_theta, G_m, n, segment_size, i);
-        if (!is_spin_glass) {
-            energy /= 2;
+        if (is_spin_glass) {
+            energy *= 2.0;
         }
         if (energy > best_energy) {
             best_energy = energy;
@@ -618,8 +618,8 @@ __kernel void double_bit_flips_segmented(
         const int l = c + k + 1;
 
         real1 energy = double_bit_flip_worker_segmented(best_theta, G_m, n, segment_size, k, l);
-        if (!is_spin_glass) {
-            energy /= 2;
+        if (is_spin_glass) {
+            energy *= 2.0;
         }
         if (energy > best_energy) {
             best_energy = energy;
