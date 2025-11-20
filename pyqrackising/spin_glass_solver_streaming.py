@@ -234,7 +234,7 @@ def spin_glass_solver_streaming(
             continue
 
         # Post-reheat phase
-        reheat_theta = state
+        reheat_theta = state.copy()
         reheat_energy = energy
 
         # Single bit flips with O(n^2)
@@ -246,7 +246,7 @@ def spin_glass_solver_streaming(
             continue
 
         if energy > 0.0:
-            reheat_theta = state
+            reheat_theta = state.copy()
             reheat_energy += energy
 
         # Double bit flips with O(n^3)

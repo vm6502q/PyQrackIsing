@@ -303,11 +303,12 @@ def compute_cut(sample, G_m, n_qubits):
 def compute_cut_diff(u, sample, G_m, n_qubits):
     energy = 0.0
     u_bit = sample[u]
+    G_u = G_m[u]
     for v in range(u):
-        val = G_m[u, v]
+        val = G_u[v]
         energy += -val if u_bit == sample[v] else val
     for v in range(u + 1, n_qubits):
-        val = G_m[u, v]
+        val = G_u[v]
         energy += -val if u_bit == sample[v] else val
 
     return energy
@@ -322,20 +323,22 @@ def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
     energy = 0.0
     k_bit = sample[k]
     l_bit = sample[l]
+    G_k = G_m[k]
+    G_l = G_m[l]
     for v in range(k):
-        val = G_m[k, v]
+        val = G_k[v]
         energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
+        val = G_l[v]
         energy += -val if l_bit == sample[v] else val
     for v in range(k + 1, l):
-        val = G_m[k, v]
+        val = G_k[v]
         energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
+        val = G_l[v]
         energy += -val if l_bit == sample[v] else val
     for v in range(l + 1, n_qubits):
-        val = G_m[k, v]
+        val = G_k[v]
         energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
+        val = G_l[v]
         energy += -val if l_bit == sample[v] else val
 
     return energy
@@ -442,14 +445,15 @@ def compute_energy_diff_between(o_theta, n_theta, G_m, n_qubits):
             continue
 
         n_bit = n_theta[n]
+        G_n = G_m[n]
 
         for o in range(n):
-            val = G_m[n, o]
+            val = G_n[o]
             o_bit = o_theta[o]
             energy += -val if n_bit == o_bit else val
 
         for o in range(n + 1, n_qubits):
-            val = G_m[n, o]
+            val = G_n[o]
             o_bit = o_theta[o]
             energy += -val if n_bit == o_bit else val
 
