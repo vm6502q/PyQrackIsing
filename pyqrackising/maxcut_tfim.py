@@ -139,8 +139,8 @@ def sample_for_opencl(G_m, G_m_buf, shots, thresholds, repulsion_base, is_spin_g
 
     solutions = np.empty((shots, n), dtype=np.bool_)
 
-    best_solution = solutions[0]
-    best_energy = -float("inf")
+    best_solution = np.zeros(n, dtype=np.bool_)
+    best_energy = compute_energy(best_solution, G_m, n) if is_spin_glass else 0.0
 
     opencl_args = setup_opencl(shots, shots, np.array([n, shots, is_spin_glass, segment_size, theta_segment_size], dtype=np.int32))
 
@@ -151,7 +151,7 @@ def sample_for_opencl(G_m, G_m_buf, shots, thresholds, repulsion_base, is_spin_g
         solution, energy = run_cut_opencl(best_energy, solutions, G_m_buf, is_segmented, *opencl_args)
         if energy > best_energy:
             best_energy = energy
-            best_solution = solution.copy()
+            best_solution = solution
             improved = True
 
     if is_spin_glass:
@@ -237,12 +237,12 @@ def run_cut_opencl(best_energy, samples, G_m_buf, is_segmented, local_size, glob
 
     if energy <= best_energy:
         # No improvement: we can exit early
-        return samples[0], max_energy_host[0]
+        return samples[0].copy(), max_energy_host[0]
 
     # We need the best index
     queue.finish()
 
-    return samples[max_index_host[best_x]], energy
+    return samples[max_index_host[best_x]].copy(), energy
 
 
 @njit
