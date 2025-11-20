@@ -926,8 +926,7 @@ __kernel void gray(
     }
 
     real1 best_energy = ZERO_R1;
-    for (int b = 0; b < max_lcv; ++b) {
-        const int u = b + rem;
+    for (int u = 0; u < n; ++u) {
         const size_t u_offset = u * n;
         const bool o_u_bit = get_const_long_bit(theta, u);
         const bool n_u_bit = get_local_bit(theta_local, u);
@@ -1021,8 +1020,7 @@ __kernel void gray_segmented(
     }
 
     real1 best_energy = ZERO_R1;
-    for (int b = 0; b < max_lcv; ++b) {
-        const int u = b + rem;
+    for (int u = 0; u < n; ++u) {
         const size_t u_offset = u * n;
         const bool o_u_bit = get_const_long_bit(theta, u);
         const bool n_u_bit = get_local_bit(theta_local, u);
