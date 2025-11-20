@@ -915,7 +915,6 @@ __kernel void gray(
 
     // Initialize different seed per thread
     const ulong seed = i ^ (i >> 1);
-    ulong diff_mask = 0U;
     const int max_lcv = (n < 64) ? n : 64;
     for (int b = 0; b < max_lcv; ++b) {
         const bool bit = (seed >> (63U - b)) & 1U;
@@ -923,29 +922,24 @@ __kernel void gray(
             continue;
         }
         const int offset = n - (b + 1);
-        const int bit_offset = offset & 63U;
-        const ulong p = 1 << bit_offset;
-        diff_mask |= p;
-        theta_local[offset >> 6U] ^= p;
+        theta_local[offset >> 6U] ^= 1 << (offset & 63U);
     }
 
     real1 best_energy = ZERO_R1;
     for (int b = 0; b < max_lcv; ++b) {
         const int u = b + rem;
         const size_t u_offset = u * n;
-        if (!((diff_mask >> b) & 1UL)) {
-            continue;
-        }
-        const bool n_bit = get_local_bit(theta_local, u);
-        for (uint v = 0; v < u; ++v) {
-            const bool v_bit = get_const_long_bit(theta, v);
-            real1 val = G_m[u_offset + v];
-            best_energy += (n_bit == v_bit) ? -val : val;
-        }
+        const bool o_u_bit = get_const_long_bit(theta, u);
+        const bool n_u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; ++v) {
-            bool v_bit = get_const_long_bit(theta, v);
-            real1 val = G_m[u_offset + v];
-            best_energy += (n_bit == v_bit) ? -val : val;
+            const bool o_v_bit = get_const_long_bit(theta, v);
+            const bool n_v_bit = get_local_bit(theta_local, v);
+            const bool o_diff = o_u_bit != o_v_bit;
+            const bool n_diff = n_u_bit != n_v_bit;
+            if (o_diff != n_diff) {
+                const real1 val = G_m[u_offset + v];
+                best_energy += n_diff ? -val : val;
+            }
         }
     }
 
@@ -1016,7 +1010,6 @@ __kernel void gray_segmented(
 
     // Initialize different seed per thread
     const ulong seed = i ^ (i >> 1);
-    ulong diff_mask = 0U;
     const int max_lcv = (n < 64) ? n : 64;
     for (int b = 0; b < max_lcv; ++b) {
         const bool bit = (seed >> (63U - b)) & 1U;
@@ -1024,29 +1017,24 @@ __kernel void gray_segmented(
             continue;
         }
         const int offset = n - (b + 1);
-        const int bit_offset = offset & 63U;
-        const ulong p = 1 << bit_offset;
-        diff_mask |= p;
-        theta_local[offset >> 6U] ^= p;
+        theta_local[offset >> 6U] ^= 1 << (offset & 63U);
     }
 
     real1 best_energy = ZERO_R1;
     for (int b = 0; b < max_lcv; ++b) {
         const int u = b + rem;
         const size_t u_offset = u * n;
-        if (!((diff_mask >> b) & 1UL)) {
-            continue;
-        }
-        const bool n_bit = get_local_bit(theta_local, u);
-        for (uint v = 0; v < u; ++v) {
-            const bool v_bit = get_const_long_bit(theta, v);
-            real1 val = get_G_m(G_m, u_offset + v, segment_size);
-            best_energy += (n_bit == v_bit) ? -val : val;
-        }
+        const bool o_u_bit = get_const_long_bit(theta, u);
+        const bool n_u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; ++v) {
-            bool v_bit = get_const_long_bit(theta, v);
-            real1 val = get_G_m(G_m, u_offset + v, segment_size);;
-            best_energy += (n_bit == v_bit) ? -val : val;
+            const bool o_v_bit = get_const_long_bit(theta, v);
+            const bool n_v_bit = get_local_bit(theta_local, v);
+            const bool o_diff = o_u_bit != o_v_bit;
+            const bool n_diff = n_u_bit != n_v_bit;
+            if (o_diff != n_diff) {
+                const real1 val = get_G_m(G_m, u_offset + v, segment_size);
+                best_energy += n_diff ? -val : val;
+            }
         }
     }
 

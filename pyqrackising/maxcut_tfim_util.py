@@ -437,25 +437,19 @@ def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
 
 @njit
 def compute_energy_diff_between(o_theta, n_theta, G_m, n_qubits):
-    diff_mask = np.logical_xor(o_theta, n_theta)
     energy = 0.0
 
-    for n in range(n_qubits):
-        if not diff_mask[n]:
-            continue
+    for i in range(n_qubits):
+        G_i = G_m[i]
+        o_i_bit = o_theta[i]
+        n_i_bit = n_theta[i]
+        for j in range(i + 1, n_qubits):
+            o_diff = o_i_bit != o_theta[j]
+            n_diff = n_i_bit != n_theta[j]
 
-        n_bit = n_theta[n]
-        G_n = G_m[n]
-
-        for o in range(n):
-            val = G_n[o]
-            o_bit = o_theta[o]
-            energy += -val if n_bit == o_bit else val
-
-        for o in range(n + 1, n_qubits):
-            val = G_n[o]
-            o_bit = o_theta[o]
-            energy += -val if n_bit == o_bit else val
+            if o_diff != n_diff:
+                gij = G_i[j]
+                energy += gij if n_diff else -gij
 
     return energy
 

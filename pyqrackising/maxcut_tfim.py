@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut, compute_energy, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
+from .maxcut_tfim_util import compute_cut, compute_energy, compute_energy_diff_between, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -68,45 +68,34 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
     shots = shot_segment * thread_count
     n = len(G_m)
 
-    solutions = np.empty((thread_count, n), dtype=np.bool_)
-    energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
-
+    solutions = np.zeros((thread_count, n), dtype=np.bool_)
     best_solution = solutions[0]
-    best_energy = -float("inf")
+    if is_spin_glass:
+        best_energy = compute_energy(best_solution, G_m, n)
+        energies = np.full(thread_count, best_energy, dtype=dtype)
+    else:
+        best_energy = 0.0
+        energies = np.zeros(thread_count, dtype=dtype)
 
     improved = True
     while improved:
         improved = False
-        if is_spin_glass:
-            for i in prange(thread_count):
-                s_offset = i * shot_segment
-                for j in range(shot_segment):
-                    s = s_offset + j
 
-                    # First dimension: Hamming weight
-                    m = sample_mag(thresholds)
+        for i in prange(thread_count):
+            s_offset = i * shot_segment
+            for j in range(shot_segment):
+                s = s_offset + j
 
-                    # Second dimension: permutation within Hamming weight
-                    sample = local_repulsion_choice(G_m, repulsion_base, n, m, s)
-                    energy = compute_energy(sample, G_m, n)
+                # First dimension: Hamming weight
+                m = sample_mag(thresholds)
 
-                    if energy > energies[i]:
-                        solutions[i], energies[i] = sample, energy
-        else:
-            for i in prange(thread_count):
-                s_offset = i * shot_segment
-                for j in range(shot_segment):
-                    s = s_offset + j
+                # Second dimension: permutation within Hamming weight
+                sample = local_repulsion_choice(G_m, repulsion_base, n, m, s)
+                energy = compute_energy_diff_between(solutions[i], sample, G_m, n)
 
-                    # First dimension: Hamming weight
-                    m = sample_mag(thresholds)
-
-                    # Second dimension: permutation within Hamming weight
-                    sample = local_repulsion_choice(G_m, repulsion_base, n, m, s)
-                    energy = compute_cut(sample, G_m, n)
-
-                    if energy > energies[i]:
-                        solutions[i], energies[i] = sample, energy
+                if energy > 0.0:
+                    energies[i] += energy
+                    solutions[i] = sample
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
@@ -114,9 +103,6 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
             best_energy = energy
             best_solution = solutions[best_index].copy()
             improved = True
-
-    if is_spin_glass:
-        best_energy = compute_cut(best_solution, G_m, n)
 
     return best_solution, best_energy
 
