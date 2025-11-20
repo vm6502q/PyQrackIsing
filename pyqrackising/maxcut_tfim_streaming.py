@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, heuristic_threshold, init_thresholds, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, compute_cut_diff_between_streaming, get_cut, get_cut_base, heuristic_threshold, init_thresholds, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
 
 
 epsilon = opencl_context.epsilon
