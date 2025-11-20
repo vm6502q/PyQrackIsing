@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut, compute_energy, compute_energy_diff_between, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
+from .maxcut_tfim_util import compute_cut, compute_energy, compute_cut_diff_between, convert_bool_to_uint, get_cut, get_cut_base, heuristic_threshold, init_thresholds, make_G_m_buf, make_theta_buf, maxcut_hamming_cdf, opencl_context, sample_mag, setup_opencl, bit_pick
 
 IS_OPENCL_AVAILABLE = True
 try:
@@ -91,7 +91,7 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
 
                 # Second dimension: permutation within Hamming weight
                 sample = local_repulsion_choice(G_m, repulsion_base, n, m, s)
-                energy = compute_energy_diff_between(solutions[i], sample, G_m, n)
+                energy = compute_cut_diff_between(solutions[i], sample, G_m, n)
 
                 if energy > 0.0:
                     energies[i] += energy
@@ -99,6 +99,23 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
+
+        if energy == float("inf"):
+            best_indices = []
+            for idx, e in enumerate(energies):
+                if e == float("inf"):
+                    best_indices.append(idx)
+            best_index = best_indices[0]
+            for idx in best_indices[1:]:
+                e = compute_cut_diff_between(solutions[best_index], solutions[idx], G_func, nodes, n)
+                if e > 0.0:
+                    best_index = idx
+                    improved = True
+            best_solution = solutions[best_index].copy()
+
+        if is_spin_glass:
+            energy *= 2.0
+
         if energy > best_energy:
             best_energy = energy
             best_solution = solutions[best_index].copy()

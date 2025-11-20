@@ -3,7 +3,7 @@ import numpy as np
 from numba import njit, prange
 import os
 
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, get_cut, get_cut_base, heuristic_threshold, init_thresholds, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, compute_cut_diff_between_streaming, get_cut, get_cut_base, heuristic_threshold, init_thresholds, maxcut_hamming_cdf, opencl_context, sample_mag, bit_pick
 
 
 epsilon = opencl_context.epsilon
@@ -60,55 +60,58 @@ def sample_measurement(G_func, nodes, shots, thread_count, thresholds, n, repuls
     shot_segment = (max(1, shots >> 1) + thread_count - 1) // thread_count
     shots = shot_segment * thread_count
 
-    solutions = np.empty((thread_count, n), dtype=np.bool_)
-    energies = np.full(thread_count, np.finfo(dtype).min, dtype=dtype)
-
+    solutions = np.zeros((thread_count, n), dtype=np.bool_)
     best_solution = solutions[0]
-    best_energy = -float("inf")
+    if is_spin_glass:
+        best_energy = compute_energy_streaming(best_solution, G_func, nodes, n)
+        energies = np.full(thread_count, best_energy, dtype=dtype)
+    else:
+        best_energy = 0.0
+        energies = np.zeros(thread_count, dtype=dtype)
 
     improved = True
     while improved:
         improved = False
-        if is_spin_glass:
-            for i in prange(thread_count):
-                s_offset = i * shot_segment
-                for j in range(shot_segment):
-                    s = s_offset + j
 
-                    # First dimension: Hamming weight
-                    m = sample_mag(thresholds)
+        for i in prange(thread_count):
+            s_offset = i * shot_segment
+            for j in range(shot_segment):
+                s = s_offset + j
 
-                    # Second dimension: permutation within Hamming weight
-                    sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
-                    energy = compute_energy_streaming(sample, G_func, nodes, n)
+                # First dimension: Hamming weight
+                m = sample_mag(thresholds)
 
-                    if energy > energies[i]:
-                        solutions[i], energies[i] = sample, energy
-        else:
-            for i in prange(thread_count):
-                s_offset = i * shot_segment
-                for j in range(shot_segment):
-                    s = s_offset + j
+                # Second dimension: permutation within Hamming weight
+                sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
+                energy = compute_cut_diff_between_streaming(solutions[i], sample, G_func, nodes, n)
 
-                    # First dimension: Hamming weight
-                    m = sample_mag(thresholds)
-
-                    # Second dimension: permutation within Hamming weight
-                    sample = local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s)
-                    energy = compute_cut_streaming(sample, G_func, nodes, n)
-
-                    if energy > energies[i]:
-                        solutions[i], energies[i] = sample, energy
+                if energy > 0.0:
+                    energies[i] += energy
+                    solutions[i] = sample
 
         best_index = np.argmax(energies)
         energy = energies[best_index]
+
+        if energy == float("inf"):
+            best_indices = []
+            for idx, e in enumerate(energies):
+                if e == float("inf"):
+                    best_indices.append(idx)
+            best_index = best_indices[0]
+            for idx in best_indices[1:]:
+                e = compute_cut_diff_between_streaming(solutions[best_index], solutions[idx], G_func, nodes, n)
+                if e > 0.0:
+                    best_index = idx
+                    improved = True
+            best_solution = solutions[best_index].copy()
+
+        if is_spin_glass:
+            energy *= 2.0
+
         if energy > best_energy:
             best_energy = energy
             best_solution = solutions[best_index].copy()
             improved = True
-
-    if is_spin_glass:
-        best_energy = compute_cut_streaming(sample, G_func, nodes, n)
 
     return best_solution, best_energy
 

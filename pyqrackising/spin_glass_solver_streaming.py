@@ -1,5 +1,5 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_energy_diff_between_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
+from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_cut_diff_between_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -18,7 +18,7 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
     for i in prange(n):
         state = best_theta.copy()
         state[i] = not state[i]
-        energies[i] = compute_energy_cut_streaming(i, state, G_func, nodes, n)
+        energies[i] = compute_cut_diff_streaming(i, state, G_func, nodes, n)
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -83,7 +83,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
         i = s % block_size
         offset = (s // block_size) << 6
         seed = gray_mutation(i, best_theta, offset)
-        energies[s] = compute_energy_diff_between_streaming(best_theta, seed, G_func, nodes, n)
+        energies[s] = compute_cut_diff_between_streaming(best_theta, seed, G_func, nodes, n)
         seeds[s] = seed
 
     indices = np.argsort(energies)[::-1]
@@ -94,8 +94,8 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
         best_seeds[i] = seeds[idx]
         best_energies[i] = energies[idx]
 
-    if not is_spin_glass:
-        best_energies[0] *= 0.5
+    if is_spin_glass:
+        best_energies[0] *= 2.0
 
     return best_seeds, best_energies[0]
 
