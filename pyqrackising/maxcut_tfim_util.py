@@ -283,7 +283,7 @@ def compute_energy(sample, G_m, n_qubits):
         u_bit = sample[u]
         for v in range(u + 1, n_qubits):
             val = G_m[u, v]
-            energy += val if u_bit == sample[v] else -val
+            energy += -val if u_bit == sample[v] else val
 
     return energy
 
@@ -305,10 +305,10 @@ def compute_energy_diff(u, sample, G_m, n_qubits):
     u_bit = sample[u]
     for v in range(u):
         val = G_m[u, v]
-        energy += val if u_bit == sample[v] else -val
+        energy += -val if u_bit == sample[v] else val
     for v in range(u + 1, n_qubits):
         val = G_m[u, v]
-        energy += val if u_bit == sample[v] else -val
+        energy += -val if u_bit == sample[v] else val
 
     return energy
 
@@ -324,19 +324,19 @@ def compute_energy_diff_2(k, l, sample, G_m, n_qubits):
     l_bit = sample[l]
     for v in range(k):
         val = G_m[k, v]
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_m[l, v]
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
     for v in range(k + 1, l):
         val = G_m[k, v]
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_m[l, v]
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
     for v in range(l + 1, n_qubits):
         val = G_m[k, v]
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_m[l, v]
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
 
     return energy
 
@@ -348,7 +348,7 @@ def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
         u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
             val = G_data[col]
-            energy += val if u_bit == sample[G_cols[col]] else -val
+            energy += -val if u_bit == sample[G_cols[col]] else val
 
     return energy
 
@@ -374,7 +374,7 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
         u_bit = sample[u]
         for v in range(u + 1, n_qubits):
             val = G_func(nodes[u], nodes[v])
-            energy += val if u_bit == sample[v] else -val
+            energy += -val if u_bit == sample[v] else val
 
     return energy
 
@@ -396,10 +396,10 @@ def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
     u_bit = sample[u]
     for v in range(u):
         val = G_func(nodes[u], nodes[v])
-        energy += val if u_bit == sample[v] else -val
+        energy += -val if u_bit == sample[v] else val
     for v in range(u + 1, n_qubits):
         val = G_func(nodes[u], nodes[v])
-        energy += val if u_bit == sample[v] else -val
+        energy += -val if u_bit == sample[v] else val
 
     return energy
 
@@ -415,19 +415,19 @@ def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
     l_bit = sample[l]
     for v in range(k):
         val = G_func(nodes[k], nodes[v])
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_func(nodes[l], nodes[v])
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
     for v in range(k + 1, l):
         val = G_func(nodes[k], nodes[v])
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_func(nodes[l], nodes[v])
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
     for v in range(l + 1, n_qubits):
         val = G_func(nodes[k], nodes[v])
-        energy += val if k_bit == sample[v] else -val
+        energy += -val if k_bit == sample[v] else val
         val = G_func(nodes[l], nodes[v])
-        energy += val if l_bit == sample[v] else -val
+        energy += -val if l_bit == sample[v] else val
 
     return energy
 
