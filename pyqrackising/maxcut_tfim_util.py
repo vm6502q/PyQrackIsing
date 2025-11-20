@@ -300,7 +300,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 
 @njit
-def compute_energy_diff(u, sample, G_m, n_qubits):
+def compute_cut_diff(u, sample, G_m, n_qubits):
     energy = 0.0
     u_bit = sample[u]
     for v in range(u):
@@ -314,7 +314,7 @@ def compute_energy_diff(u, sample, G_m, n_qubits):
 
 
 @njit
-def compute_energy_diff_2(k, l, sample, G_m, n_qubits):
+def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
     if l < k:
         t = k
         k = l
@@ -391,7 +391,7 @@ def compute_cut_streaming(sample, G_func, nodes, n_qubits):
 
 
 @njit
-def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
+def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
     energy = 0.0
     u_bit = sample[u]
     for v in range(u):
@@ -405,7 +405,7 @@ def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
 
 
 @njit
-def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
+def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
     if l < k:
         t = k
         k = l

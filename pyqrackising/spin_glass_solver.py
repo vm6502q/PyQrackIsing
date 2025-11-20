@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, compute_energy_diff, compute_energy_diff_2, compute_energy_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_energy, compute_cut_diff, compute_cut_diff_2, compute_energy_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -25,11 +25,11 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_m):
     for i in prange(n):
         state = best_theta.copy()
         state[i] = not state[i]
-        energies[i] = compute_energy_diff(i, state, G_m, n)
+        energies[i] = compute_cut_diff(i, state, G_m, n)
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
-    if not is_spin_glass:
-        best_energy *= 0.5
+    if is_spin_glass:
+        best_energy *= 2.0
     best_state = best_theta.copy()
     best_state[best_index] = not best_state[best_index]
 
@@ -63,14 +63,14 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count):
             state[i] = not state[i]
             state[j] = not state[j]
 
-            states[t], energies[t] = state, compute_energy_diff_2(i, j, state, G_m, n)
+            states[t], energies[t] = state, compute_cut_diff_2(i, j, state, G_m, n)
 
             s += thread_batch
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
-    if not is_spin_glass:
-        best_energy *= 0.5
+    if is_spin_glass:
+        best_energy *= 2.0
     best_state = states[best_index]
 
     return best_energy, best_state
@@ -119,7 +119,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
             best_energy = 0.0
             for block in range(blocks):
                 flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                energy = compute_energy_diff(flip_bit, iterator, G_m, n)
+                energy = compute_cut_diff(flip_bit, iterator, G_m, n)
                 if energy > 0.0:
                     best_energy += energy
                 else:
@@ -129,8 +129,8 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
-    if not is_spin_glass:
-        best_energy *= 0.5
+    if is_spin_glass:
+        best_energy *= 2.0
     best_state = iterators[best_index]
 
     return best_energy, best_state
