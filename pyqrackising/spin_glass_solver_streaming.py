@@ -120,16 +120,15 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
             seeds[s] = seed
 
     indices = np.argsort(energies)[::-1]
-
     best_seeds = np.empty((thread_count, n), dtype=np.bool_)
     best_energies = np.empty(thread_count, dtype=dtype)
-
     for i in prange(thread_count):
         idx = indices[i]
         best_seeds[i] = seeds[idx]
         best_energies[i] = energies[idx]
 
     return best_seeds, best_energies
+
 
 @njit(parallel=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
