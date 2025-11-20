@@ -250,7 +250,6 @@ def run_bit_flips_opencl(is_double, n, kernel, best_energy, theta, theta_buf, G_
                 break
         j = c + i + 1
 
-        theta = theta.copy()
         theta[i] = not theta[i]
         theta[j] = not theta[j]
     else:
