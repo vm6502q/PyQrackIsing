@@ -304,27 +304,13 @@ def compute_energy_diff(u, sample, G_m, n_qubits):
     energy = 0.0
     u_bit = sample[u]
     for v in range(u):
-        val = 2 * G_m[u, v]
+        val = G_m[u, v]
         energy += val if u_bit == sample[v] else -val
     for v in range(u + 1, n_qubits):
-        val = 2 * G_m[u, v]
+        val = G_m[u, v]
         energy += val if u_bit == sample[v] else -val
 
-    return -energy
-
-
-@njit
-def compute_cut_diff(u, sample, G_m, n_qubits):
-    energy = 0.0
-    u_bit = sample[u]
-    for v in range(u):
-        val = G_m[u, v]
-        energy += -val if u_bit == sample[v] else val
-    for v in range(u + 1, n_qubits):
-        val = G_m[u, v]
-        energy += -val if u_bit == sample[v] else val
-
-    return energy
+    return -2 * energy
 
 
 @njit
@@ -337,50 +323,22 @@ def compute_energy_diff_2(k, l, sample, G_m, n_qubits):
     k_bit = sample[k]
     l_bit = sample[l]
     for v in range(k):
-        val = 2 * G_m[k, v]
+        val = G_m[k, v]
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_m[l, v]
+        val = G_m[l, v]
         energy += val if l_bit == sample[v] else -val
     for v in range(k + 1, l):
-        val = 2 * G_m[k, v]
+        val = G_m[k, v]
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_m[l, v]
+        val = G_m[l, v]
         energy += val if l_bit == sample[v] else -val
     for v in range(l + 1, n_qubits):
-        val = 2 * G_m[k, v]
+        val = G_m[k, v]
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_m[l, v]
+        val = G_m[l, v]
         energy += val if l_bit == sample[v] else -val
 
-    return -energy
-
-
-@njit
-def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
-    if l < k:
-        t = k
-        k = l
-        l = t
-    energy = 0.0
-    k_bit = sample[k]
-    l_bit = sample[l]
-    for v in range(k):
-        val = G_m[k, v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
-        energy += -val if l_bit == sample[v] else val
-    for v in range(k + 1, l):
-        val = G_m[k, v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
-        energy += -val if l_bit == sample[v] else val
-    for v in range(l + 1, n_qubits):
-        val = G_m[k, v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_m[l, v]
-        energy += -val if l_bit == sample[v] else val
-
-    return energy
+    return -2 * energy
 
 
 @njit
@@ -437,27 +395,13 @@ def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
     energy = 0.0
     u_bit = sample[u]
     for v in range(u):
-        val = 2 * G_func(nodes[u], nodes[v])
+        val = G_func(nodes[u], nodes[v])
         energy += val if u_bit == sample[v] else -val
     for v in range(u + 1, n_qubits):
-        val = 2 * G_func(nodes[u], nodes[v])
+        val = G_func(nodes[u], nodes[v])
         energy += val if u_bit == sample[v] else -val
 
-    return -energy
-
-
-@njit
-def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
-    energy = 0.0
-    u_bit = sample[u]
-    for v in range(u):
-        val = G_func(nodes[u], nodes[v])
-        energy += -val if u_bit == sample[v] else val
-    for v in range(u + 1, n_qubits):
-        val = G_func(nodes[u], nodes[v])
-        energy += -val if u_bit == sample[v] else val
-
-    return energy
+    return -2 * energy
 
 
 @njit
@@ -470,117 +414,44 @@ def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
     k_bit = sample[k]
     l_bit = sample[l]
     for v in range(k):
-        val = 2 * G_func(nodes[k], nodes[v])
+        val = G_func(nodes[k], nodes[v])
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_func(nodes[l], nodes[v])
+        val = G_func(nodes[l], nodes[v])
         energy += val if l_bit == sample[v] else -val
     for v in range(k + 1, l):
-        val = 2 * G_func(nodes[k], nodes[v])
+        val = G_func(nodes[k], nodes[v])
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_func(nodes[l], nodes[v])
+        val = G_func(nodes[l], nodes[v])
         energy += val if l_bit == sample[v] else -val
     for v in range(l + 1, n_qubits):
-        val = 2 * G_func(nodes[k], nodes[v])
+        val = G_func(nodes[k], nodes[v])
         energy += val if k_bit == sample[v] else -val
-        val = 2 * G_func(nodes[l], nodes[v])
+        val = G_func(nodes[l], nodes[v])
         energy += val if l_bit == sample[v] else -val
 
-    return -energy
+    return -2 * energy
 
 
 @njit
-def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
-    if l < k:
-        t = k
-        k = l
-        l = t
-    energy = 0.0
-    k_bit = sample[k]
-    l_bit = sample[l]
-    for v in range(k):
-        val = G_func(nodes[k], nodes[v])
-        energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
-        energy += -val if l_bit == sample[v] else val
-    for v in range(k + 1, l):
-        val = G_func(nodes[k], nodes[v])
-        energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
-        energy += -val if l_bit == sample[v] else val
-    for v in range(l + 1, n_qubits):
-        val = G_func(nodes[k], nodes[v])
-        energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
-        energy += -val if l_bit == sample[v] else val
-
-    return energy
-
-
-@njit
-def compute_cut_diff_between(o_theta, n_theta, G_m, n):
+def compute_energy_diff_between(o_theta, n_theta, G_m, n_qubits):
     diff_mask = np.logical_xor(o_theta, n_theta)
     energy = 0.0
-    for b in range(n):
-        if not diff_mask[b]:
+
+    for n in range(n_qubits):
+        if not diff_mask[n]:
             continue
-        o_bit = o_theta[b]
-        n_bit = n_theta[b]
-        for v in range(b):
-            v_bit = o_theta[v]
-            val = G_m[b, v]
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
-        for v in range(b + 1, n):
-            v_bit = o_theta[v]
-            val = G_m[b, v]
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
 
-    return energy
+        n_bit = n_theta[n]
 
+        for o in range(n):
+            val = G_m[n, o]
+            o_bit = o_theta[o]
+            energy += val if n_bit != o_bit else -val
 
-@njit
-def compute_energy_diff_between(o_theta, n_theta, G_m, n):
-    diff_mask = np.logical_xor(o_theta, n_theta)
-    energy = 0.0
-    for b in range(n):
-        if not diff_mask[b]:
-            continue
-        o_bit = o_theta[b]
-        n_bit = n_theta[b]
-        for v in range(b):
-            v_bit = o_theta[v]
-            val = 2.0 * G_m[b, v]
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
-        for v in range(b + 1, n):
-            v_bit = o_theta[v]
-            val = 2.0 * G_m[b, v]
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
-
-    return energy
-
-
-@njit
-def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
-    diff_mask = np.logical_xor(o_theta, n_theta)
-    energy = 0.0
-    for b in range(n):
-        if not diff_mask[b]:
-            continue
-        o_bit = o_theta[b]
-        n_bit = n_theta[b]
-        for v in range(b):
-            v_bit = o_theta[v]
-            val = G_func(nodes[b], nodes[v])
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
-        for v in range(b + 1, n):
-            v_bit = o_theta[v]
-            val = G_func(nodes[b], nodes[v])
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
+        for o in range(n + 1, n_qubits):
+            val = G_m[n, o]
+            o_bit = o_theta[o]
+            energy += val if n_bit != o_bit else -val
 
     return energy
 
@@ -589,21 +460,22 @@ def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
 def compute_energy_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
     diff_mask = np.logical_xor(o_theta, n_theta)
     energy = 0.0
-    for b in range(n):
-        if not diff_mask[b]:
+
+    for n in range(n_qubits):
+        if not diff_mask[n]:
             continue
-        o_bit = o_theta[b]
-        n_bit = n_theta[b]
-        for v in range(b):
-            v_bit = o_theta[v]
-            val = 2.0 * G_func(nodes[b], nodes[v])
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
-        for v in range(b + 1, n):
-            v_bit = o_theta[v]
-            val = 2.0 * G_func(nodes[b], nodes[v])
-            if o_bit != n_bit:
-                energy += -val if n_bit == v_bit else val
+
+        n_bit = n_theta[n]
+
+        for o in range(n):
+            val = G_func(nodes[n], nodes[o])
+            o_bit = o_theta[o]
+            energy += val if n_bit != o_bit else -val
+
+        for o in range(n + 1, n_qubits):
+            val = G_func(nodes[n], nodes[o])
+            o_bit = o_theta[o]
+            energy += val if n_bit != o_bit else -val
 
     return energy
 

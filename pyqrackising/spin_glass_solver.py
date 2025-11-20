@@ -1,5 +1,5 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_cut_diff, compute_cut_diff_2, compute_cut_diff_between, compute_energy, compute_energy_diff, compute_energy_diff_2, compute_energy_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
+from .maxcut_tfim_util import compute_cut, compute_energy, compute_energy_diff, compute_energy_diff_2, compute_energy_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -21,22 +21,15 @@ gnl = opencl_context.GRAY_NODE_LIMIT
 @njit(parallel=True)
 def run_single_bit_flips(best_theta, is_spin_glass, G_m):
     n = len(best_theta)
-
     energies = np.empty(n, dtype=dtype)
-
-    if is_spin_glass:
-        for i in prange(n):
-            state = best_theta.copy()
-            state[i] = not state[i]
-            energies[i] = compute_energy_diff(i, state, G_m, n)
-    else:
-        for i in prange(n):
-            state = best_theta.copy()
-            state[i] = not state[i]
-            energies[i] = compute_cut_diff(i, state, G_m, n)
-
+    for i in prange(n):
+        state = best_theta.copy()
+        state[i] = not state[i]
+        energies[i] = compute_energy_diff(i, state, G_m, n)
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
+    if not is_spin_glass:
+        best_energy *= -0.5
     best_state = best_theta.copy()
     best_state[best_index] = not best_state[best_index]
 
@@ -52,53 +45,32 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count):
     states = np.empty((thread_count, n), dtype=np.bool_)
     energies = np.empty(thread_count, dtype=dtype)
 
-    if is_spin_glass:
-        for t in prange(thread_count):
-            s = int(t)
-            while s < combo_count:
-                c = int(s)
-                i = int(0)
-                lcv = int(n - 1)
-                while c >= lcv:
-                    c -= lcv
-                    i += 1
-                    lcv -= 1
-                    if not lcv:
-                        break
-                j = int(c + i + 1)
+    for t in prange(thread_count):
+        s = int(t)
+        while s < combo_count:
+            c = int(s)
+            i = int(0)
+            lcv = int(n - 1)
+            while c >= lcv:
+                c -= lcv
+                i += 1
+                lcv -= 1
+                if not lcv:
+                    break
+            j = int(c + i + 1)
 
-                state = best_theta.copy()
-                state[i] = not state[i]
-                state[j] = not state[j]
+            state = best_theta.copy()
+            state[i] = not state[i]
+            state[j] = not state[j]
 
-                states[t], energies[t] = state, compute_energy_diff_2(i, j, state, G_m, n)
+            states[t], energies[t] = state, compute_energy_diff_2(i, j, state, G_m, n)
 
-                s += thread_batch
-    else:
-        for t in prange(thread_count):
-            s = int(t)
-            while s < combo_count:
-                c = int(s)
-                i = int(0)
-                lcv = int(n - 1)
-                while c >= lcv:
-                    c -= lcv
-                    i += 1
-                    lcv -= 1
-                    if not lcv:
-                        break
-                j = int(c + i + 1)
-
-                state = best_theta.copy()
-                state[i] = not state[i]
-                state[j] = not state[j]
-
-                states[t], energies[t] = state, compute_cut_diff_2(i, j, state, G_m, n)
-
-                s += thread_batch
+            s += thread_batch
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
+    if not is_spin_glass:
+        best_energy *= -0.5
     best_state = states[best_index]
 
     return best_energy, best_state
@@ -113,20 +85,12 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
     seeds = np.empty((seed_count, n), dtype=np.bool_)
     energies = np.empty(seed_count, dtype=dtype)
 
-    if is_spin_glass:
-        for s in prange(seed_count):
-            i = s % block_size
-            offset = (s // block_size) << 6
-            seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_energy_diff_between(best_theta, seed, G_m, n)
-            seeds[s] = seed
-    else:
-        for s in prange(seed_count):
-            i = s % block_size
-            offset = (s // block_size) << 6
-            seed = gray_mutation(i, best_theta, offset)
-            energies[s] = compute_cut_diff_between(best_theta, seed, G_m, n)
-            seeds[s] = seed
+    for s in prange(seed_count):
+        i = s % block_size
+        offset = (s // block_size) << 6
+        seed = gray_mutation(i, best_theta, offset)
+        energies[s] = compute_energy_diff_between(best_theta, seed, G_m, n)
+        seeds[s] = seed
 
     indices = np.argsort(energies)[::-1]
     best_seeds = np.empty((thread_count, n), dtype=np.bool_)
@@ -136,7 +100,10 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
         best_seeds[i] = seeds[idx]
         best_energies[i] = energies[idx]
 
-    return best_seeds, best_energies
+    if not is_spin_glass:
+        best_energies[0] *= -0.5
+
+    return best_seeds, best_energies[0]
 
 
 @njit(parallel=True)
@@ -146,37 +113,24 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     blocks = (n + 63) >> 6
     energies = np.empty(thread_count, dtype=dtype)
 
-    if is_spin_glass:
-        for i in prange(thread_count):
-            iterator = iterators[i]
-            for curr_idx in range(thread_iterations):
-                best_energy = 0.0
-                for block in range(blocks):
-                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_energy_diff(flip_bit, iterator, G_m, n)
-                    if energy > 0.0:
-                        best_energy += energy
-                    else:
-                        # Revert iterator
-                        iterator[flip_bit] = not iterator[flip_bit]
-                energies[i] += best_energy
-    else:
-        for i in prange(thread_count):
-            iterator = iterators[i]
-            for curr_idx in range(thread_iterations):
-                best_energy = 0.0
-                for block in range(blocks):
-                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_cut_diff(flip_bit, iterator, G_m, n)
-                    if energy > 0.0:
-                        best_energy += energy
-                    else:
-                        # Revert iterator
-                        iterator[flip_bit] = not iterator[flip_bit]
-                energies[i] += best_energy
+    for i in prange(thread_count):
+        iterator = iterators[i]
+        for curr_idx in range(thread_iterations):
+            best_energy = 0.0
+            for block in range(blocks):
+                flip_bit = gray_code_next(iterator, curr_idx, block << 6)
+                energy = compute_energy_diff(flip_bit, iterator, G_m, n)
+                if energy > 0.0:
+                    best_energy += energy
+                else:
+                    # Revert iterator
+                    iterator[flip_bit] = not iterator[flip_bit]
+            energies[i] += best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
+    if not is_spin_glass:
+        best_energy *= -0.5
     best_state = iterators[best_index]
 
     return best_energy, best_state
@@ -445,15 +399,14 @@ def spin_glass_solver(
             energy, state = run_gray_search_opencl(n_qubits, gray_kernel, best_theta, theta_buf_64, G_m_buf, is_segmented, *gray_args)
         else:
             # Gray code with default O(n^3)
-            iterators, energies = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
-            energy, state = energies[0], iterators[0]
+            iterators, energy = pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n_qubits, is_spin_glass)
+            state = iterators[0]
             if energy > 0.0:
                 max_energy += energy
                 best_theta = state
                 improved = True
                 continue
 
-            energies = None
             energy, state = run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_m)
         if energy > 0.0:
             max_energy += energy
