@@ -128,7 +128,6 @@ jobs:
 
       - name: Prepare Build Environment (MacOS)
         run: |
-          brew upgrade
           brew install pybind11 python-build
 
       - name: Install Python Dependencies
@@ -161,7 +160,6 @@ jobs:
 
       - name: Prepare Build Environment (MacOS)
         run: |
-          brew upgrade
           brew install pybind11 python-build
 
       - name: Install Python Dependencies
