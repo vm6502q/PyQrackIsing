@@ -310,7 +310,7 @@ def compute_energy_diff(u, sample, G_m, n_qubits):
         val = G_m[u, v]
         energy += val if u_bit == sample[v] else -val
 
-    return -2 * energy
+    return -energy
 
 
 @njit
@@ -338,7 +338,7 @@ def compute_energy_diff_2(k, l, sample, G_m, n_qubits):
         val = G_m[l, v]
         energy += val if l_bit == sample[v] else -val
 
-    return -2 * energy
+    return -energy
 
 
 @njit
@@ -401,7 +401,7 @@ def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
         val = G_func(nodes[u], nodes[v])
         energy += val if u_bit == sample[v] else -val
 
-    return -2 * energy
+    return -energy
 
 
 @njit
@@ -429,7 +429,7 @@ def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
         val = G_func(nodes[l], nodes[v])
         energy += val if l_bit == sample[v] else -val
 
-    return -2 * energy
+    return -energy
 
 
 @njit
