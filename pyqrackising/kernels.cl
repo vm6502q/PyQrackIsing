@@ -973,17 +973,17 @@ __kernel void gray(
         for (uint v = 0; v < u; ++v) {
             const bool v_bit = get_const_long_bit(theta, v);
             real1 val = G_m[u_offset + v];
-            best_energy += (n_bit == v_bit) ? -val : val;
+            best_energy += (n_bit != v_bit) ? val : -val;
         }
         for (uint v = u + 1; v < n; ++v) {
             bool v_bit = get_const_long_bit(theta, v);
             real1 val = G_m[u_offset + v];
-            best_energy += (n_bit == v_bit) ? -val : val;
+            best_energy += (n_bit != v_bit) ? val : -val;
         }
     }
 
     if (!is_spin_glass) {
-        best_energy /= -2;
+        best_energy /= 2;
     }
 
     for (; i < gray_iterations; i += max_i) {
@@ -1004,7 +1004,7 @@ __kernel void gray(
                 energy += (k_bit != v_bit) ? val : -val;
             }
             if (!is_spin_glass) {
-                energy /= -2;
+                energy /= 2;
             }
 
             if (energy > ZERO_R1) {
@@ -1078,17 +1078,17 @@ __kernel void gray_segmented(
         for (uint v = 0; v < u; ++v) {
             const bool v_bit = get_const_long_bit(theta, v);
             real1 val = get_G_m(G_m, u_offset + v, segment_size);
-            best_energy += (n_bit == v_bit) ? -val : val;
+            best_energy += (n_bit != v_bit) ? val : -val;
         }
         for (uint v = u + 1; v < n; ++v) {
             bool v_bit = get_const_long_bit(theta, v);
             real1 val = get_G_m(G_m, u_offset + v, segment_size);;
-            best_energy += (n_bit == v_bit) ? -val : val;
+            best_energy += (n_bit != v_bit) ? val : -val;
         }
     }
 
     if (!is_spin_glass) {
-        best_energy /= -2;
+        best_energy /= 2;
     }
 
     for (; i < gray_iterations; i += max_i) {
@@ -1109,7 +1109,7 @@ __kernel void gray_segmented(
                 energy += (k_bit != v_bit) ? val : -val;
             }
             if (!is_spin_glass) {
-                energy /= -2;
+                energy /= 2;
             }
 
             if (energy > ZERO_R1) {

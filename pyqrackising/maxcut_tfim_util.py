@@ -285,7 +285,7 @@ def compute_energy(sample, G_m, n_qubits):
             val = G_m[u, v]
             energy += val if u_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -310,7 +310,7 @@ def compute_energy_diff(u, sample, G_m, n_qubits):
         val = G_m[u, v]
         energy += val if u_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -338,7 +338,7 @@ def compute_energy_diff_2(k, l, sample, G_m, n_qubits):
         val = G_m[l, v]
         energy += val if l_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -350,7 +350,7 @@ def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
             val = G_data[col]
             energy += val if u_bit == sample[G_cols[col]] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -376,7 +376,7 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
             val = G_func(nodes[u], nodes[v])
             energy += val if u_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -401,7 +401,7 @@ def compute_energy_diff_streaming(u, sample, G_func, nodes, n_qubits):
         val = G_func(nodes[u], nodes[v])
         energy += val if u_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -429,7 +429,7 @@ def compute_energy_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
         val = G_func(nodes[l], nodes[v])
         energy += val if l_bit == sample[v] else -val
 
-    return -energy
+    return energy
 
 
 @njit
@@ -446,12 +446,12 @@ def compute_energy_diff_between(o_theta, n_theta, G_m, n_qubits):
         for o in range(n):
             val = G_m[n, o]
             o_bit = o_theta[o]
-            energy += val if n_bit != o_bit else -val
+            energy += -val if n_bit == o_bit else val
 
         for o in range(n + 1, n_qubits):
             val = G_m[n, o]
             o_bit = o_theta[o]
-            energy += val if n_bit != o_bit else -val
+            energy += -val if n_bit == o_bit else val
 
     return energy
 
@@ -470,12 +470,12 @@ def compute_energy_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
         for o in range(n):
             val = G_func(nodes[n], nodes[o])
             o_bit = o_theta[o]
-            energy += val if n_bit != o_bit else -val
+            energy += -val if n_bit == o_bit else val
 
         for o in range(n + 1, n_qubits):
             val = G_func(nodes[n], nodes[o])
             o_bit = o_theta[o]
-            energy += val if n_bit != o_bit else -val
+            energy += -val if n_bit == o_bit else val
 
     return energy
 

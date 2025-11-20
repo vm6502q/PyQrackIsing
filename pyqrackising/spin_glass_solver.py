@@ -29,7 +29,7 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_m):
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
     if not is_spin_glass:
-        best_energy *= -0.5
+        best_energy *= 0.5
     best_state = best_theta.copy()
     best_state[best_index] = not best_state[best_index]
 
@@ -70,7 +70,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count):
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
     if not is_spin_glass:
-        best_energy *= -0.5
+        best_energy *= 0.5
     best_state = states[best_index]
 
     return best_energy, best_state
@@ -101,7 +101,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_m, n, is_spi
         best_energies[i] = energies[idx]
 
     if not is_spin_glass:
-        best_energies[0] *= -0.5
+        best_energies[0] *= 0.5
 
     return best_seeds, best_energies[0]
 
@@ -130,7 +130,7 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
     if not is_spin_glass:
-        best_energy *= -0.5
+        best_energy *= 0.5
     best_state = iterators[best_index]
 
     return best_energy, best_state
