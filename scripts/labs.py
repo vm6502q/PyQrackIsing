@@ -57,6 +57,10 @@ def labs_to_maxcut_adjacency(N: int, lam: float = 5.0) -> np.ndarray:
 
     # No self-loops (diagonal remains zero)
     np.fill_diagonal(A, 0.0)
+
+    # Normalize
+    A /= A.max()
+
     return A
 
 
