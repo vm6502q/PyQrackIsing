@@ -575,18 +575,16 @@ def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
             continue
         o_bit = o_theta[b]
         n_bit = n_theta[b]
-        deltaE_b = 0.0
         for v in range(b):
             v_bit = o_theta[v]
             val = G_func(nodes[b], nodes[v])
-            deltaE_b += -val if o_bit != v_bit else val
-            deltaE_b += val if n_bit != v_bit else -val
+            if o_bit != n_bit:
+                best_energy += -val if n_bit == v_bit else val
         for v in range(b + 1, n):
             v_bit = o_theta[v]
             val = G_func(nodes[b], nodes[v])
-            deltaE_b += -val if o_bit != v_bit else val
-            deltaE_b += val if n_bit != v_bit else -val
-        best_energy += deltaE_b
+            if o_bit != n_bit:
+                best_energy += -val if n_bit == v_bit else val
 
     return best_energy
 
@@ -600,18 +598,16 @@ def compute_energy_diff_between_streaming(o_theta, n_theta, G_func, nodes, n):
             continue
         o_bit = o_theta[b]
         n_bit = n_theta[b]
-        deltaE_b = 0.0
         for v in range(b):
             v_bit = o_theta[v]
             val = 2.0 * G_func(nodes[b], nodes[v])
-            deltaE_b += -val if o_bit != v_bit else val
-            deltaE_b += val if n_bit != v_bit else -val
+            if o_bit != n_bit:
+                best_energy += -val if n_bit == v_bit else val
         for v in range(b + 1, n):
             v_bit = o_theta[v]
             val = 2.0 * G_func(nodes[b], nodes[v])
-            deltaE_b += -val if o_bit != v_bit else val
-            deltaE_b += val if n_bit != v_bit else -val
-        best_energy += deltaE_b
+            if o_bit != n_bit:
+                best_energy += -val if n_bit == v_bit else val
 
     return best_energy
 
