@@ -985,7 +985,8 @@ __kernel void gray(
     // Initialize different seed per thread
     const ulong seed = i ^ (i >> 1);
     ulong diff_mask = 0U;
-    for (int b = 0; b < 64; ++b) {
+    const int max_lcv = (n < 64) ? n : 64;
+    for (int b = 0; b < max_lcv; ++b) {
         const bool bit = (seed >> (63U - b)) & 1U;
         if (!bit) {
             continue;
@@ -998,34 +999,27 @@ __kernel void gray(
     }
 
     real1 best_energy = ZERO_R1;
-    for (int b = 0; b < 64; ++b) {
-        const int u = b + last_block;
+    for (int b = 0; b < max_lcv; ++b) {
+        const int u = b + rem;
         const size_t u_offset = u * n;
         if (!((diff_mask >> b) & 1UL)) {
             continue;
         }
-        const bool o_bit = get_const_long_bit(theta, u);
         const bool n_bit = get_local_bit(theta_local, u);
         for (uint v = 0; v < u; ++v) {
-            bool v_bit = get_const_long_bit(theta, v);
+            const bool v_bit = get_const_long_bit(theta, v);
             real1 val = G_m[u_offset + v];
-            if (is_spin_glass) {
-                val *= 2.0;
-            }
-            if (o_bit != n_bit) {
-                best_energy += (n_bit == v_bit) ? -val : val;
-            }
+            best_energy += (n_bit == v_bit) ? -val : val;
         }
         for (uint v = u + 1; v < n; ++v) {
             bool v_bit = get_const_long_bit(theta, v);
             real1 val = G_m[u_offset + v];
-            if (is_spin_glass) {
-                val *= 2.0;
-            }
-            if (o_bit != n_bit) {
-                best_energy += (n_bit == v_bit) ? -val : val;
-            }
+            best_energy += (n_bit == v_bit) ? -val : val;
         }
+    }
+
+    if (!is_spin_glass) {
+        best_energy *= -ONE_R1 / 2;
     }
 
     for (; i < gray_iterations; i += max_i) {
