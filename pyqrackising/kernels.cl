@@ -931,13 +931,11 @@ __kernel void gray(
         const bool o_u_bit = get_const_long_bit(theta, u);
         const bool n_u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; ++v) {
-            const bool o_v_bit = get_const_long_bit(theta, v);
-            const bool n_v_bit = get_local_bit(theta_local, v);
-            const bool o_diff = o_u_bit != o_v_bit;
-            const bool n_diff = n_u_bit != n_v_bit;
+            const bool o_diff = o_u_bit != get_const_long_bit(theta, v);
+            const bool n_diff = n_u_bit != get_local_bit(theta_local, v);
             if (o_diff != n_diff) {
                 const real1 val = G_m[u_offset + v];
-                best_energy += n_diff ? -val : val;
+                best_energy += n_diff ? val : -val;
             }
         }
     }
@@ -1025,13 +1023,11 @@ __kernel void gray_segmented(
         const bool o_u_bit = get_const_long_bit(theta, u);
         const bool n_u_bit = get_local_bit(theta_local, u);
         for (uint v = u + 1; v < n; ++v) {
-            const bool o_v_bit = get_const_long_bit(theta, v);
-            const bool n_v_bit = get_local_bit(theta_local, v);
-            const bool o_diff = o_u_bit != o_v_bit;
-            const bool n_diff = n_u_bit != n_v_bit;
+            const bool o_diff = o_u_bit != get_const_long_bit(theta, v);
+            const bool n_diff = n_u_bit != get_local_bit(theta_local, v);
             if (o_diff != n_diff) {
                 const real1 val = get_G_m(G_m, u_offset + v, segment_size);
-                best_energy += n_diff ? -val : val;
+                best_energy += n_diff ? val : -val;
             }
         }
     }
