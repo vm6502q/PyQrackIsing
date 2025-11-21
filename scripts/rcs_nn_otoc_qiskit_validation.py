@@ -5,6 +5,7 @@ import math
 import random
 import statistics
 import sys
+import time
 
 from collections import Counter
 
@@ -127,19 +128,22 @@ def bench_qrack(width, depth, cycles):
         otoc &= rcs.inverse()
 
 
+    shots = 1 << (width + 2)
+    qrack_start = time.perf_counter()
     experiment = QrackSimulator(width, isTensorNetwork=False)
     experiment.run_qiskit_circuit(otoc)
+    experiment_counts = dict(Counter(experiment.measure_shots(all_bits, shots)))
+    qrack_end = time.perf_counter()
 
     otoc_aer = otoc.copy()
     otoc_aer.save_statevector()
     control = AerSimulator(method="statevector")
+    aer_start = time.perf_counter()
     job = control.run(otoc_aer)
-
-    shots = 1 << (width + 2)
-    experiment_counts = dict(Counter(experiment.measure_shots(all_bits, shots)))
     control_probs = Statevector(job.result().get_statevector()).probabilities()
+    aer_end = time.perf_counter()
 
-    return calc_stats(control_probs, experiment_counts, d + 1, shots), pauli_strings
+    return calc_stats(control_probs, experiment_counts, d + 1, shots), pauli_strings, { 'qrack_seconds': qrack_end - qrack_start, 'aer_seconds': aer_end - aer_start }
 
 
 def act_string(otoc, string):
