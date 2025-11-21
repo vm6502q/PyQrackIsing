@@ -58,40 +58,6 @@ def acz(sim, q1, q2):
     sim.x(q1)
 
 
-def swap(sim, q1, q2):
-    sim.swap(q1, q2)
-
-
-def iswap(sim, q1, q2):
-    sim.swap(q1, q2)
-    sim.cz(q1, q2)
-    sim.s(q1)
-    sim.s(q2)
-
-
-def iiswap(sim, q1, q2):
-    sim.sdg(q2)
-    sim.sdg(q1)
-    sim.cz(q1, q2)
-    sim.swap(q1, q2)
-
-
-def pswap(sim, q1, q2):
-    sim.cz(q1, q2)
-    sim.swap(q1, q2)
-
-
-def mswap(sim, q1, q2):
-    sim.swap(q1, q2)
-    sim.cz(q1, q2)
-
-
-def nswap(sim, q1, q2):
-    sim.cz(q1, q2)
-    sim.swap(q1, q2)
-    sim.cz(q1, q2)
-
-
 def bench_qrack(width, depth, cycles):
     # This is a "nearest-neighbor" coupler random circuit.
 
@@ -100,7 +66,7 @@ def bench_qrack(width, depth, cycles):
 
     # Nearest-neighbor couplers:
     gateSequence = [0, 3, 2, 1, 2, 1, 0, 3]
-    two_bit_gates = swap, pswap, mswap, nswap, iswap, iiswap, cx, cy, cz, acx, acy, acz
+    two_bit_gates = cx, cy, cz, acx, acy, acz
 
     row_len, col_len = factor_width(width)
 
@@ -136,8 +102,13 @@ def bench_qrack(width, depth, cycles):
                 b1 = row * row_len + col
                 b2 = temp_row * row_len + temp_col
 
-                if (b1 >= width) or (b2 >= width):
+                if (b1 >= width) or (b2 >= width) or (b1 == b2):
                     continue
+
+                if d & 1:
+                    t = b1
+                    b1 = b2
+                    b2 = t
 
                 g = random.choice(two_bit_gates)
                 g(rcs, b1, b2)
