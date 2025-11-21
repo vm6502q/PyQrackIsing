@@ -169,6 +169,7 @@ def calc_stats(ideal_probs, counts, depth, shots):
     numer = 0
     denom = 0
     sum_hog_counts = 0
+    sqr_diff = 0
     for i in range(n_pow):
         count = counts[i] if i in counts else 0
         ideal = ideal_probs[i]
@@ -176,6 +177,9 @@ def calc_stats(ideal_probs, counts, depth, shots):
         # XEB / EPLG
         denom += (ideal - u_u) ** 2
         numer += (ideal - u_u) * ((count / shots) - u_u)
+
+        # L2 norm
+        sqr_diff += (ideal - count / shots) ** 2
 
         # QV / HOG
         if ideal > threshold:
@@ -187,12 +191,14 @@ def calc_stats(ideal_probs, counts, depth, shots):
     p_val = (
         (1 - binom.cdf(sum_hog_counts - 1, shots, 1 / 2)) if sum_hog_counts > 0 else 1
     )
+    rss = math.sqrt(sqr_diff)
 
     return {
         "qubits": n,
         "depth": depth,
         "xeb": float(xeb),
         "hog_prob": float(hog_prob),
+        "l2_diff": float(rss),
         "p-value": float(p_val),
     }
 
