@@ -156,7 +156,7 @@ def bench_qrack(width, depth, cycles):
         otoc &= rcs.inverse()
 
 
-    experiment = QrackSimulator(width)
+    experiment = QrackSimulator(width, isTensorNetwork=False)
     experiment.run_qiskit_circuit(otoc)
 
     otoc_aer = otoc.copy()
