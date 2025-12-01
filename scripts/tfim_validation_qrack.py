@@ -94,6 +94,8 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
     diff_sqr = 0
     z_fidelity = 0
     sum_hog_counts = 0
+    magnetization = 0
+    sqr_magnetization = 0
     # total = 0
     # hamming_bias = [0.0] * (n + 1)
     for i in range(n_pow):
@@ -111,6 +113,10 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
+
+        mag = 1.0 - 2 * hamming_weight / n
+        magnetization += count * mag
+        sqr_magnetization += count * mag * mag
 
         # QV / HOG
         if ideal > threshold:
@@ -140,6 +146,8 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
         "z_fidelity": float(z_fidelity),
         "hog_prob": sum_hog_counts,
         "xeb": xeb,
+        "magnetization": magnetization,
+        "sqr_magnetization": sqr_magnetization
     }
 
 
@@ -218,8 +226,6 @@ def main():
     n_qubits = 8
     depth = 20
     t1 = 0
-    t2 = 1
-    omega = 1.5
 
     # Quantinuum settings
     J, h, dt, z = -1.0, 2.0, 0.25, 4
@@ -255,10 +261,7 @@ def main():
         trials = 8 if t1 > 0 else 1
 
     print("t1: " + str(t1))
-    print("t2: " + str(t2))
-    print("omega / pi: " + str(omega))
 
-    omega *= math.pi
     n_rows, n_cols = factor_width(n_qubits, False)
     qubits = list(range(n_qubits))
 
@@ -276,20 +279,7 @@ def main():
     control.run_qiskit_circuit(qc_aer)
     control_probs = control.out_probs()
 
-    n_bias = n_qubits + 1
     bias_0 = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits)
-    qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits, shots=shots)))
-    for key in qrack_probs.keys():
-        qrack_probs[key] /= shots
-
-    sqr_magnetization_0 = 0
-    for key, value in qrack_probs.items():
-        m = 0
-        for _ in range(n_qubits):
-            m += -1 if key & 1 else 1
-            key >>= 1
-        m /= n_qubits
-        sqr_magnetization_0 += value * m * m
 
     c_sqr_magnetization = 0
     for p in range(1 << n_qubits):
@@ -301,10 +291,6 @@ def main():
         m /= n_qubits
         c_sqr_magnetization += control_probs[p] * m * m
 
-    # Save the sum of squares and sum of square residuals on the magnetization curve values.
-    ss = c_sqr_magnetization**2
-    ssr = (c_sqr_magnetization - sqr_magnetization_0) ** 2
-
     result = calc_stats(
         n_rows,
         n_cols,
@@ -315,6 +301,11 @@ def main():
 
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
+    sqr_magnetization_0 = result["sqr_magnetization"]
+
+    # Save the sum of squares and sum of square residuals on the magnetization curve values.
+    ss = c_sqr_magnetization**2
+    ssr = (c_sqr_magnetization - sqr_magnetization_0) ** 2
 
     qc_aer = QuantumCircuit(n_qubits)
     trotter_step(qc_aer, qubits, (n_rows, n_cols), J, h, dt)
@@ -325,44 +316,15 @@ def main():
         basis_gates=basis_gates
     )
 
-    r_squared = 0
-    ss = 0
-    ssr = 0
     for d in range(1, depth + 1):
+        t = d * dt
+
         # For each depth step, we append an additional Trotter step to Aer's circuit.
         control.run_qiskit_circuit(qc_aer)
         control_probs = control.out_probs()
 
-        # This section calculates the geometric series weight per Hamming weight, with oscillating time dependence.
-        # The mean-field ground state is encapsulated as a multiplier on the geometric series exponent.
-        # Additionally, this same mean-field exponent is the amplitude of time-dependent oscillation (also in the geometric series exponent).
-        t = d * dt
-        # Determine how to weight closed-form vs. conventional simulation contributions:
-        model = (1 - math.exp(-t / t1)) if (t1 > 0) else 1
-
-        # "p" is the exponent of the geometric series weighting, for (n+1) dimensions of Hamming weight.
-        # Notice that the expected symmetries are respected under reversal of signs of J and/or h.
-        zJ = z * J
-        theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) <= sys.float_info.epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
-
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
         bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
-        qrack_probs = dict(Counter(generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)))
-        for key in qrack_probs.keys():
-            qrack_probs[key] /= shots
-
-        d_sqr_magnetization = 0
-        for key, value in qrack_probs.items():
-            m = 0
-            for _ in range(n_qubits):
-                m += -1 if key & 1 else 1
-                key >>= 1
-            m /= n_qubits
-            d_sqr_magnetization += value * m * m
-
-        # Mix in the initial state component.
-        bias = model * bias + (1 - model) * bias_0
-        sqr_magnetization = model * d_sqr_magnetization + (1 - model) * sqr_magnetization_0
 
         # The full 2^n marginal probabilities will be produced in the statistics calculation,
         # but notice that the global magnetization value only requires (n+1) dimensions of marginal probability,
@@ -378,6 +340,7 @@ def main():
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2
+        sqr_magnetization = result["sqr_magnetization"]
 
         # Calculate the "control-case" magnetization values, from Aer's samples.
         c_magnetization, c_sqr_magnetization = 0, 0
