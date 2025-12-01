@@ -115,10 +115,6 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
 
-        mag = 1.0 - 2 * hamming_weight / n
-        magnetization += count * mag
-        sqr_magnetization += count * mag * mag
-
         # QV / HOG
         if ideal > threshold:
             sum_hog_counts += count
@@ -146,9 +142,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
         "l2_difference": float(l2_difference),
         "z_fidelity": float(z_fidelity),
         "hog_prob": sum_hog_counts,
-        "xeb": xeb,
-        "magnetization": magnetization,
-        "sqr_magnetization": sqr_magnetization
+        "xeb": xeb
     }
 
 
@@ -308,7 +302,12 @@ def main():
 
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
-    sqr_magnetization_0 = result["sqr_magnetization"]
+
+    magnetization_0, sqr_magnetization_0 = 0, 0
+    for hamming_weight, value in enumerate(bias_0):
+        m = 1.0 - 2 * hamming_weight / n_qubits
+        magnetization_0 += value * m
+        sqr_magnetization_0 += value * m * m
 
     # Save the sum of squares and sum of square residuals on the magnetization curve values.
     ss = c_sqr_magnetization**2
@@ -359,7 +358,12 @@ def main():
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2
-        sqr_magnetization = result["sqr_magnetization"]
+
+        magnetization, sqr_magnetization = 0, 0
+        for hamming_weight, value in enumerate(bias):
+            m = 1.0 - 2 * hamming_weight / n_qubits
+            magnetization += value * m
+            sqr_magnetization += value * m * m
 
         # Calculate the "control-case" magnetization values, from Aer's samples.
         c_magnetization, c_sqr_magnetization = 0, 0
