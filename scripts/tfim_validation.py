@@ -246,8 +246,6 @@ def main():
         dt = float(sys.argv[3])
     if len(sys.argv) > 4:
         t1 = float(sys.argv[4])
-    else:
-        t1 = dt
     if len(sys.argv) > 5:
         shots = int(sys.argv[5])
     else:
