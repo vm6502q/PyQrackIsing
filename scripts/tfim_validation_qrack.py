@@ -299,7 +299,7 @@ def main():
     if xeb > 1.0:
         # Rectify, to penalize values greater than 1.0
         xeb -= xeb - 1.0
-    r_squared_xeb = (1.0 - xeb) ** 2
+    r_squared_xeb = 1.0 - xeb
 
     magnetization_0, sqr_magnetization_0 = 0, 0
     for hamming_weight, value in enumerate(bias_0):
@@ -348,7 +348,7 @@ def main():
         if xeb > 1.0:
             # Rectify, to penalize values greater than 1.0
             xeb -= xeb - 1.0
-        r_squared_xeb += (1.0 - xeb) ** 2
+        r_squared_xeb += 1.0 - xeb
 
         magnetization, sqr_magnetization = 0, 0
         for hamming_weight, value in enumerate(bias):
