@@ -295,11 +295,7 @@ def main():
 
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
-    xeb = result["xeb"]
-    if xeb > 1.0:
-        # Rectify, to penalize values greater than 1.0
-        xeb -= xeb - 1.0
-    r_squared_xeb = 1.0 - xeb
+    r_squared_xeb = (1.0 - result["xeb"]) ** 2
 
     magnetization_0, sqr_magnetization_0 = 0, 0
     for hamming_weight, value in enumerate(bias_0):
@@ -344,11 +340,7 @@ def main():
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2
-        xeb = result["xeb"]
-        if xeb > 1.0:
-            # Rectify, to penalize values greater than 1.0
-            xeb -= xeb - 1.0
-        r_squared_xeb += 1.0 - xeb
+        r_squared_xeb += (1.0 - result["xeb"]) ** 2
 
         magnetization, sqr_magnetization = 0, 0
         for hamming_weight, value in enumerate(bias):
@@ -380,7 +372,7 @@ def main():
     sm_r_squared = 1.0 - (ssr / ss)
 
     print("L2 norm similarity R^2: " + str(r_squared))
-    print("Rectified XEB R^2: " + str(r_squared_xeb))
+    print("XEB R^2: " + str(r_squared_xeb))
     print("Square magnetization RMSE: " + str(rmse))
     print("Square magnetization R^2: " + str(sm_r_squared))
 
