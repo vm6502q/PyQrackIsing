@@ -16,7 +16,7 @@ from qiskit.compiler import transpile
 
 from pyqrack import QrackSimulator
 
-from pyqrackising import generate_tfim_samples, get_tfim_hamming_distribution
+from pyqrackising import get_tfim_hamming_distribution
 
 
 # Factor the qubit width for torus dimensions that are close as possible to square
