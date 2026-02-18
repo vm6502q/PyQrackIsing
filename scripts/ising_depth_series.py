@@ -14,7 +14,7 @@ from scipy.stats import distributions as dists
 import matplotlib.pyplot as plt
 
 from qiskit import QuantumCircuit
-from qiskit.circuit.library import RZZGate, RXGate
+from qiskit.circuit.library import RZZGate
 from qiskit.compiler import transpile
 
 from pyqrack import QrackSimulator
