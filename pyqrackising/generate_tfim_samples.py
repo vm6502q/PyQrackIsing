@@ -109,7 +109,7 @@ def fix_cdf(hamming_prob):
 
 
 @njit
-def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega =1.5*np.pi):
+def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega=1.5*np.pi):
     if abs(t) <= epsilon:
         p = (1.0 - np.cos(theta)) / 2.0
         bias = np.empty(n_qubits + 1, dtype=np.float64)
