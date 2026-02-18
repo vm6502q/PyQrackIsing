@@ -600,7 +600,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, om
 
 
 @njit
-def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult, omega=1.5 * np.pi):
+def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult, omega=1.5*np.pi):
     n_steps = 1 << quality
     delta_t = tot_t / n_steps
     n_bias = n_qubits + 1
