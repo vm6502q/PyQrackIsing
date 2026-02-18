@@ -569,13 +569,13 @@ def init_thresholds(n_qubits):
 
 
 @njit
-def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True):
+def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega = 1.5 * np.pi):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
     p = (
         2.0 ** (abs(J / h) - 1.0)
-        * (1.0 + np.sin(theta - theta_c) * np.cos(1.5 * np.pi * J * t + theta) / (1.0 + np.sqrt(t)))
+        * (1.0 + np.sin(theta - theta_c) * np.cos(omega * J * t + theta) / (1.0 + np.sqrt(t)))
         - 0.5
     )
 

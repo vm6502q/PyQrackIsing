@@ -1,4 +1,4 @@
-from .generate_tfim_samples import generate_tfim_samples, get_tfim_hamming_distribution
+from .generate_tfim_samples import generate_tfim_samples, get_tfim_hamming_distribution, generate_fh_samples, get_fh_hamming_distribution
 from .tfim_magnetization import tfim_magnetization
 from .tfim_square_magnetization import tfim_square_magnetization
 from .otoc import generate_otoc_samples, get_otoc_hamming_distribution
