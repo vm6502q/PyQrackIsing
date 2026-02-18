@@ -109,7 +109,7 @@ def fix_cdf(hamming_prob):
 
 
 @njit
-def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56):
+def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega=1.5*np.pi):
     if abs(t) <= epsilon:
         p = (1.0 - np.cos(theta)) / 2.0
         bias = np.empty(n_qubits + 1, dtype=np.float64)
@@ -126,13 +126,13 @@ def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
             bias[0] = 1.0
         return bias
 
-    bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+    bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, normalized=True, omega=omega)
 
     return bias / bias.sum()
 
 
 def generate_tfim_samples(
-    J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100
+    J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5*np.pi
 ):
     samples = []
 
@@ -151,7 +151,7 @@ def generate_tfim_samples(
     n_rows, n_cols = factor_width(n_qubits)
 
     # First dimension: Hamming weight
-    bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
+    bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, omega=omega)
     thresholds = fix_cdf(bias)
     hamming_samples = dict(Counter(sample_hamming_weight(thresholds, shots)))
 
