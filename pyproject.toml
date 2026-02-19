@@ -1,16 +1,13 @@
 [build-system]
 requires = [
     "setuptools",
-    "networkx",
-    "numpy",
-    "numba",
-    "scipy"
+    "wheel"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyqrackising"
-version = "9.10.0"
+version = "9.10.1"
 requires-python = ">=3.8"
 description = "Fast MAXCUT, TSP, and sampling heuristics from near-ideal transverse field Ising model (TFIM)"
 readme = {file = "README.txt", content-type = "text/markdown"}
@@ -30,6 +27,12 @@ classifiers=[
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering",
+]
+dependencies=[
+    "networkx",
+    "numpy",
+    "numba",
+    "scipy"
 ]
 
 [project.urls]
