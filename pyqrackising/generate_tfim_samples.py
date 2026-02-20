@@ -1,6 +1,7 @@
 from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
 import itertools
 import math
+import random
 import sys
 import numpy as np
 from numba import njit
@@ -9,6 +10,122 @@ from collections import Counter
 
 
 epsilon = opencl_context.epsilon
+
+
+# Fixed-Hamming-weight Kawasaki swaps with acceptance probability, by Elara
+def random_fixed_hamming_state(n_qubits, h):
+    bits = np.zeros(n_qubits, dtype=np.bool_)
+    bits[:h] = True
+    np.random.shuffle(bits)
+    state = 0
+    for b in bits:
+        state <<= 1
+        if b:
+            state |= 1
+
+    return state
+
+
+def build_neighbors(n_rows, n_cols):
+    L = n_rows * n_cols
+    neighbors = [[] for _ in range(L)]
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            idx = i * n_cols + j
+
+            right = i * n_cols + ((j + 1) % n_cols)
+            left = i * n_cols + ((j - 1) % n_cols)
+            down = ((i + 1) % n_rows) * n_cols + j
+            up = ((i - 1) % n_rows) * n_cols + j
+
+            neighbors[idx] = [right, left, down, up]
+
+    return neighbors
+
+
+def count_like_edges(state, neighbors):
+    like = 0
+    visited = set()
+
+    for i, nbrs in enumerate(neighbors):
+        si = (state >> i) & 1
+        for j in nbrs:
+            if (j, i) in visited:
+                continue
+            sj = (state >> j) & 1
+            if si == sj:
+                like += 1
+            visited.add((i, j))
+
+    return like
+
+
+def delta_like_edges(state, i, j, neighbors):
+    si = (state >> i) & 1
+    sj = (state >> j) & 1
+
+    delta = 0
+
+    for idx in [i, j]:
+        s_old = (state >> idx) & 1
+
+        for nbr in neighbors[idx]:
+            if nbr == i or nbr == j:
+                continue
+
+            s_nbr = (state >> nbr) & 1
+
+            old_like = s_old == s_nbr
+            new_spin = sj if idx == i else si
+            new_like = new_spin == s_nbr
+
+            delta += int(new_like) - int(old_like)
+
+    # handle edge between i and j if neighbors
+    if j in neighbors[i]:
+        old_like = si == sj
+        new_like = sj == si
+        delta += int(new_like) - int(old_like)
+
+    return delta
+
+
+def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
+    n_qubits = n_rows * n_cols
+    neighbors = build_neighbors(n_rows, n_cols)
+
+    like_edges = 0
+    while like_edges == 0:
+        state = random_fixed_hamming_state(n_qubits, h_weight)
+        like_edges = count_like_edges(state, neighbors)
+
+    samples = []
+
+    total_steps = burnin * count + count
+
+    for step in range(total_steps):
+        # choose random 1-bit and 0-bit
+        ones = [i for i in range(n_qubits) if (state >> i) & 1]
+        zeros = [i for i in range(n_qubits) if not (state >> i) & 1]
+
+        i = random.choice(ones)
+        j = random.choice(zeros)
+
+        delta = delta_like_edges(state, i, j, neighbors)
+        new_like = like_edges + delta
+
+        if new_like > 0:
+            accept_prob = new_like / like_edges
+            if np.random.random() < accept_prob:
+                state ^= 1 << i
+                state ^= 1 << j
+                like_edges = new_like
+
+        if step >= burnin * count:
+            samples.append(state)
+
+    return samples
 
 
 @njit
@@ -44,120 +161,6 @@ def fix_cdf(hamming_prob):
     cum_prob[-1] = 1.0
 
     return cum_prob
-
-
-# Fixed-Hamming-weight Kawasaki swaps with acceptance probability, by Elara
-@njit
-def random_fixed_hamming_state(n_qubits, h):
-    bits = np.zeros(n_qubits, dtype=np.uint8)
-    bits[:h] = 1
-    np.random.shuffle(bits)
-    state = 0
-    for b in bits:
-        state = (state << 1) | int(b)
-    return state
-
-
-@njit
-def build_neighbors(n_rows, n_cols):
-    L = n_rows * n_cols
-    neighbors = np.empty((L, 4), dtype=np.int32)
-
-    for i in range(n_rows):
-        for j in range(n_cols):
-            idx = i * n_cols + j
-
-            neighbors[idx][0] = i * n_cols + ((j + 1) % n_cols)
-            neighbors[idx][1] = i * n_cols + ((j - 1) % n_cols)
-            neighbors[idx][2] = ((i + 1) % n_rows) * n_cols + j
-            neighbors[idx][3] = ((i - 1) % n_rows) * n_cols + j
-
-    return neighbors
-
-
-@njit
-def count_like_edges(state, neighbors):
-    like = 0
-    visited = set()
-
-    for i, nbrs in enumerate(neighbors):
-        si = (state >> i) & 1
-        for j in nbrs:
-            if (j, i) in visited:
-                continue
-            sj = (state >> j) & 1
-            if si == sj:
-                like += 1
-            visited.add((i, j))
-
-    return like
-
-
-@njit
-def delta_like_edges(state, i, j, neighbors):
-    si = (state >> i) & 1
-    sj = (state >> j) & 1
-
-    delta = 0
-
-    for idx in [i, j]:
-        s_old = (state >> idx) & 1
-
-        for nbr in neighbors[idx]:
-            if nbr == i or nbr == j:
-                continue
-
-            s_nbr = (state >> nbr) & 1
-
-            old_like = s_old == s_nbr
-            new_spin = sj if idx == i else si
-            new_like = new_spin == s_nbr
-
-            delta += int(new_like) - int(old_like)
-
-    # handle edge between i and j if neighbors
-    if j in neighbors[i]:
-        old_like = si == sj
-        new_like = sj == si
-        delta += int(new_like) - int(old_like)
-
-    return delta
-
-
-@njit
-def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
-    n_qubits = n_rows * n_cols
-    neighbors = build_neighbors(n_rows, n_cols)
-
-    state = random_fixed_hamming_state(n_qubits, h_weight)
-    like_edges = count_like_edges(state, neighbors)
-
-    samples = []
-
-    total_steps = burnin * count + count
-
-    for step in range(total_steps):
-        # choose random 1-bit and 0-bit
-        ones = np.array([i for i in range(n_qubits) if (state >> i) & 1])
-        zeros = np.array([i for i in range(n_qubits) if not (state >> i) & 1])
-
-        i = np.random.choice(ones)
-        j = np.random.choice(zeros)
-
-        delta = delta_like_edges(state, i, j, neighbors)
-        new_like = like_edges + delta
-
-        if new_like > 0:
-            accept_prob = new_like / like_edges
-            if np.random.random() < accept_prob:
-                state ^= 1 << i
-                state ^= 1 << j
-                like_edges = new_like
-
-        if step >= burnin * count:
-            samples.append(state)
-
-    return samples
 
 
 @njit
@@ -204,9 +207,19 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
     counts = np.random.multinomial(shots, bias)
 
+    samples += [0] * counts[0]
+    samples += [(1 << n_qubits) - 1] * counts[-1]
+    if n_qubits > 1:
+        samples += [int(1 << np.random.randint(n_qubits)) for _ in range(counts[1])]
+    if n_qubits > 2:
+        mask = (1 << n_qubits) - 1
+        samples += [(mask ^ int(1 << np.random.randint(n_qubits))) for _ in range(counts[-2])]
+
     # Second dimension: magnetic localization
-    for h_weight in range(len(counts)):
+    for h_weight in range(2, len(bias) - 2):
         samples += sample_fixed_hamming_weight(h_weight, counts[h_weight], n_rows, n_cols)
+
+    np.random.shuffle(samples)
 
     return samples
 
