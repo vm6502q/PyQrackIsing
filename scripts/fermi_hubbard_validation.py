@@ -19,7 +19,7 @@ from qiskit_aer.backends import AerSimulator
 from qiskit.quantum_info import Statevector
 
 from pyqrack import QrackSimulator
-from pyqrackising import generate_tfim_samples
+from pyqrackising import generate_fermi_hubbard_samples
 
 
 def factor_width(width, is_transpose=False):
@@ -112,7 +112,7 @@ def init_beta(n_qubits):
     return thresholds
 
 
-def calc_stats(ideal_probs, init_probs, ace_probs, pqi_probs, alpha, beta, shots):
+def calc_stats(ideal_probs, pqi_probs, shots):
     # For QV, we compare probabilities of (ideal) "heavy outputs."
     # If the probability is above 2/3, the protocol certifies/passes the qubit width.
     n_pow = len(ideal_probs)
@@ -127,10 +127,7 @@ def calc_stats(ideal_probs, init_probs, ace_probs, pqi_probs, alpha, beta, shots
     ideal_sqr_mag = 0
     exp_sqr_mag = 0
     for i in range(n_pow):
-        init_prob = init_probs.get(i, 0)
-        ace_prob = ace_probs.get(i, 0)
-        pqi_prob = pqi_probs.get(i, 0)
-        exp = (1.0 - beta) * (alpha * ace_prob + (1.0 - alpha) * pqi_prob) + beta * init_prob
+        exp = pqi_probs.get(i, 0)
         ideal = ideal_probs[i]
 
         # L2 distance
@@ -180,7 +177,8 @@ def normalize_counts(counts, shots):
 
 def main():
     n_qubits = 6
-    depth = 40
+    # Limit to non-equilibrium depths
+    depth = 10
     z = 4
 
     # Quantinuum settings
@@ -201,64 +199,30 @@ def main():
 
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
-
-    if os.environ['QRACK_MAX_PAGING_QB'] and (int(os.environ['QRACK_MAX_PAGING_QB']) < n_qubits):
-        alpha = 0.0
-        beta = 0.0
-    else:
-        alpha = 1.0
-        beta = 0.0
-
     if len(sys.argv) > 2:
         depth = int(sys.argv[2])
     if len(sys.argv) > 3:
         dt = float(sys.argv[3])
     if len(sys.argv) > 4:
-        alpha = float(sys.argv[4])
-        alpha = min(max(alpha, 0), 1)
-    if len(sys.argv) > 5:
-        beta = float(sys.argv[5])
-        beta = min(max(beta, 0), 1)
-    if len(sys.argv) > 6:
-        t2 = float(sys.argv[6])
-    else:
-        t2 = 1.0
-    if len(sys.argv) > 7:
-        shots = int(sys.argv[7])
+        shots = int(sys.argv[4])
     else:
         shots = max(65536, 1 << (n_qubits + 2))
 
-    dt_h = dt / t2
-
     print(f"Qubits: {n_qubits}")
-    print(f"Subsystem size: {os.environ['QRACK_MAX_PAGING_QB']}")
-    print(f"alpha: {alpha}")
-    print(f"beta: {beta}")
-    print(f"t2: {t2}")
 
     n_rows, n_cols = factor_width(n_qubits, False)
     qubits = list(range(n_qubits))
-
-    shots_x, shots_y, shots_z = np.random.multinomial(shots, [1/3, 1/3, 1/3])
-    init_probs = normalize_counts(dict(Counter(
-        generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=0, n_qubits=n_qubits, shots=shots_z) +
-            generate_tfim_samples(J=-h, h=-J, z=z, theta=theta+np.pi/2, t=0, n_qubits=n_qubits, shots=shots_x) +
-            generate_tfim_samples(J=J, h=h, z=z, theta=theta+np.pi/2, t=0, n_qubits=n_qubits, shots=shots_y)
-    )), shots)
 
     # Set the initial temperature by theta.
     qc_aer = QuantumCircuit(n_qubits)
     for q in range(n_qubits):
         qc_aer.ry(theta, q)
 
-    qc_step = brick_wall_tfim_step(n_rows, n_cols, J, h, dt_h)
+    qc_step = brick_wall_tfim_step(n_rows, n_cols, J, h, dt)
     qc_step = transpile(
         qc_step,
         basis_gates=QrackSimulator.get_qiskit_basis_gates(),
     )
-
-    experiment = QrackSimulator(n_qubits)
-    experiment.run_qiskit_circuit(qc_aer)
 
     control = AerSimulator(method="statevector")
 
@@ -270,7 +234,6 @@ def main():
 
     for d in range(1, depth + 1):
         t = d * dt
-        t_h = t / t2
 
         # Run the Trotterized simulation with Aer and get the marginal probabilities.
         qc_aer = qc_aer.compose(qc_step)
@@ -279,18 +242,12 @@ def main():
         job = control.run(qc_aer_sv)
         ideal_probs = Statevector(job.result().get_statevector()).probabilities()
 
-        experiment.run_qiskit_circuit(qc_step)
-        ace_probs = normalize_counts(dict(Counter(experiment.measure_shots(qubits, shots))), shots)
-
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
-        shots_x, shots_y, shots_z = np.random.multinomial(shots, [1/3, 1/3, 1/3])
         pqi_probs = normalize_counts(dict(Counter(
-            generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots_z) +
-            generate_tfim_samples(J=-h, h=-J, z=z, theta=theta+np.pi/2, t=t, n_qubits=n_qubits, shots=shots_x) +
-            generate_tfim_samples(J=J, h=h, z=z, theta=theta+np.pi/2, t=t, n_qubits=n_qubits, shots=shots_y)
+            generate_fermi_hubbard_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)
         )), shots)
 
-        result = calc_stats(ideal_probs, init_probs, ace_probs, pqi_probs, alpha, beta, shots)
+        result = calc_stats(ideal_probs, pqi_probs, shots)
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2

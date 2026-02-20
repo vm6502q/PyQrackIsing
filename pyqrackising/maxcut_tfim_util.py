@@ -34,12 +34,13 @@ class OpenCLContext:
         self.gray_sparse_kernel = u
         self.gray_sparse_segmented_kernel = v
 
+
 IS_OPENCL_AVAILABLE = True
 ctx = None
 queue = None
 compute_units = None
 dtype = np.float32
-epsilon = 2 ** -23
+epsilon = 2**-23
 work_group_size = 32
 max_alloc = 0xFFFFFFFFFFFFFFFF
 calculate_cut_kernel = None
@@ -59,11 +60,11 @@ gray_segmented_kernel = None
 gray_sparse_kernel = None
 gray_sparse_segmented_kernel = None
 
-dtype_bits = int(os.getenv('PYQRACKISING_FPPOW', '5'))
-kernel_src = ''
+dtype_bits = int(os.getenv("PYQRACKISING_FPPOW", "5"))
+kernel_src = ""
 if dtype_bits <= 4:
     dtype = np.float16
-    epsilon = 2 ** -10
+    epsilon = 2**-10
     kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n"
     kernel_src += "#define FP16 1\n"
     kernel_src += "#define real1 half\n"
@@ -74,7 +75,7 @@ if dtype_bits <= 4:
     kernel_src += "#define TWO_R1 ((half)2.0f)\n"
 elif dtype_bits >= 6:
     dtype = np.float64
-    epsilon = 2 ** -52
+    epsilon = 2**-52
     kernel_src += "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n"
     kernel_src += "#define real1 double\n"
     kernel_src += "#define qint long\n"
@@ -84,7 +85,7 @@ elif dtype_bits >= 6:
     kernel_src += "#define TWO_R1 2.0\n"
 else:
     dtype = np.float32
-    epsilon = 2 ** -23
+    epsilon = 2**-23
     kernel_src += "#define real1 float\n"
     kernel_src += "#define qint int\n"
     kernel_src += "#define EPSILON FLT_EPSILON\n"
@@ -97,11 +98,16 @@ try:
     import warnings
 
     warnings.simplefilter("ignore", cl.CompilerWarning)
-    
+
     # Pick a device (GPU if available)
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
-    compute_units = int(os.getenv('PYQRACKISING_MAX_GPU_PROC_ELEM', str(ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS))))
+    compute_units = int(
+        os.getenv(
+            "PYQRACKISING_MAX_GPU_PROC_ELEM",
+            str(ctx.devices[0].get_info(cl.device_info.MAX_COMPUTE_UNITS)),
+        )
+    )
 
     # Load and build OpenCL kernels
     kernel_src += open(os.path.dirname(os.path.abspath(__file__)) + "/kernels.cl").read()
@@ -123,17 +129,39 @@ try:
     gray_sparse_kernel = program.gray_sparse
     gray_sparse_segmented_kernel = program.gray_sparse_segmented
 
-    work_group_size = calculate_cut_kernel.get_work_group_info(
-        cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
-        ctx.devices[0]
-    )
+    work_group_size = calculate_cut_kernel.get_work_group_info(cl.kernel_work_group_info.PREFERRED_WORK_GROUP_SIZE_MULTIPLE, ctx.devices[0])
 
     max_alloc = ctx.devices[0].get_info(cl.device_info.MAX_MEM_ALLOC_SIZE)
 except ImportError:
     IS_OPENCL_AVAILABLE = False
     print("PyOpenCL not installed. (If you have any OpenCL accelerator devices with available ICDs, you might want to optionally install pyopencl.)")
 
-opencl_context = OpenCLContext(compute_units, IS_OPENCL_AVAILABLE, work_group_size, dtype, epsilon, max_alloc, ctx, queue, calculate_cut_kernel, calculate_cut_sparse_kernel, calculate_cut_segmented_kernel, calculate_cut_sparse_segmented_kernel, single_bit_flips_kernel, single_bit_flips_sparse_kernel, single_bit_flips_segmented_kernel, single_bit_flips_sparse_segmented_kernel, double_bit_flips_kernel, double_bit_flips_sparse_kernel, double_bit_flips_segmented_kernel, double_bit_flips_sparse_segmented_kernel, gray_kernel, gray_segmented_kernel, gray_sparse_kernel, gray_sparse_segmented_kernel)
+opencl_context = OpenCLContext(
+    compute_units,
+    IS_OPENCL_AVAILABLE,
+    work_group_size,
+    dtype,
+    epsilon,
+    max_alloc,
+    ctx,
+    queue,
+    calculate_cut_kernel,
+    calculate_cut_sparse_kernel,
+    calculate_cut_segmented_kernel,
+    calculate_cut_sparse_segmented_kernel,
+    single_bit_flips_kernel,
+    single_bit_flips_sparse_kernel,
+    single_bit_flips_segmented_kernel,
+    single_bit_flips_sparse_segmented_kernel,
+    double_bit_flips_kernel,
+    double_bit_flips_sparse_kernel,
+    double_bit_flips_segmented_kernel,
+    double_bit_flips_sparse_segmented_kernel,
+    gray_kernel,
+    gray_segmented_kernel,
+    gray_sparse_kernel,
+    gray_sparse_segmented_kernel,
+)
 heuristic_threshold = 24
 heuristic_threshold_sparse = 23
 
@@ -150,7 +178,9 @@ def setup_opencl(l, g, args_np, is_gray=False):
 
     # Group sizes
     local_size = min(wgs, l)
-    max_global_size = ((opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
+    max_global_size = (
+        (opencl_context.MAX_GPU_PROC_ELEM + local_size - 1) // local_size
+    ) * local_size  # corresponds to MAX_PROC_ELEM macro in OpenCL kernel program
     global_size = min(((g + local_size - 1) // local_size) * local_size, max_global_size)
 
     max_energy_host = np.empty(global_size // local_size, dtype=dtype)
@@ -160,7 +190,15 @@ def setup_opencl(l, g, args_np, is_gray=False):
         max_theta_host = np.empty(((args_np[0] + 63) // 64) * (global_size // local_size), dtype=np.int64)
         max_theta_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_theta_host.nbytes)
 
-        return local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf
+        return (
+            local_size,
+            global_size,
+            args_buf,
+            max_energy_host,
+            max_theta_host,
+            max_energy_buf,
+            max_theta_buf,
+        )
 
     # Local memory allocation (1 float per work item)
     local_energy_buf = cl.LocalMemory(np.dtype(dtype).itemsize * local_size)
@@ -170,7 +208,17 @@ def setup_opencl(l, g, args_np, is_gray=False):
     max_index_host = np.empty(global_size // local_size, dtype=np.int32)
     max_index_buf = cl.Buffer(ctx, mf.WRITE_ONLY, max_index_host.nbytes)
 
-    return local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf
+    return (
+        local_size,
+        global_size,
+        args_buf,
+        local_energy_buf,
+        local_index_buf,
+        max_energy_host,
+        max_index_host,
+        max_energy_buf,
+        max_index_buf,
+    )
 
 
 def make_G_m_buf(G_m, is_segmented, segment_size):
@@ -183,10 +231,7 @@ def make_G_m_buf(G_m, is_segmented, segment_size):
         if n_shape != o_shape:
             np.resize(_G_m, (n_shape,))
         G_m_segments = np.split(_G_m, 4)
-        G_m_buf = [
-            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in G_m_segments
-        ]
+        G_m_buf = [cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg) for seg in G_m_segments]
     else:
         G_m_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=G_m)
 
@@ -205,10 +250,7 @@ def make_G_m_csr_buf(G_m, is_segmented, segment_size):
         if n_shape != o_shape:
             np.resize(_G_data, (n_shape,))
         G_data_segments = np.split(_G_data, 4)
-        G_data_buf = [
-            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in G_data_segments
-        ]
+        G_data_buf = [cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg) for seg in G_data_segments]
         _G_data = None
         _G_data_segments = None
     else:
@@ -224,10 +266,7 @@ def make_theta_buf(theta, is_segmented, shots, n):
         n_shape = (((shots + 3) >> 2) << 2) * ((n + 31) >> 5)
         theta = np.reshape(theta, (n_shape,))
         theta_segments = np.split(theta, 4)
-        theta_buf = [
-            cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg)
-            for seg in theta_segments
-        ]
+        theta_buf = [cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=seg) for seg in theta_segments]
     else:
         theta_buf = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta)
 
@@ -246,6 +285,7 @@ def make_best_theta_buf(theta):
     theta_buf = cl.Buffer(opencl_context.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=theta_np)
 
     return theta_buf
+
 
 def make_best_theta_buf_64(theta):
     n = theta.shape[0]
@@ -530,7 +570,7 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
         for v in range(u + 1, n_nodes):
             v_node = nodes[v]
             if G.has_edge(u_node, v_node):
-                lil[u, v] = G[u_node][v_node].get('weight', 1.0)
+                lil[u, v] = G[u_node][v_node].get("weight", 1.0)
 
     return lil.tocsr()
 
@@ -569,16 +609,11 @@ def init_thresholds(n_qubits):
 
 
 @njit
-def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega=1.5*np.pi):
+def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega=1.5 * np.pi):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
-    p = (
-        2.0 ** (abs(J / h) - 1.0)
-        * (1.0 + np.sin(theta - theta_c) * np.cos(omega * J * t + theta) / (1.0 + np.sqrt(t)))
-        - 0.5
-    )
-
+    p = 2.0 ** (abs(J / h) - 1.0) * (1.0 + np.sin(theta - theta_c) * np.cos(omega * J * t + theta) / (1.0 + np.sqrt(t))) - 0.5
 
     bias = np.empty(n_bias, dtype=np.float64)
     factor = 2.0 ** -(p / n_bias)
@@ -600,7 +635,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, om
 
 
 @njit
-def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult, omega=1.5*np.pi):
+def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult, omega=1.5 * np.pi):
     n_steps = 1 << quality
     delta_t = tot_t / n_steps
     n_bias = n_qubits + 1

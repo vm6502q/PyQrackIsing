@@ -36,9 +36,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, shots, depth):
         normed_closeness = (1 + closeness_like_bits(i, n_rows, n_cols)) / (1 + expected_closeness)
         # If we're also using conventional simulation, use a normalized weighted average that favors the (n+1)-dimensional model at later times.
         # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
-        count = (1 - model) * count + model * normed_closeness * bias[hamming_weight] / math.comb(
-            n, hamming_weight
-        )
+        count = (1 - model) * count + model * normed_closeness * bias[hamming_weight] / math.comb(n, hamming_weight)
 
         # You can make sure this still adds up to 1.0, to show the distribution is normalized:
         # total += count
@@ -216,16 +214,7 @@ def get_hamming_probabilities(J, h, theta, z, t):
         # "p" is the exponent of the geometric series weighting, for (n+1) dimensions of Hamming weight.
         # Notice that the expected symmetries are respected under reversal of signs of J and/or h.
         p = (
-            (
-                (2 ** (abs(J / h) - 1))
-                * (
-                    1
-                    + sin_delta_theta
-                    * math.cos(J * omega * t + theta)
-                    / ((1 + math.sqrt(t / t2)) if t2 > 0 else 1)
-                )
-                - 1 / 2
-            )
+            ((2 ** (abs(J / h) - 1)) * (1 + sin_delta_theta * math.cos(J * omega * t + theta) / ((1 + math.sqrt(t / t2)) if t2 > 0 else 1)) - 1 / 2)
             if t2 > 0
             else (2 ** abs(J / h))
         )
@@ -286,9 +275,7 @@ def simulate_tfim(
             if step == 0:
                 hamming_probabilities = bias.copy()
             else:
-                last_bias = get_hamming_probabilities(
-                    J_eff, h_eff, theta[q], z[q], delta_t * (step - 1)
-                )
+                last_bias = get_hamming_probabilities(J_eff, h_eff, theta[q], z[q], delta_t * (step - 1))
                 tot_n = 0
                 for i in range(len(bias)):
                     hamming_probabilities[i] += bias[i] - last_bias[i]
@@ -367,11 +354,7 @@ if __name__ == "__main__":
     ylim = ((min(mag) * 100) // 10) / 10
     plt.figure(figsize=(14, 14))
     plt.plot(list(range(1, n_steps + 1)), mag, marker="o", linestyle="-")
-    plt.title(
-        "Supply Chain Resilience over Time (Magnetization vs Trotter Depth, "
-        + str(n_qubits)
-        + " Qubits)"
-    )
+    plt.title("Supply Chain Resilience over Time (Magnetization vs Trotter Depth, " + str(n_qubits) + " Qubits)")
     plt.xlabel("Trotter Depth")
     plt.ylabel("Magnetization")
     plt.ylim(ylim, 1.0)

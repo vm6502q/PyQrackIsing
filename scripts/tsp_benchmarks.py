@@ -61,9 +61,7 @@ def tsp_nearest_neighbor(G, start=0):
     total_weight = 0
     while len(visited) < len(G.nodes):
         last = visited[-1]
-        next_node = min(
-            (n for n in G.nodes if n not in visited), key=lambda x: G[last][x]["weight"]
-        )
+        next_node = min((n for n in G.nodes if n not in visited), key=lambda x: G[last][x]["weight"])
         total_weight += G[last][next_node]["weight"]
         visited.append(next_node)
     total_weight += G[visited[-1]][visited[0]]["weight"]  # close the loop
@@ -72,9 +70,7 @@ def tsp_nearest_neighbor(G, start=0):
 
 # Christofides approximation (via networkx)
 def tsp_christofides(G):
-    return nx.approximation.traveling_salesman_problem(
-        G, cycle=True, method=nx.approximation.christofides
-    )
+    return nx.approximation.traveling_salesman_problem(G, cycle=True, method=nx.approximation.christofides)
 
 
 # Simulated Annealing for TSP (basic implementation)
@@ -177,9 +173,9 @@ for i in range(5, 12):
     df = pd.DataFrame(
         {
             f"Nearest Neighbor ({n_nodes})": results_dict["Nearest Neighbor"],
-            F"Christofides ({n_nodes})": results_dict["Christofides"],
-            F"Simulated Annealing ({n_nodes})": results_dict["Simulated Annealing"],
-            F"PyQrackIsing ({n_nodes})": results_dict["PyQrackIsing"],
+            f"Christofides ({n_nodes})": results_dict["Christofides"],
+            f"Simulated Annealing ({n_nodes})": results_dict["Simulated Annealing"],
+            f"PyQrackIsing ({n_nodes})": results_dict["PyQrackIsing"],
         }
     )
     print(df)

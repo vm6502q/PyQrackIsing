@@ -37,6 +37,7 @@ def zz_rotation(qc, q1, q2, theta):
     qc.rz(2 * theta, q2)
     qc.cx(q1, q2)
 
+
 def first_order_tfim(qc, n_rows, n_cols, J, h, dt):
     theta_zz = J * dt
 
@@ -67,6 +68,7 @@ def first_order_tfim(qc, n_rows, n_cols, J, h, dt):
             q1 = index(i, j, n_cols)
             q2 = index(i + 1, j, n_cols)
             zz_rotation(qc, q1, q2, theta_zz)
+
 
 def brick_wall_tfim_step(n_rows, n_cols, J, h, dt):
     """
@@ -132,7 +134,7 @@ def main():
     if len(sys.argv) > 1:
         n_qubits = int(sys.argv[1])
 
-    if os.environ['QRACK_MAX_PAGING_QB'] and (int(os.environ['QRACK_MAX_PAGING_QB']) < n_qubits):
+    if os.environ["QRACK_MAX_PAGING_QB"] and (int(os.environ["QRACK_MAX_PAGING_QB"]) < n_qubits):
         alpha = 0.0
         beta = 0.0
     else:
@@ -205,8 +207,8 @@ def main():
 
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
         bias_z = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
-        bias_x = get_tfim_hamming_distribution(J=-h, h=-J, z=z, theta=theta+np.pi/2, t=t, n_qubits=n_qubits)
-        bias_y = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta+np.pi/2, t=t, n_qubits=n_qubits)
+        bias_x = get_tfim_hamming_distribution(J=-h, h=-J, z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits)
+        bias_y = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits)
         bias = [(z + x + y) / 3 for z, x, y in zip(bias_z, bias_x, bias_y)]
 
         magnetization, sqr_magnetization = 0, 0
@@ -220,7 +222,7 @@ def main():
             sqr_magnetization += m * m * value
         magnetization /= shots
         sqr_magnetization /= shots
-        
+
         b_magnetization, b_sqr_magnetization = 0.0, 0.0
         for hamming_weight, value in enumerate(bias):
             m = 1.0 - 2 * hamming_weight / n_qubits
@@ -228,7 +230,7 @@ def main():
             b_sqr_magnetization += value * m * m
 
         magnetization = (1.0 - beta) * (alpha * magnetization + (1.0 - alpha) * b_magnetization) + beta * bias_magnetization
-        sqr_magnetization = (1.0 - beta) * (alpha * sqr_magnetization +  (1.0 - alpha) * b_sqr_magnetization) + beta * bias_sqr_magnetization
+        sqr_magnetization = (1.0 - beta) * (alpha * sqr_magnetization + (1.0 - alpha) * b_sqr_magnetization) + beta * bias_sqr_magnetization
 
         seconds = time.perf_counter() - start
 
@@ -247,7 +249,7 @@ def main():
     # Plotting (contributed by Elara, an OpenAI custom GPT)
     plt.figure(figsize=(14, 14))
 
-    plt.plot(depths, magnetizations, marker='o', linestyle='-')
+    plt.plot(depths, magnetizations, marker="o", linestyle="-")
 
     plt.xlabel("step")
     plt.ylabel(r"$\langle Z^2_{tot} \rangle$")

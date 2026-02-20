@@ -46,35 +46,19 @@ def trotter_step(circ, qubits, lattice_shape, J, h, dt):
             circ.append(RZZGate(2 * J * dt), [q1, q2])
 
     # Layer 1: horizontal pairs (even rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(0, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(0, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 2: horizontal pairs (odd rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(1, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(1, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 3: vertical pairs (even columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(1, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(1, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Layer 4: vertical pairs (odd columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(0, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(0, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Second half of transverse field term
@@ -142,9 +126,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
 
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
-    return sum(
-        ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n))
-    )
+    return sum(ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n)))
 
 
 # From https://stackoverflow.com/questions/13070461/get-indices-of-the-top-n-values-of-a-list#answer-38835860
@@ -238,7 +220,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, counts, bias, model, beta, shots, de
         "l2_difference": float(l2_difference),
         "z_fidelity": float(z_fidelity),
         "hog_prob": sum_hog_counts,
-        "xeb": xeb
+        "xeb": xeb,
     }
 
 
@@ -372,7 +354,7 @@ def main():
             sqr_magnetization += m * m * value
         magnetization /= shots
         sqr_magnetization /= shots
-        
+
         b_magnetization, b_sqr_magnetization = 0, 0
         for hamming_weight, value in enumerate(bias):
             m = 1.0 - 2 * hamming_weight / n_qubits

@@ -1,5 +1,21 @@
 from .maxcut_tfim import maxcut_tfim
-from .maxcut_tfim_util import compute_cut, compute_energy, compute_cut_diff, compute_cut_diff_2, compute_cut_diff_between, get_cut, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, make_G_m_buf, make_best_theta_buf, make_best_theta_buf_64, opencl_context, setup_opencl
+from .maxcut_tfim_util import (
+    compute_cut,
+    compute_energy,
+    compute_cut_diff,
+    compute_cut_diff_2,
+    compute_cut_diff_between,
+    get_cut,
+    gray_code_next,
+    gray_mutation,
+    heuristic_threshold,
+    int_to_bitstring,
+    make_G_m_buf,
+    make_best_theta_buf,
+    make_best_theta_buf_64,
+    opencl_context,
+    setup_opencl,
+)
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -136,7 +152,24 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     return best_energy, best_state
 
 
-def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, local_energy_buf, local_index_buf, max_energy_host, max_index_host, max_energy_buf, max_index_buf):
+def run_bit_flips_opencl(
+    is_double,
+    n,
+    kernel,
+    theta,
+    theta_buf,
+    G_m_buf,
+    is_segmented,
+    local_size,
+    global_size,
+    args_buf,
+    local_energy_buf,
+    local_index_buf,
+    max_energy_host,
+    max_index_host,
+    max_energy_buf,
+    max_index_buf,
+):
     queue = opencl_context.queue
 
     # Set kernel args
@@ -151,7 +184,7 @@ def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_seg
             max_energy_buf,
             max_index_buf,
             local_energy_buf,
-            local_index_buf
+            local_index_buf,
         )
     else:
         kernel.set_args(
@@ -161,7 +194,7 @@ def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_seg
             max_energy_buf,
             max_index_buf,
             local_energy_buf,
-            local_index_buf
+            local_index_buf,
         )
 
     cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
@@ -207,7 +240,21 @@ def run_bit_flips_opencl(is_double, n, kernel, theta, theta_buf, G_m_buf, is_seg
     return energy, theta
 
 
-def run_gray_search_opencl(n, kernel, theta, theta_buf, G_m_buf, is_segmented, local_size, global_size, args_buf, max_energy_host, max_theta_host, max_energy_buf, max_theta_buf):
+def run_gray_search_opencl(
+    n,
+    kernel,
+    theta,
+    theta_buf,
+    G_m_buf,
+    is_segmented,
+    local_size,
+    global_size,
+    args_buf,
+    max_energy_host,
+    max_theta_host,
+    max_energy_buf,
+    max_theta_buf,
+):
     queue = opencl_context.queue
 
     # Set kernel args
@@ -220,16 +267,10 @@ def run_gray_search_opencl(n, kernel, theta, theta_buf, G_m_buf, is_segmented, l
             theta_buf,
             args_buf,
             max_theta_buf,
-            max_energy_buf
+            max_energy_buf,
         )
     else:
-        kernel.set_args(
-            G_m_buf,
-            theta_buf,
-            args_buf,
-            max_theta_buf,
-            max_energy_buf
-        )
+        kernel.set_args(G_m_buf, theta_buf, args_buf, max_theta_buf, max_energy_buf)
 
     cl.enqueue_nd_range_kernel(queue, kernel, (global_size,), (local_size,))
 
@@ -277,7 +318,7 @@ def spin_glass_solver(
     repulsion_base=None,
     is_log=False,
     gray_iterations=None,
-    gray_seed_multiple=None
+    gray_seed_multiple=None,
 ):
     dtype = opencl_context.dtype
     nodes = None
@@ -286,7 +327,7 @@ def spin_glass_solver(
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
+        G_m = nx.to_numpy_array(G, weight="weight", nonedge=0.0, dtype=dtype)
     else:
         n_qubits = len(G)
         nodes = list(range(n_qubits))
@@ -317,7 +358,17 @@ def spin_glass_solver(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, cut_value, _ = maxcut_tfim(G_m, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base, is_maxcut_gpu=is_maxcut_gpu, is_nested=True)
+        bitstring, cut_value, _ = maxcut_tfim(
+            G_m,
+            quality=quality,
+            shots=shots,
+            is_spin_glass=is_spin_glass,
+            anneal_t=anneal_t,
+            anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
+            is_maxcut_gpu=is_maxcut_gpu,
+            is_nested=True,
+        )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
@@ -348,7 +399,11 @@ def spin_glass_solver(
 
         local_work_group_size = min(wgs, n_qubits)
         global_work_group_size = n_qubits
-        opencl_args = setup_opencl(local_work_group_size, global_work_group_size, np.array([n_qubits, is_spin_glass, segment_size]))
+        opencl_args = setup_opencl(
+            local_work_group_size,
+            global_work_group_size,
+            np.array([n_qubits, is_spin_glass, segment_size]),
+        )
 
         if is_segmented:
             single_bit_flips_kernel = opencl_context.single_bit_flips_segmented_kernel
@@ -361,7 +416,19 @@ def spin_glass_solver(
 
         if n_qubits <= gnl:
             gray_work_group_size = opencl_context.MAX_GPU_PROC_ELEM
-            gray_args = setup_opencl(1, gray_work_group_size, np.array([n_qubits, is_spin_glass, (gray_iterations + gray_work_group_size - 1) // gray_work_group_size, segment_size]), True)
+            gray_args = setup_opencl(
+                1,
+                gray_work_group_size,
+                np.array(
+                    [
+                        n_qubits,
+                        is_spin_glass,
+                        (gray_iterations + gray_work_group_size - 1) // gray_work_group_size,
+                        segment_size,
+                    ]
+                ),
+                True,
+            )
             gray_kernel = opencl_context.gray_segmented_kernel if is_segmented else opencl_context.gray_kernel
 
     thread_count = os.cpu_count() ** 2
@@ -372,7 +439,16 @@ def spin_glass_solver(
         # Single bit flips with O(n^2)
         if is_opencl:
             theta_buf = make_best_theta_buf(best_theta)
-            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(
+                False,
+                n_qubits,
+                single_bit_flips_kernel,
+                best_theta,
+                theta_buf,
+                G_m_buf,
+                is_segmented,
+                *opencl_args,
+            )
         else:
             energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m)
         if energy > 0.0:
@@ -384,7 +460,16 @@ def spin_glass_solver(
         # Double bit flips with O(n^3)
         if is_opencl:
             # theta_buf has not changed
-            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, best_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(
+                True,
+                n_qubits,
+                double_bit_flips_kernel,
+                best_theta,
+                theta_buf,
+                G_m_buf,
+                is_segmented,
+                *opencl_args,
+            )
         else:
             energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m, thread_count)
         if energy > 0.0:
@@ -420,7 +505,16 @@ def spin_glass_solver(
         # Single bit flips with O(n^2)
         if is_opencl:
             theta_buf = make_best_theta_buf(reheat_theta)
-            energy, state = run_bit_flips_opencl(False, n_qubits, single_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(
+                False,
+                n_qubits,
+                single_bit_flips_kernel,
+                reheat_theta,
+                theta_buf,
+                G_m_buf,
+                is_segmented,
+                *opencl_args,
+            )
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m)
         if (energy + reheat_energy) > 0.0:
@@ -436,7 +530,16 @@ def spin_glass_solver(
         # Double bit flips with O(n^3)
         if is_opencl:
             # theta_buf has not changed
-            energy, state = run_bit_flips_opencl(True, n_qubits, double_bit_flips_kernel, reheat_theta, theta_buf, G_m_buf, is_segmented, *opencl_args)
+            energy, state = run_bit_flips_opencl(
+                True,
+                n_qubits,
+                double_bit_flips_kernel,
+                reheat_theta,
+                theta_buf,
+                G_m_buf,
+                is_segmented,
+                *opencl_args,
+            )
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m, thread_count)
         if (energy + reheat_energy) > 0.0:

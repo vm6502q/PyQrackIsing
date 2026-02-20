@@ -15,7 +15,7 @@ import random
 # Step 1: Define the molecule (Hydrogen, Helium, Lithium, Carbon, Nitrogen, Oxygen)
 
 # basis = "sto-3g"  # Minimal Basis Set
-basis = '6-31g'  # Larger basis set
+basis = "6-31g"  # Larger basis set
 # basis = 'cc-pVDZ' # Even larger basis set!
 multiplicity = 1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
 # multiplicity = 2  # doublet, one unpaired electron (ex.: OH- radical)
@@ -30,8 +30,10 @@ print(f"multiplicity = {multiplicity}")
 # geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
 geometry = [
-    ("H", (-1.0, 0.0, -1.0)), ("H", (-1.0, 0.0, 1.00)),
-    ("H", (1.0, 0.0, -1.0)), ("H", (1.0, 0.0, 1.00))
+    ("H", (-1.0, 0.0, -1.0)),
+    ("H", (-1.0, 0.0, 1.00)),
+    ("H", (1.0, 0.0, -1.0)),
+    ("H", (1.0, 0.0, 1.00)),
 ]  # H4 Dissociation (hard for Hartree-Fock)
 
 # Helium (and lighter):
@@ -222,13 +224,12 @@ geometry = [
 
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
+
 # Step 2: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
-    return "; ".join(
-        f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
-        for symbol, (x, y, z) in geometry
-    )
+    return "; ".join(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in geometry)
+
 
 def initial_energy(theta_bits, z_hamiltonian):
     energy = 0.0
@@ -308,9 +309,7 @@ def multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=0)
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(
-                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
-                    ))
+                    combos = np.array(list(item for sublist in itertools.combinations(z_qubits, k) for item in sublist))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
@@ -353,6 +352,7 @@ def multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=0)
 
     return best_theta, min_energy
 
+
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
@@ -375,7 +375,7 @@ while is_charge_update:
 
         for pauli_string, jw_coeff in jw_term.terms.items():
             # Skip terms with X or Y
-            if any(p in ('X', 'Y') for _, p in pauli_string):
+            if any(p in ("X", "Y") for _, p in pauli_string):
                 continue
 
             q = []

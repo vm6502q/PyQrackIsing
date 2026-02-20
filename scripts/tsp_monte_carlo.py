@@ -8,6 +8,7 @@ import numpy as np
 import os
 import sys
 
+
 def generate_tsp_graph(n_nodes=64, seed=None):
     if seed is not None:
         np.random.seed(seed)
@@ -28,6 +29,7 @@ def generate_tsp_graph(n_nodes=64, seed=None):
 
     return shm, G_m
 
+
 def bootstrap_worker(args):
     shm_name, shape, dtype, k_neighbors = args
     # Reattach to existing shared memory by name
@@ -38,6 +40,7 @@ def bootstrap_worker(args):
 
     existing_shm.close()  # worker should not unlink, just close
     return path, length
+
 
 if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
@@ -57,9 +60,7 @@ if __name__ == "__main__":
 
     # verify result using original shared array
     reconstructed_node_count = len(set(best_circuit))
-    reconstructed_path_length = sum(
-        G_m[best_circuit[i], best_circuit[i+1]] for i in range(len(best_circuit)-1)
-    )
+    reconstructed_path_length = sum(G_m[best_circuit[i], best_circuit[i + 1]] for i in range(len(best_circuit) - 1))
 
     shm.close()
     shm.unlink()  # only unlink once, after workers are done
@@ -70,6 +71,4 @@ if __name__ == "__main__":
     print(f"Solution distinct node count: {reconstructed_node_count}")
     print(f"Claimed path length: {best_path_length}")
     print(f"Verified path length: {reconstructed_path_length}")
-    print(
-        "(The average randomized and normalized separation between each and every node is about 0.5.)"
-    )
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")

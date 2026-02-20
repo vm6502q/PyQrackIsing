@@ -25,7 +25,15 @@ if __name__ == "__main__":
     multi_start = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
     G = generate_tsp_graph(n_nodes=n_nodes, seed=seed)
-    best_circuit, best_path_length = tsp_symmetric(G, quality=quality, multi_start=multi_start, is_cyclic=False, start_node=0, end_node=1, monte_carlo=False)
+    best_circuit, best_path_length = tsp_symmetric(
+        G,
+        quality=quality,
+        multi_start=multi_start,
+        is_cyclic=False,
+        start_node=0,
+        end_node=1,
+        monte_carlo=False,
+    )
 
     reconstructed_node_count = len(set(best_circuit))
     reconstructed_path_length = 0
@@ -39,6 +47,4 @@ if __name__ == "__main__":
     print(f"Solution distinct node count: {reconstructed_node_count}")
     print(f"Claimed path length: {best_path_length}")
     print(f"Verified path length: {reconstructed_path_length}")
-    print(
-        "(The average randomized and normalized separation between each and every node is about 0.5.)"
-    )
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")

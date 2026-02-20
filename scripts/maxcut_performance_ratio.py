@@ -146,10 +146,10 @@ def ratio_confidence_interval(qrack_vals, gw_vals, confidence=0.99):
     se_Q, se_G = st.sem(qrack_vals), st.sem(gw_vals)
 
     R = mean_Q / mean_G
-    se_R = R * np.sqrt((se_Q / mean_Q)**2 + (se_G / mean_G)**2)
+    se_R = R * np.sqrt((se_Q / mean_Q) ** 2 + (se_G / mean_G) ** 2)
 
-    df = min(nQ-1, nG-1)  # conservative choice
-    t_val = st.t.ppf((1 + confidence) / 2., df)
+    df = min(nQ - 1, nG - 1)  # conservative choice
+    t_val = st.t.ppf((1 + confidence) / 2.0, df)
 
     ci_R = (R - t_val * se_R, R + t_val * se_R)
     return R, ci_R

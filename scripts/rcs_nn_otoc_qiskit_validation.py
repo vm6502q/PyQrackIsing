@@ -114,7 +114,7 @@ def bench_qrack(width, depth, cycles):
                 g = random.choice(two_bit_gates)
                 g(rcs, b1, b2)
 
-    ops = ['I', 'X', 'Y', 'Z']
+    ops = ["I", "X", "Y", "Z"]
     pauli_strings = []
 
     otoc = QuantumCircuit(width)
@@ -126,7 +126,6 @@ def bench_qrack(width, depth, cycles):
         pauli_strings.append("".join(string))
         act_string(otoc, string)
         otoc &= rcs.inverse()
-
 
     shots = 1 << (width + 2)
     qrack_start = time.perf_counter()
@@ -143,17 +142,21 @@ def bench_qrack(width, depth, cycles):
     control_probs = Statevector(job.result().get_statevector()).probabilities()
     aer_end = time.perf_counter()
 
-    return calc_stats(control_probs, experiment_counts, d + 1, shots), pauli_strings, { 'qrack_seconds': qrack_end - qrack_start, 'aer_seconds': aer_end - aer_start }
+    return (
+        calc_stats(control_probs, experiment_counts, d + 1, shots),
+        pauli_strings,
+        {"qrack_seconds": qrack_end - qrack_start, "aer_seconds": aer_end - aer_start},
+    )
 
 
 def act_string(otoc, string):
     for i in range(len(string)):
         match string[i]:
-            case 'X':
+            case "X":
                 otoc.x(i)
-            case 'Y':
+            case "Y":
                 otoc.y(i)
-            case 'Z':
+            case "Z":
                 otoc.z(i)
             case _:
                 pass
@@ -188,9 +191,7 @@ def calc_stats(ideal_probs, counts, depth, shots):
     hog_prob = sum_hog_counts / shots
     xeb = numer / denom
     # p-value of heavy output count, if method were actually 50/50 chance of guessing
-    p_val = (
-        (1 - binom.cdf(sum_hog_counts - 1, shots, 1 / 2)) if sum_hog_counts > 0 else 1
-    )
+    p_val = (1 - binom.cdf(sum_hog_counts - 1, shots, 1 / 2)) if sum_hog_counts > 0 else 1
     rss = math.sqrt(sqr_diff)
 
     return {
@@ -205,9 +206,7 @@ def calc_stats(ideal_probs, counts, depth, shots):
 
 def main():
     if len(sys.argv) < 4:
-        raise RuntimeError(
-            "Usage: python3 fc_qiskit_validation.py [width] [depth] [cycles]"
-        )
+        raise RuntimeError("Usage: python3 fc_qiskit_validation.py [width] [depth] [cycles]")
 
     width = int(sys.argv[1])
     depth = int(sys.argv[2])

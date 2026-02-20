@@ -8,7 +8,7 @@ import sys
 epsilon = opencl_context.epsilon
 
 
-def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64]):
+def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings=["X" + "I" * 64]):
     n_bias = n_qubits + 1
     if (abs(h) <= epsilon) or (abs(t) <= epsilon):
         bias = np.empty(n_bias, dtype=np.float64)
@@ -36,7 +36,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        term_signal = 0.5 * pauli_string.count('X') + pauli_string.count('Z') + 1.5 * pauli_string.count('Y')
+        term_signal = 0.5 * pauli_string.count("X") + pauli_string.count("Z") + 1.5 * pauli_string.count("Y")
         if term_signal == 0:
             continue
 
@@ -53,11 +53,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
 
         for b in pauli_string:
             match b:
-                case 'X':
+                case "X":
                     diff_z += diff_theta
-                case 'Z':
+                case "Z":
                     diff_x += diff_phi
-                case 'Y':
+                case "Y":
                     diff_z += diff_theta
                     diff_x += diff_phi
                 case _:
@@ -67,7 +67,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     diff_z /= diff_z.sum()
     diff_x /= diff_x.sum()
 
-    signal_frac = 2 ** signal_frac
+    signal_frac = 2**signal_frac
     diff_z = signal_frac * diff_z + (1 - signal_frac) * diff_x
 
     # Normalize:
@@ -187,16 +187,26 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t
     return inv_dist
 
 
-def generate_otoc_samples(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings = ['X' + 'I' * 64], shots=100, is_orbifold=True):
+def generate_otoc_samples(
+    J=-1.0,
+    h=2.0,
+    z=4,
+    theta=0.0,
+    t=5,
+    n_qubits=65,
+    pauli_strings=["X" + "I" * 64],
+    shots=100,
+    is_orbifold=True,
+):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
 
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for pauli_string in pauli_strings:
-        if (pauli_string.count('X') + pauli_string.count('Y') + pauli_string.count('Z')) == 0:
+        if (pauli_string.count("X") + pauli_string.count("Y") + pauli_string.count("Z")) == 0:
             continue
-        butterfly_idx_x = find_all_str_occurrences(pauli_string, 'X')
-        butterfly_idx_z = find_all_str_occurrences(pauli_string, 'Z')
+        butterfly_idx_x = find_all_str_occurrences(pauli_string, "X")
+        butterfly_idx_z = find_all_str_occurrences(pauli_string, "Z")
         if is_orbifold:
             inv_dist += get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t)
         else:

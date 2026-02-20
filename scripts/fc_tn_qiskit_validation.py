@@ -57,7 +57,7 @@ def bench_qrack(width, depth, sdrp):
 
     quimb_rcs = quimb_circuit(rcs)
     n_pow = 1 << width
-    u_u =  1 / n_pow
+    u_u = 1 / n_pow
     idx = 0
     ideal_probs = {}
     sum_probs = 0
@@ -114,9 +114,7 @@ def calc_stats(ideal_probs, exp_probs, shots, depth):
     hog_prob = sum_hog_counts / shots
     xeb = numer / denom
     # p-value of heavy output count, if method were actually 50/50 chance of guessing
-    p_val = (
-        (1 - binom.cdf(sum_hog_counts - 1, shots, 1 / 2)) if sum_hog_counts > 0 else 1
-    )
+    p_val = (1 - binom.cdf(sum_hog_counts - 1, shots, 1 / 2)) if sum_hog_counts > 0 else 1
     rss = math.sqrt(sqr_diff)
 
     return {
@@ -131,9 +129,7 @@ def calc_stats(ideal_probs, exp_probs, shots, depth):
 
 def main():
     if len(sys.argv) < 3:
-        raise RuntimeError(
-            "Usage: python3 fc_qiskit_validation.py [width] [depth] [trials]"
-        )
+        raise RuntimeError("Usage: python3 fc_qiskit_validation.py [width] [depth] [trials]")
 
     width = int(sys.argv[1])
     depth = int(sys.argv[2])

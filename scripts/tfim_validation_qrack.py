@@ -43,35 +43,19 @@ def trotter_step(circ, qubits, lattice_shape, J, h, dt):
             circ.append(RZZGate(2 * J * dt), [q1, q2])
 
     # Layer 1: horizontal pairs (even rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(0, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(0, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 2: horizontal pairs (odd rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(1, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(1, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 3: vertical pairs (even columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(1, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(1, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Layer 4: vertical pairs (odd columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(0, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(0, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Second half of transverse field term
@@ -141,7 +125,7 @@ def calc_stats(n_rows, n_cols, ideal_probs, bias, depth):
         "l2_difference": float(l2_difference),
         "z_fidelity": float(z_fidelity),
         "hog_prob": sum_hog_counts,
-        "xeb": xeb
+        "xeb": xeb,
     }
 
 
@@ -203,9 +187,7 @@ def expected_closeness_weight(n_rows, n_cols, hamming_weight):
 
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
-    return sum(
-        ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n))
-    )
+    return sum(ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n)))
 
 
 # From https://stackoverflow.com/questions/13070461/get-indices-of-the-top-n-values-of-a-list#answer-38835860
@@ -266,10 +248,7 @@ def main():
 
     control = QrackSimulator(n_qubits, isTensorNetwork=False)
     basis_gates = QrackSimulator.get_qiskit_basis_gates()
-    qc_aer = transpile(
-        qc_aer,
-        basis_gates=basis_gates
-    )
+    qc_aer = transpile(qc_aer, basis_gates=basis_gates)
     control.run_qiskit_circuit(qc_aer)
     control_probs = control.out_probs()
 
@@ -285,13 +264,7 @@ def main():
         m /= n_qubits
         c_sqr_magnetization += control_probs[p] * m * m
 
-    result = calc_stats(
-        n_rows,
-        n_cols,
-        control_probs,
-        bias_0,
-        0
-    )
+    result = calc_stats(n_rows, n_cols, control_probs, bias_0, 0)
 
     # Add up the square residuals:
     r_squared = result["l2_difference"] ** 2
@@ -311,10 +284,7 @@ def main():
     trotter_step(qc_aer, qubits, (n_rows, n_cols), J, h, dt)
 
     # Run the Trotterized simulation with Aer and get the marginal probabilities.
-    qc_aer = transpile(
-        qc_aer,
-        basis_gates=basis_gates
-    )
+    qc_aer = transpile(qc_aer, basis_gates=basis_gates)
 
     for d in range(1, depth + 1):
         t = d * dt
@@ -330,13 +300,7 @@ def main():
         # but notice that the global magnetization value only requires (n+1) dimensions of marginal probability,
         # the marginal probability per each Hilbert space basis dimension is trivial to calculate by closed form,
         # and we simply need to be thoughtful in how to extract expectation values to maximize similar symmetries.
-        result = calc_stats(
-            n_rows,
-            n_cols,
-            control_probs,
-            bias,
-            d
-        )
+        result = calc_stats(n_rows, n_cols, control_probs, bias, d)
 
         # Add up the square residuals:
         r_squared += result["l2_difference"] ** 2

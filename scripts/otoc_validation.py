@@ -44,35 +44,19 @@ def trotter_step(circ, qubits, lattice_shape, J, h, dt):
             circ.append(RZZGate(2 * J * dt), [q1, q2])
 
     # Layer 1: horizontal pairs (even rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(0, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(0, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 2: horizontal pairs (odd rows)
-    horiz_pairs = [
-        (r * n_cols + c, r * n_cols + (c + 1) % n_cols)
-        for r in range(n_rows)
-        for c in range(1, n_cols, 2)
-    ]
+    horiz_pairs = [(r * n_cols + c, r * n_cols + (c + 1) % n_cols) for r in range(n_rows) for c in range(1, n_cols, 2)]
     add_rzz_pairs(horiz_pairs)
 
     # Layer 3: vertical pairs (even columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(1, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(1, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Layer 4: vertical pairs (odd columns)
-    vert_pairs = [
-        (r * n_cols + c, ((r + 1) % n_rows) * n_cols + c)
-        for r in range(0, n_rows, 2)
-        for c in range(n_cols)
-    ]
+    vert_pairs = [(r * n_cols + c, ((r + 1) % n_rows) * n_cols + c) for r in range(0, n_rows, 2) for c in range(n_cols)]
     add_rzz_pairs(vert_pairs)
 
     # Second half of transverse field term
@@ -121,15 +105,13 @@ def calc_stats(ideal_probs, patch_probs, depth):
         "xeb": float(xeb),
         "hog_prob": float(hog_prob),
         "l2_dist": float(l2_dist),
-        "l2_dist_vs_uniform_random": float(l2_dist_random)
+        "l2_dist_vs_uniform_random": float(l2_dist_random),
     }
 
 
 # By Elara (OpenAI custom GPT)
 def hamming_distance(s1, s2, n):
-    return sum(
-        ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n))
-    )
+    return sum(ch1 != ch2 for ch1, ch2 in zip(int_to_bitstring(s1, n), int_to_bitstring(s2, n)))
 
 
 # From https://stackoverflow.com/questions/13070461/get-indices-of-the-top-n-values-of-a-list#answer-38835860
@@ -143,11 +125,11 @@ def top_n(n, a):
 def act_string(otoc, string):
     for i in range(len(string)):
         match string[i]:
-            case 'X':
+            case "X":
                 otoc.x(i)
-            case 'Y':
+            case "Y":
                 otoc.y(i)
-            case 'Z':
+            case "Z":
                 otoc.z(i)
             case _:
                 pass
@@ -190,14 +172,14 @@ def main():
     ising_dag = ising.inverse()
 
     # 1/8 butterfly qubits
-    ops = ['X', 'Y', 'Z']
+    ops = ["X", "Y", "Z"]
     pauli_strings = []
 
     otoc = QuantumCircuit(n_qubits)
     for cycle in range(cycles):
         otoc &= ising
         # Add the out-of-time-order perturbation
-        string = ['I'] * n_qubits
+        string = ["I"] * n_qubits
         butterfly_qubits = np.random.choice(qubits, size=butterfly_count, replace=False)
         for b in butterfly_qubits:
             string[b] = np.random.choice(ops)
@@ -211,25 +193,30 @@ def main():
 
     # Compile OTOC for Qiskit Aer
     control = AerSimulator(method="statevector")
-    otoc = transpile(
-        otoc,
-        optimization_level=3,
-        backend=control
-    )
+    otoc = transpile(otoc, optimization_level=3, backend=control)
 
     otoc.save_statevector()
     job = control.run(otoc)
     control_probs = Statevector(job.result().get_statevector()).probabilities()
 
-    shots = 1<<(n_qubits + 2)
-    experiment_probs = dict(Counter(generate_otoc_samples(n_qubits=n_qubits, J=J, h=h, z=z, theta=0, t=dt*depth, shots=shots, pauli_strings=pauli_strings)))
-    experiment_probs = { k: v / shots for k, v in experiment_probs.items() }
+    shots = 1 << (n_qubits + 2)
+    experiment_probs = dict(
+        Counter(
+            generate_otoc_samples(
+                n_qubits=n_qubits,
+                J=J,
+                h=h,
+                z=z,
+                theta=0,
+                t=dt * depth,
+                shots=shots,
+                pauli_strings=pauli_strings,
+            )
+        )
+    )
+    experiment_probs = {k: v / shots for k, v in experiment_probs.items()}
 
-    print(calc_stats(
-        control_probs,
-        experiment_probs,
-        depth
-    ))
+    print(calc_stats(control_probs, experiment_probs, depth))
 
     print(pauli_strings)
 

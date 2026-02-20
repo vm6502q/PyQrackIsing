@@ -68,7 +68,6 @@ def convert_tensor_network_to_tsp(tensors, index_dims, dtype=np.float32):
     return dist_matrix, tensor_ids
 
 
-
 def convert_quimb_tree_to_tsp(tn, dtype=np.float32):
     """
     Converts a quimb TensorNetwork to a TSP distance matrix for contraction optimization.
@@ -86,10 +85,7 @@ def convert_quimb_tree_to_tsp(tn, dtype=np.float32):
     for tensor in tn.tensors:
         # Use a unique tag or fallback to name
         tensor_id = frozenset(tensor.tags) if tensor.tags else str(tensor.name)
-        tensors.append({
-            "id": tensor_id,
-            "indices": set(tensor.inds)
-        })
+        tensors.append({"id": tensor_id, "indices": set(tensor.inds)})
 
         for ind, dim in zip(tensor.inds, tensor.shape):
             index_dims[ind] = dim  # capture dimension size

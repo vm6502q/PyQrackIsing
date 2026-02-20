@@ -7,6 +7,7 @@ from collections import Counter
 
 from pyqrackising import spin_glass_solver
 
+
 def build_program_graph(halts=True, size=7):
     """
     Encode a toy program into a graph:
@@ -26,6 +27,7 @@ def build_program_graph(halts=True, size=7):
         G.add_edge(nodes[-1], nodes[0], weight=2)
     return G
 
+
 def halting_entropy(G, trials=10):
     cuts = []
     for i in range(trials):
@@ -38,6 +40,7 @@ def halting_entropy(G, trials=10):
     entropy = -sum(p * math.log2(p) for p in probs)
 
     return entropy, counts
+
 
 print("Graph that actually halts:")
 halts = build_program_graph(halts=True)

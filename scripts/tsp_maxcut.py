@@ -44,6 +44,4 @@ if __name__ == "__main__":
     print(f"Seconds to MAXCUT solution: {seconds}")
     print(f"Partition: {bit_string}")
     print(f"Cut value: {cut_value}")
-    print(
-        "(The average randomized and normalized separation between each and every node is about 0.5.)"
-    )
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")

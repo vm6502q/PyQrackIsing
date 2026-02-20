@@ -18,7 +18,7 @@ def generate_heavy_hex_graph(
 ):
     """
     Generate a random heavy-hex-like graph with Gaussian edge weights.
-    
+
     Parameters
     ----------
     num_nodes : int

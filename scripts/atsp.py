@@ -40,6 +40,4 @@ if __name__ == "__main__":
     print(f"Solution distinct node count: {reconstructed_node_count}")
     print(f"Claimed path length: {best_path_length}")
     print(f"Verified path length: {reconstructed_path_length}")
-    print(
-        "(The average randomized and normalized separation between each and every node is about 0.5.)"
-    )
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")

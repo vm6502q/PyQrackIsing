@@ -45,7 +45,7 @@ def bootstrap_worker(args):
 
 def tsp_to_maxcut_bipartition(tsp_path, weights):
     n = len(tsp_path)
-    best_cut_value = -float('inf')
+    best_cut_value = -float("inf")
     best_partition = None
     direction = 0
 
@@ -53,11 +53,7 @@ def tsp_to_maxcut_bipartition(tsp_path, weights):
         mid = n // 2 + offset
         A = set(tsp_path[:mid])
         B = set(tsp_path[mid:])
-        cut_value = sum(
-            weights[u, v]
-            for u in A
-            for v in B
-        )
+        cut_value = sum(weights[u, v] for u in A for v in B)
         if cut_value > best_cut_value:
             best_cut_value = cut_value
             best_partition = (A, B)
@@ -74,11 +70,7 @@ def tsp_to_maxcut_bipartition(tsp_path, weights):
         mid = n // 2 + offset
         A = set(tsp_path[:mid])
         B = set(tsp_path[mid:])
-        cut_value = sum(
-            weights[u, v]
-            for u in A
-            for v in B
-        )
+        cut_value = sum(weights[u, v] for u in A for v in B)
         if cut_value > best_cut_value:
             best_cut_value = cut_value
             best_partition = (A, B)
@@ -126,6 +118,4 @@ if __name__ == "__main__":
     print(f"Seconds to MAXCUT solution: {seconds}")
     print(f"Partition: {partition}")
     print(f"Cut value: {cut_value}")
-    print(
-        "(The average randomized and normalized separation between each and every node is about 0.5.)"
-    )
+    print("(The average randomized and normalized separation between each and every node is about 0.5.)")

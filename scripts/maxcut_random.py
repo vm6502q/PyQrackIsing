@@ -27,7 +27,7 @@ if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     quality = int(sys.argv[2]) if len(sys.argv) > 2 else None
     seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
-    is_spin_glass = (sys.argv[4] not in ['0', 'False']) if len(sys.argv) > 4 else False
+    is_spin_glass = (sys.argv[4] not in ["0", "False"]) if len(sys.argv) > 4 else False
 
     start = time.perf_counter()
     G_m = generate_adjacency(n_nodes=n_nodes, seed=seed)
@@ -46,6 +46,4 @@ if __name__ == "__main__":
     print(f"Seconds to solution: {seconds}")
     print(f"Bipartite cut bit string: {bitstring}")
     print(f"Cut weight: {cut_value}")
-    print(
-        "(The average randomized and symmetric weight between each and every node is about 0.5, from the range 0.0 to 1.0.)"
-    )
+    print("(The average randomized and symmetric weight between each and every node is about 0.5, from the range 0.0 to 1.0.)")

@@ -95,6 +95,7 @@ def sample_hamming_weight(thresholds, shots):
 
     return hamming_samples
 
+
 @njit
 def fix_cdf(hamming_prob):
     tot_prob = 0.0
@@ -109,12 +110,12 @@ def fix_cdf(hamming_prob):
 
 
 @njit
-def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega=1.5*np.pi):
+def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega=1.5 * np.pi):
     if abs(t) <= epsilon:
         p = (1.0 - np.cos(theta)) / 2.0
         bias = np.empty(n_qubits + 1, dtype=np.float64)
         for k in range(n_qubits + 1):
-            bias[k] = comb(n_qubits, k) * (p ** k) * ((1.0 - p) ** (n_qubits - k))
+            bias[k] = comb(n_qubits, k) * (p**k) * ((1.0 - p) ** (n_qubits - k))
 
         return bias / bias.sum()
 
@@ -131,9 +132,7 @@ def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
     return bias / bias.sum()
 
 
-def generate_tfim_samples(
-    J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5*np.pi
-):
+def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi):
     samples = []
 
     if abs(t) <= epsilon:
@@ -179,7 +178,7 @@ def generate_tfim_samples(
             # Use a normalized weighted average that favors the (n+1)-dimensional model at later times.
             # The (n+1)-dimensional marginal probability is the product of a function of Hamming weight and "closeness," split among all basis states with that specific Hamming weight.
             tot_prob += normed_closeness / h_weight_combos
-            while (rands[s] <= tot_prob):
+            while rands[s] <= tot_prob:
                 samples.append(state_int)
                 s += 1
                 if s == count:
@@ -189,7 +188,15 @@ def generate_tfim_samples(
         if s < count:
             samples += (count - s) * [state_int]
 
-
     np.random.shuffle(samples)
 
     return samples
+
+
+def generate_fermi_hubbard_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi):
+    shots_x, shots_y, shots_z = np.random.multinomial(shots, [1 / 3, 1 / 3, 1 / 3])
+    return (
+        generate_tfim_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots_z)
+        + generate_tfim_samples(J=-h, h=-J, z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits, shots=shots_x)
+        + generate_tfim_samples(J=J, h=h, z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits, shots=shots_y)
+    )

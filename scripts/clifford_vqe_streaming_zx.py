@@ -59,10 +59,10 @@ print(f"multiplicity = {multiplicity}")
 
 # Ammonia:
 geometry = [
-    ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
-    ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
+    ("N", (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+    ("H", (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+    ("H", (-0.4700, 0.8130, -0.3200)),  # Hydrogen 2
+    ("H", (-0.4700, -0.8130, -0.3200)),  # Hydrogen 3
 ]
 
 # Oxygen (and lighter):
@@ -222,13 +222,12 @@ geometry = [
 
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
+
 # Step 3: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
-    return "; ".join(
-        f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
-        for symbol, (x, y, z) in geometry
-    )
+    return "; ".join(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in geometry)
+
 
 def compute_energy(theta_bits, phi_bits):
     energy = 0.0
@@ -236,14 +235,14 @@ def compute_energy(theta_bits, phi_bits):
         jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
 
         for pauli_string, jw_coeff in jw_term.terms.items():
-            if any(p in ('Y') for _, p in pauli_string):
+            if any(p in ("Y") for _, p in pauli_string):
                 continue
 
             is_sat = True
             for qubit, op in pauli_string:
-                if op == 'I':
+                if op == "I":
                     continue
-                if (op != 'Z') != phi_bits[qubit]:
+                if (op != "Z") != phi_bits[qubit]:
                     is_sat = False
                     break
             if not is_sat:
@@ -252,7 +251,7 @@ def compute_energy(theta_bits, phi_bits):
             term_value = jw_coeff.real
             for qubit, op in pauli_string:
                 # Z/I terms: keep only Z
-                if op == 'I':
+                if op == "I":
                     continue
                 if theta_bits[qubit]:
                     term_value *= -1
@@ -311,9 +310,7 @@ def multiprocessing_bootstrap(n_qubits, reheat_tries=0):
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(
-                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                    ))
+                    combos = np.array(list(item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
@@ -372,6 +369,7 @@ def multiprocessing_bootstrap(n_qubits, reheat_tries=0):
 
     return best_theta, best_phi, min_energy
 
+
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
@@ -398,7 +396,7 @@ while is_charge_update:
     for i in range(len(theta)):
         b = theta[i]
         if theta[i]:
-            r_electrons += 1/2 if phi[i] else 1
+            r_electrons += 1 / 2 if phi[i] else 1
     if int(r_electrons) != r_electrons:
         print("Whoops! We don't have an integer number of charges!")
         break

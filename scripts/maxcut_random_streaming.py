@@ -11,7 +11,7 @@ if __name__ == "__main__":
     n_nodes = int(sys.argv[1]) if len(sys.argv) > 1 else 64
     quality = int(sys.argv[2]) if len(sys.argv) > 2 else None
     seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
-    is_spin_glass = (sys.argv[4] not in ['0', 'False']) if len(sys.argv) > 4 else False
+    is_spin_glass = (sys.argv[4] not in ["0", "False"]) if len(sys.argv) > 4 else False
 
     # This is a contrived example.
     # The function must use numba NJIT.

@@ -10,7 +10,7 @@ from numba import njit, prange
 @njit(parallel=True)
 def tsp_to_maxcut_bipartition(tsp_path, weights):
     n = len(tsp_path)
-    best_cut_value = -float('inf')
+    best_cut_value = -float("inf")
     best_partition_A = None
     best_partition_B = None
     direction = 0
@@ -87,7 +87,7 @@ def early_exit(G_m, partition, nodes):
     for u in prange(n_qubits):
         for v in range(u + 1, n_qubits):
             val = G_m[nodes[u], nodes[v]]
-            energy += (val if theta_bits[u] == theta_bits[v] else -val)
+            energy += val if theta_bits[u] == theta_bits[v] else -val
 
     return bitstring, energy
 
@@ -98,7 +98,7 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
-        G_m = nx.to_numpy_array(G, weight='weight', nonedge=0.0, dtype=dtype)
+        G_m = nx.to_numpy_array(G, weight="weight", nonedge=0.0, dtype=dtype)
     else:
         n_qubits = len(G)
         nodes = list(range(n_qubits))
@@ -125,7 +125,7 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
 @njit(parallel=True)
 def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
     n = len(tsp_path)
-    best_cut_value = -float('inf')
+    best_cut_value = -float("inf")
     best_partition_A = None
     best_partition_B = None
     direction = 0
@@ -194,7 +194,7 @@ def early_exit_sparse(G_data, G_rows, G_cols, partition, nodes):
             i = binary_search(G_cols[start:end], v) + start
             if i < end:
                 val = G_data[i]
-                energy += (val if theta_bits[u] == theta_bits[v] else -val)
+                energy += val if theta_bits[u] == theta_bits[v] else -val
 
     return bitstring, energy
 
@@ -232,7 +232,7 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
 @njit(parallel=True)
 def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
     n = len(tsp_path)
-    best_cut_value = -float('inf')
+    best_cut_value = -float("inf")
     best_partition_A = None
     best_partition_B = None
     direction = 0
@@ -287,7 +287,7 @@ def early_exit_streaming(G_func, partition, nodes):
     for u in prange(n_qubits):
         for v in range(u + 1, n_qubits):
             val = G_func(nodes[u], nodes[v])
-            energy += (val if theta_bits[u] == theta_bits[v] else -val)
+            energy += val if theta_bits[u] == theta_bits[v] else -val
 
     return bitstring, energy
 

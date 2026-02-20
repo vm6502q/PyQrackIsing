@@ -1,5 +1,18 @@
 from .maxcut_tfim_streaming import maxcut_tfim_streaming
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming, compute_cut_diff_streaming, compute_cut_diff_2_streaming, compute_cut_diff_between_streaming, get_cut, get_cut_base, gray_code_next, gray_mutation, heuristic_threshold, int_to_bitstring, opencl_context
+from .maxcut_tfim_util import (
+    compute_cut_streaming,
+    compute_energy_streaming,
+    compute_cut_diff_streaming,
+    compute_cut_diff_2_streaming,
+    compute_cut_diff_between_streaming,
+    get_cut,
+    get_cut_base,
+    gray_code_next,
+    gray_mutation,
+    heuristic_threshold,
+    int_to_bitstring,
+    opencl_context,
+)
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -143,7 +156,7 @@ def spin_glass_solver_streaming(
     repulsion_base=None,
     is_log=False,
     gray_iterations=None,
-    gray_seed_multiple=None
+    gray_seed_multiple=None,
 ):
     dtype = opencl_context.dtype
     n_qubits = len(nodes)
@@ -173,7 +186,16 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, cut_value, _ = maxcut_tfim_streaming(G_func, nodes, quality=quality, shots=shots, is_spin_glass=is_spin_glass, anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base)
+        bitstring, cut_value, _ = maxcut_tfim_streaming(
+            G_func,
+            nodes,
+            quality=quality,
+            shots=shots,
+            is_spin_glass=is_spin_glass,
+            anneal_t=anneal_t,
+            anneal_h=anneal_h,
+            repulsion_base=repulsion_base,
+        )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
