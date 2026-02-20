@@ -41,6 +41,7 @@ def zz_rotation(qc, q1, q2, theta):
     qc.rz(2 * theta, q2)
     qc.cx(q1, q2)
 
+
 def first_order_tfim(qc, n_rows, n_cols, J, h, dt):
     theta_zz = J * dt
 
@@ -71,6 +72,7 @@ def first_order_tfim(qc, n_rows, n_cols, J, h, dt):
             q1 = index(i, j, n_cols)
             q2 = index(i + 1, j, n_cols)
             zz_rotation(qc, q1, q2, theta_zz)
+
 
 def brick_wall_tfim_step(n_rows, n_cols, J, h, dt):
     """
@@ -148,7 +150,7 @@ def calc_stats(ideal_probs, pqi_probs, shots):
             m += -1 if (perm & 1) else 1
             perm >>= 1
         m /= n
-        m *= m 
+        m *= m
         ideal_sqr_mag += ideal * m
         exp_sqr_mag += exp * m
 
@@ -243,9 +245,9 @@ def main():
         ideal_probs = Statevector(job.result().get_statevector()).probabilities()
 
         # The magnetization components are weighted by (n+1) symmetric "bias" terms over possible Hamming weights.
-        pqi_probs = normalize_counts(dict(Counter(
-            generate_fermi_hubbard_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots)
-        )), shots)
+        pqi_probs = normalize_counts(
+            dict(Counter(generate_fermi_hubbard_samples(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, shots=shots))), shots
+        )
 
         result = calc_stats(ideal_probs, pqi_probs, shots)
 
