@@ -128,8 +128,8 @@ def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
                 zeros.add(i)
 
                 state ^= 1 << j
-                zeros.remove(i)
-                ones.add(i)
+                zeros.remove(j)
+                ones.add(j)
 
                 like_edges = new_like
 
