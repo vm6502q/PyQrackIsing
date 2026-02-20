@@ -92,6 +92,9 @@ def delta_like_edges(state, i, j, neighbors):
 
 
 def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
+    if count == 0:
+        return []
+
     n_qubits = n_rows * n_cols
     neighbors = build_neighbors(n_rows, n_cols)
 
