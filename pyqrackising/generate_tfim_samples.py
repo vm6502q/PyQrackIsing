@@ -105,15 +105,17 @@ def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
 
     samples = []
 
-    total_steps = burnin * count + count
+    burn = burnin * n_qubits
+    thinning = n_qubits
 
-    for step in range(total_steps):
+    ones = set([i for i in range(n_qubits) if (state >> i) & 1])
+    zeros = set([i for i in range(n_qubits) if not (state >> i) & 1])
+
+    for step in range(burn + thinning * count):
         # choose random 1-bit and 0-bit
-        ones = [i for i in range(n_qubits) if (state >> i) & 1]
-        zeros = [i for i in range(n_qubits) if not (state >> i) & 1]
 
-        i = random.choice(ones)
-        j = random.choice(zeros)
+        i = random.choice(tuple(ones))
+        j = random.choice(tuple(zeros))
 
         delta = delta_like_edges(state, i, j, neighbors)
         new_like = like_edges + delta
@@ -122,10 +124,16 @@ def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
             accept_prob = new_like / like_edges
             if np.random.random() < accept_prob:
                 state ^= 1 << i
+                ones.remove(i)
+                zeros.add(i)
+
                 state ^= 1 << j
+                zeros.remove(i)
+                ones.add(i)
+
                 like_edges = new_like
 
-        if step >= burnin * count:
+        if step >= burn and (step - burn) % thinning == 0:
             samples.append(state)
 
     return samples
