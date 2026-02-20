@@ -22,15 +22,6 @@ def factor_width(width, is_transpose=False):
 
 
 @njit
-def expected_closeness_weight(n_rows, n_cols, hamming_weight):
-    L = n_rows * n_cols
-    same_pairs = comb(hamming_weight, 2) + comb(L - hamming_weight, 2)
-    total_pairs = comb(L, 2)
-    mu_k = same_pairs / total_pairs
-    return 2.0 * mu_k - 1.0
-
-
-@njit
 def comb(n, k):
     if (k < 0) or (k > n):
         return 0
