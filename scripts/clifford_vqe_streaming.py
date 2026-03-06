@@ -59,10 +59,10 @@ print(f"multiplicity = {multiplicity}")
 
 # Ammonia:
 geometry = [
-    ("N", (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ("H", (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ("H", (-0.4700, 0.8130, -0.3200)),  # Hydrogen 2
-    ("H", (-0.4700, -0.8130, -0.3200)),  # Hydrogen 3
+    ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+    ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+    ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
+    ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
 ]
 
 # Oxygen (and lighter):
@@ -222,12 +222,13 @@ geometry = [
 
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
-
 # Step 2: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
-    return "; ".join(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in geometry)
-
+    return "; ".join(
+        f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
+        for symbol, (x, y, z) in geometry
+    )
 
 def initial_energy(theta_bits):
     energy = 0.0
@@ -237,7 +238,7 @@ def initial_energy(theta_bits):
 
         for pauli_string, jw_coeff in jw_term.terms.items():
             # Skip terms with X or Y
-            if any(p in ("X", "Y") for _, p in pauli_string):
+            if any(p in ('X', 'Y') for _, p in pauli_string):
                 continue
 
             term_value = jw_coeff.real
@@ -256,7 +257,6 @@ def initial_energy(theta_bits):
 
     return energy, z_qubits
 
-
 def compute_energy(theta_bits):
     # Step 4: Iterate JW terms without materializing full op
     energy = 0.0
@@ -265,13 +265,13 @@ def compute_energy(theta_bits):
 
         for pauli_string, jw_coeff in jw_term.terms.items():
             # Skip terms with X or Y
-            if any(p in ("X", "Y") for _, p in pauli_string):
+            if any(p in ('X', 'Y') for _, p in pauli_string):
                 continue
 
             # Evaluate expectation value on computational basis state
             term_value = jw_coeff.real
             for qubit, op in pauli_string:
-                if op == "Z":
+                if op == 'Z':
                     if theta_bits[qubit]:
                         term_value *= -1
 
@@ -321,7 +321,9 @@ def multiprocessing_bootstrap(n_qubits, reheat_tries=0):
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(item for sublist in itertools.combinations(z_qubits, k) for item in sublist))
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
+                    ))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
@@ -363,7 +365,6 @@ def multiprocessing_bootstrap(n_qubits, reheat_tries=0):
 
     return best_theta, min_energy
 
-
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
@@ -395,18 +396,7 @@ while is_charge_update:
 
     if n_electrons != r_electrons or multiplicity != r_multiplicity:
         print()
-        print("Regresssed electron count doesn't match the assumptions!")
-        print("Running again with the natural parameters replacing your assumptions:")
-        print(f"charge = {r_charge}")
-        print(f"multiplicity = {r_multiplicity}")
-        print()
-
-        charge = r_charge
-        multiplicity = r_multiplicity
-        is_charge_update = True
-
-        print()
-        print("Regresssed electron count doesn't match the assumptions!")
+        print("Regresssed electron count or multiplicity doesn't match the assumptions!")
         print("Running again with the natural parameters replacing your assumptions:")
         print(f"charge = {r_charge}")
         print(f"multiplicity = {r_multiplicity}")

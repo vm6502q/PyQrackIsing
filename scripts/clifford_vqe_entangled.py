@@ -41,10 +41,10 @@ print(f"multiplicity = {multiplicity}")
 
 # geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
-# geometry = [
-#     ("H", (-1.0, 0.0, -1.0)), ("H", (-1.0, 0.0, 1.00)),
-#     ("H", (1.0, 0.0, -1.0)), ("H", (1.0, 0.0, 1.00))
-# ]  # H4 Dissociation (hard for Hartree-Fock)
+geometry = [
+    ("H", (-1.0, 0.0, -1.0)), ("H", (-1.0, 0.0, 1.00)),
+    ("H", (1.0, 0.0, -1.0)), ("H", (1.0, 0.0, 1.00))
+]  # H4 Dissociation (hard for Hartree-Fock)
 
 # Helium (and lighter):
 
@@ -70,12 +70,12 @@ print(f"multiplicity = {multiplicity}")
 # geometry = [('N', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 1.10))]  # N2 Molecule
 
 # Ammonia:
-geometry = [
-    ("N", (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ("H", (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ("H", (-0.4700, 0.8130, -0.3200)),  # Hydrogen 2
-    ("H", (-0.4700, -0.8130, -0.3200)),  # Hydrogen 3
-]
+# geometry = [
+#     ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+#     ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+#     ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
+#     ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
+# ]
 
 # Oxygen (and lighter):
 
@@ -234,12 +234,13 @@ geometry = [
 
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
-
 # Step 2: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
-    return "; ".join(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in geometry)
-
+    return "; ".join(
+        f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
+        for symbol, (x, y, z) in geometry
+    )
 
 def initial_energy(theta_bits, z_hamiltonian):
     energy = 0.0
@@ -319,7 +320,9 @@ def multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=0)
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(item for sublist in itertools.combinations(z_qubits, k) for item in sublist))
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
+                    ))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
@@ -362,7 +365,6 @@ def multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=0)
 
     return best_theta, min_energy
 
-
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
@@ -385,7 +387,7 @@ while is_charge_update:
 
         for pauli_string, jw_coeff in jw_term.terms.items():
             # Skip terms with X or Y
-            if any(p in ("X", "Y") for _, p in pauli_string):
+            if any(p in ('X', 'Y') for _, p in pauli_string):
                 continue
 
             q = []
@@ -417,7 +419,7 @@ while is_charge_update:
 
     if n_electrons != r_electrons or multiplicity != r_multiplicity:
         print()
-        print("Regresssed electron count doesn't match the assumptions!")
+        print("Regresssed electron count or multiplicity doesn't match the assumptions!")
         print("Running again with the natural parameters replacing your assumptions:")
         print(f"charge = {r_charge}")
         print(f"multiplicity = {r_multiplicity}")
@@ -453,7 +455,6 @@ for term, coeff in fermion_ham.terms.items():
 
 hamiltonian = qml.Hamiltonian(coeffs, observables)
 
-
 # Step 5: Variational fit
 def fit_entanglement(hamiltonian, best_theta, n_qubits, min_energy):
     # Fast low-width simulation:
@@ -473,14 +474,14 @@ def fit_entanglement(hamiltonian, best_theta, n_qubits, min_energy):
             # qml.H(wires=i)
             # qml.RZ(delta[i], wires=i)
             # qml.H(wires=i)
-        for i in range(n_qubits - 1):
-            qml.CZ(wires=[i, i + 1])
-        qml.CZ(wires=[n_qubits - 1, 0])
+        for i in range(n_qubits-1):
+            qml.CZ(wires=[i, i+1])
+        qml.CZ(wires=[n_qubits-1, 0])
         return qml.expval(hamiltonian)
 
     best_delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
     delta = best_delta.copy()
-    opt = qml.AdamOptimizer(stepsize=(np.pi / 1800))  # one tenth a degree
+    opt = qml.AdamOptimizer(stepsize=(np.pi / 1800)) #one tenth a degree
     num_steps = 100
     for step in range(num_steps):
         delta = opt.step(lambda delta: circuit(best_theta, delta), delta)
@@ -492,7 +493,6 @@ def fit_entanglement(hamiltonian, best_theta, n_qubits, min_energy):
         print(best_delta)
 
     return best_theta, best_delta, min_energy
-
 
 # Run threaded bootstrap
 theta, delta, min_energy = fit_entanglement(hamiltonian, theta, n_qubits, min_energy)

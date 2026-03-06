@@ -59,10 +59,10 @@ print(f"multiplicity = {multiplicity}")
 
 # Ammonia:
 geometry = [
-    ("N", (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ("H", (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ("H", (-0.4700, 0.8130, -0.3200)),  # Hydrogen 2
-    ("H", (-0.4700, -0.8130, -0.3200)),  # Hydrogen 3
+    ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+    ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+    ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
+    ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
 ]
 
 # Oxygen (and lighter):
@@ -222,12 +222,13 @@ geometry = [
 
 # Now, `geometry` contains all 6 carbons and 6 hydrogens!
 
-
 # Step 2: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
     """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
-    return "; ".join(f"{symbol} {x:.10f} {y:.10f} {z:.10f}" for symbol, (x, y, z) in geometry)
-
+    return "; ".join(
+        f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
+        for symbol, (x, y, z) in geometry
+    )
 
 def compute_energy(theta_bits, phi_bits, zx_hamiltonian):
     energy = 0.0
@@ -273,16 +274,7 @@ def bootstrap(theta, phi, zx_hamiltonian, k, indices_array, energy):
             args.append((theta, phi, zx_hamiltonian, [], indices_array[j : j + k], energy))
         for i in range(n):
             j = i * k
-            args.append(
-                (
-                    theta,
-                    phi,
-                    zx_hamiltonian,
-                    indices_array[j : j + k],
-                    indices_array[j : j + k],
-                    energy,
-                )
-            )
+            args.append((theta, phi, zx_hamiltonian, indices_array[j : j + k], indices_array[j : j + k], energy))
         energies = pool.starmap(bootstrap_worker, args)
 
     return energies
@@ -308,7 +300,9 @@ def multiprocessing_bootstrap(zx_hamiltonian, n_qubits, reheat_tries=0):
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist))
+                    combos = np.array(list(
+                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
+                    ))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
@@ -367,7 +361,6 @@ def multiprocessing_bootstrap(zx_hamiltonian, n_qubits, reheat_tries=0):
 
     return best_theta, best_phi, min_energy
 
-
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
@@ -388,19 +381,20 @@ while is_charge_update:
         jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
 
         for pauli_string, jw_coeff in jw_term.terms.items():
-            if any(p in ("Y") for _, p in pauli_string):
+            if any(p in ('Y') for _, p in pauli_string):
                 continue
 
             q = []
             b = []
             for qubit, op in pauli_string:
                 # Z/I terms: keep only Z
-                if op == "I":
+                if op == 'I':
                     continue
                 q.append(qubit)
-                b.append(op != "Z")
+                b.append(op != 'Z')
 
             zx_hamiltonian.append((q, b, jw_coeff.real))
+
 
     # Step 4: Bootstrap!
     theta, phi, min_energy = multiprocessing_bootstrap(zx_hamiltonian, n_qubits, 1)
@@ -414,7 +408,7 @@ while is_charge_update:
     for i in range(len(theta)):
         b = theta[i]
         if theta[i]:
-            r_electrons += 1 / 2 if phi[i] else 1
+            r_electrons += 1/2 if phi[i] else 1
     if int(r_electrons) != r_electrons:
         print("Whoops! We don't have an integer number of charges!")
         break
@@ -429,7 +423,7 @@ while is_charge_update:
 
     if n_electrons != r_electrons or multiplicity != r_multiplicity:
         print()
-        print("Regresssed electron count doesn't match the assumptions!")
+        print("Regresssed electron count or multiplicity doesn't match the assumptions!")
         print("Running again with the natural parameters replacing your assumptions:")
         print(f"charge = {r_charge}")
         print(f"multiplicity = {r_multiplicity}")
