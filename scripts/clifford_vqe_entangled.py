@@ -364,7 +364,12 @@ def fit_ig_entanglement(pl_hamiltonian, bootstrap_theta, n_qubits, ig_edges,
     print(f"  [P2] Variational parameters: {n_qubits} (RY) + {n_edges} (RZZ) = "
           f"{n_qubits + n_edges} total.")
 
+    # Fast low-width simulation:
     dev = qml.device("lightning.qubit", wires=n_qubits)
+    # Ideal simulation with "automatic circuit elision" approximation for large circuits:
+    # dev = qml.device("qrack.simulator", wires=n_qubits)
+    # Does heuristic Clifford+RZ gate set approximation:
+    # dev = qml.device("qrack.stabilizer", wires=n_qubits)
 
     @qml.qnode(dev)
     def circuit(delta, gamma):
