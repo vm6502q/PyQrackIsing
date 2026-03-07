@@ -357,7 +357,7 @@ def phase1_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=1):
 # around the bootstrap product state.  gamma=0 recovers the pure product state.
 
 def fit_ig_entanglement(pl_hamiltonian, bootstrap_theta, n_qubits, ig_edges,
-                        bootstrap_energy, n_steps=200, stepsize=np.pi/1800):
+                        bootstrap_energy, n_steps=50, stepsize=np.pi/1800):
 
     n_edges = len(ig_edges)
     print(f"  [P2] Interaction graph: {n_edges} edges.")
