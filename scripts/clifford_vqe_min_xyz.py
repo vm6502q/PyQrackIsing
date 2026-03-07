@@ -1,5 +1,6 @@
 # Quantum chemistry example
 # Developed with help from (OpenAI custom GPT) Elara
+# Adapted to atomic checks of Z/X/Y basis by (Anthropic) Claude
 # (Requires OpenFermion)
 
 from openfermion import MolecularData, FermionOperator, jordan_wigner, get_fermion_operator
@@ -230,68 +231,93 @@ def geometry_to_atom_str(geometry):
         for symbol, (x, y, z) in geometry
     )
 
-def compute_energy(theta_bits, phi_bits, zx_hamiltonian):
+
+# phi encodes Pauli basis per qubit: 0=Z, 1=X, 2=Y
+# theta encodes |0> vs |1> in that basis (False=|0>, True=|1>)
+#
+# For a single-qubit Clifford state |b>_P:
+#   <b|_P sigma_P |b>_P = (-1)^b  (eigenvalue of the matching Pauli)
+#   <b|_P sigma_Q |b>_P = 0       (orthogonal Pauli, no contribution)
+#
+# So a term contributes only when ALL its qubits are measured in the
+# matching basis, and its sign is the product of (-1)^theta[qubit].
+
+def compute_energy(theta, phi, zxy_hamiltonian):
     energy = 0.0
-    for qubits, bases, coeff in zx_hamiltonian:
-        is_sat = True
-        for i in range(len(qubits)):
-            qubit = qubits[i]
-            if phi_bits[qubit] != bases[i]:
-                is_sat = False
-                break
+    for qubits, bases, coeff in zxy_hamiltonian:
+        # bases[i] is 0/1/2 for Z/X/Y; phi[qubit] must match for term to contribute
+        is_sat = all(phi[qubits[i]] == bases[i] for i in range(len(qubits)))
         if not is_sat:
             continue
-
         for qubit in qubits:
-            if theta_bits[qubit]:
+            if theta[qubit]:
                 coeff *= -1
         energy += coeff
-
     return energy
 
 
-def bootstrap_worker(theta, phi, zx_hamiltonian, d_theta, d_phi, energy):
+# A candidate update is a pair (new_theta_slice, new_phi_slice) for a subset of qubits,
+# tested atomically. We enumerate all 6 single-qubit Clifford states per qubit in the
+# subset, and all combinations across qubits for k>1.
+
+def bootstrap_worker(theta, phi, zxy_hamiltonian, qubit_indices, new_states):
+    """new_states: list of (theta_val, phi_val) per qubit in qubit_indices."""
     local_theta = theta.copy()
-    for i in d_theta:
-        local_theta[i] = not local_theta[i]
     local_phi = phi.copy()
-    for i in d_phi:
-        local_phi[i] = not local_phi[i]
-    energy = compute_energy(local_theta, local_phi, zx_hamiltonian)
+    for idx, (t, p) in zip(qubit_indices, new_states):
+        local_theta[idx] = t
+        local_phi[idx] = p
+    return compute_energy(local_theta, local_phi, zxy_hamiltonian)
 
-    return energy
 
+def bootstrap(theta, phi, zxy_hamiltonian, k, qubit_combos):
+    """
+    For each combination of k qubits, test all 6^k assignments of
+    (theta, phi) per qubit atomically. Returns list of (energy, qubit_indices, new_states).
+    """
+    # 6 single-qubit Clifford states: (theta_val, phi_val)
+    clifford_states = [
+        (False, 0), (True, 0),   # |0>_Z, |1>_Z
+        (False, 1), (True, 1),   # |0>_X, |1>_X
+        (False, 2), (True, 2),   # |0>_Y, |1>_Y
+    ]
 
-def bootstrap(theta, phi, zx_hamiltonian, k, indices_array, energy):
-    n = len(indices_array) // k
+    args = []
+    meta = []
+    for combo in qubit_combos:
+        for new_states in itertools.product(clifford_states, repeat=k):
+            # Skip if this assignment matches the current state (no change)
+            if all(
+                theta[combo[i]] == new_states[i][0] and phi[combo[i]] == new_states[i][1]
+                for i in range(k)
+            ):
+                continue
+            args.append((theta, phi, zxy_hamiltonian, list(combo), list(new_states)))
+            meta.append((list(combo), list(new_states)))
+
+    if not args:
+        return []
+
     with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-        args = []
-        for i in range(n):
-            j = i * k
-            args.append((theta, phi, zx_hamiltonian, indices_array[j : j + k], [], energy))
-        for i in range(n):
-            j = i * k
-            args.append((theta, phi, zx_hamiltonian, [], indices_array[j : j + k], energy))
-        for i in range(n):
-            j = i * k
-            args.append((theta, phi, zx_hamiltonian, indices_array[j : j + k], indices_array[j : j + k], energy))
         energies = pool.starmap(bootstrap_worker, args)
 
-    return energies
+    return list(zip(energies, meta))
 
 
-def multiprocessing_bootstrap(zx_hamiltonian, n_qubits, reheat_tries=0):
-    best_theta = np.random.randint(2, size=n_qubits)
-    best_phi = np.random.randint(2, size=n_qubits)
-    min_energy = compute_energy(best_theta, best_phi, zx_hamiltonian)
+def multiprocessing_bootstrap(zxy_hamiltonian, n_qubits, reheat_tries=0):
+    # Initialise randomly across all 6 Clifford states
+    best_theta = np.array([bool(random.randint(0, 1)) for _ in range(n_qubits)])
+    best_phi   = np.array([random.randint(0, 2)       for _ in range(n_qubits)])
+    min_energy = compute_energy(best_theta, best_phi, zxy_hamiltonian)
 
     combos_list = []
     reheat_theta = best_theta.copy()
-    reheat_phi = best_phi.copy()
+    reheat_phi   = best_phi.copy()
     reheat_min_energy = min_energy
+
     for reheat_round in range(reheat_tries + 1):
         improved = True
-        quality = 1
+        quality  = 1
         while improved:
             improved = False
             k = 1
@@ -300,122 +326,119 @@ def multiprocessing_bootstrap(zx_hamiltonian, n_qubits, reheat_tries=0):
                     break
 
                 if len(combos_list) < k:
-                    combos = np.array(list(
-                        item for sublist in itertools.combinations(range(n_qubits), k) for item in sublist
-                    ))
+                    combos = list(itertools.combinations(range(n_qubits), k))
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
 
-                energies = bootstrap(reheat_theta, reheat_phi, zx_hamiltonian, k, combos, reheat_min_energy)
+                results = bootstrap(reheat_theta, reheat_phi, zxy_hamiltonian, k, combos)
 
-                energy = min(energies)
+                if not results:
+                    k += 1
+                    continue
+
+                best_result = min(results, key=lambda x: x[0])
+                energy, (qubit_indices, new_states) = best_result
 
                 if energy < reheat_min_energy:
                     reheat_min_energy = energy
-                    index_match = energies.index(energy)
-
-                    n_combos = len(combos)
-                    is_theta = (index_match < n_combos) or (index_match >= (n_combos << 1))
-                    is_phi = index_match >= n_combos
-                    index_match %= n_combos
-                    indices = combos[index_match * k : (index_match + 1) * k]
-                    if is_theta:
-                        for i in indices:
-                            reheat_theta[i] = not reheat_theta[i]
-                    if is_phi:
-                        for i in indices:
-                            reheat_phi[i] = not reheat_phi[i]
-
+                    for idx, (t, p) in zip(qubit_indices, new_states):
+                        reheat_theta[idx] = t
+                        reheat_phi[idx]   = p
                     improved = True
                     if quality < (k + 1):
                         quality = k + 1
                     if reheat_min_energy < min_energy:
-                        print(f"  Qubits {indices} flip accepted. New energy: {reheat_min_energy}")
-                        print(f"  θ: {reheat_theta}")
+                        basis_names = {0: 'Z', 1: 'X', 2: 'Y'}
+                        state_strs = [f"|{'1' if t else '0'}>_{basis_names[p]}"
+                                      for t, p in new_states]
+                        print(f"  Qubits {qubit_indices} -> {state_strs}. New energy: {reheat_min_energy}")
+                        print(f"  θ: {reheat_theta.astype(int)}")
                         print(f"  φ: {reheat_phi}")
                     break
 
-                k = k + 1
-                print("  Qubit flips all rejected.")
+                k += 1
+                print("  Qubit updates all rejected.")
 
         if min_energy < reheat_min_energy:
-            reheat_theta = best_theta.copy()
-            reheat_phi = best_phi.copy()
+            reheat_theta      = best_theta.copy()
+            reheat_phi        = best_phi.copy()
             reheat_min_energy = min_energy
         else:
             best_theta = reheat_theta.copy()
-            best_phi = reheat_phi.copy()
+            best_phi   = reheat_phi.copy()
             min_energy = reheat_min_energy
 
         if reheat_round < reheat_tries:
             print("  Reheating...")
-            num_to_flip = int(np.round(np.log2(len(reheat_theta))))
-            z_bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
-            for bit in z_bits_to_flip:
-                reheat_theta[bit] = not reheat_theta[bit]
-            x_bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
-            for bit in x_bits_to_flip:
-                reheat_phi[bit] = not reheat_phi[bit]
-            reheat_min_energy = compute_energy(reheat_theta, reheat_phi, zx_hamiltonian)
+            num_to_flip = int(np.round(np.log2(n_qubits)))
+            for bit in random.sample(range(n_qubits), num_to_flip):
+                reheat_theta[bit] = bool(random.randint(0, 1))
+                reheat_phi[bit]   = random.randint(0, 2)
+            reheat_min_energy = compute_energy(reheat_theta, reheat_phi, zxy_hamiltonian)
 
     return best_theta, best_phi, min_energy
+
 
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
 
-    atom_str = geometry_to_atom_str(geometry)
+    atom_str    = geometry_to_atom_str(geometry)
     molecule_of = MolecularData(geometry, basis, multiplicity=multiplicity, charge=charge)
-    molecule_of = run_pyscf(molecule_of, run_scf=True, run_mp2=False, run_cisd=False, run_ccsd=False, run_fci=False)
+    molecule_of = run_pyscf(molecule_of, run_scf=True, run_mp2=False, run_cisd=False,
+                            run_ccsd=False, run_fci=False)
     fermion_ham = get_fermion_operator(molecule_of.get_molecular_hamiltonian())
     n_electrons = molecule_of.n_electrons
-    n_qubits = molecule_of.n_qubits
+    n_qubits    = molecule_of.n_qubits
     print(f"Hartree-Fock energy: {molecule_of.hf_energy}")
     print(f"{n_electrons} electrons...")
     print(f"{n_qubits} qubits...")
 
-    # Step 3: Iterate JW terms without materializing full op
-    zx_hamiltonian = []
+    # Build ZXY Hamiltonian: retain Z, X, and Y terms.
+    # A Pauli string contributes only when all its qubits are in the matching basis.
+    # bases[i] = 0 (Z), 1 (X), or 2 (Y).
+    zxy_hamiltonian = []
     for term, coeff in fermion_ham.terms.items():
-        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
+        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))
 
         for pauli_string, jw_coeff in jw_term.terms.items():
-            if any(p in ('Y') for _, p in pauli_string):
-                continue
-
             q = []
             b = []
             for qubit, op in pauli_string:
-                # Z/I terms: keep only Z
                 if op == 'I':
                     continue
+                if op == 'Z':
+                    b.append(0)
+                elif op == 'X':
+                    b.append(1)
+                elif op == 'Y':
+                    b.append(2)
                 q.append(qubit)
-                b.append(op != 'Z')
+            zxy_hamiltonian.append((q, b, jw_coeff.real))
 
-            zx_hamiltonian.append((q, b, jw_coeff.real))
-
-
-    # Step 4: Bootstrap!
-    theta, phi, min_energy = multiprocessing_bootstrap(zx_hamiltonian, n_qubits, 1)
+    # Bootstrap!
+    theta, phi, min_energy = multiprocessing_bootstrap(zxy_hamiltonian, n_qubits, 1)
 
     print(f"\nFinal Bootstrap Ground State Energy: {min_energy} Ha")
     print("Final Bootstrap Parameters:")
-    print(f"  θ: {theta}")
-    print(f"  φ: {phi}")
+    basis_names = {0: 'Z', 1: 'X', 2: 'Y'}
+    print(f"  θ: {theta.astype(int)}")
+    print(f"  φ: {[basis_names[p] for p in phi]}")
 
+    # Electron count: in Z basis a |1> is a full electron;
+    # in X or Y basis a |1> contributes 1/2 (superposition of occupied/unoccupied).
     r_electrons = 0
-    for i in range(len(theta)):
-        b = theta[i]
+    for i in range(n_qubits):
         if theta[i]:
-            r_electrons += 1/2 if phi[i] else 1
+            r_electrons += 1 if phi[i] == 0 else 0.5
     if int(r_electrons) != r_electrons:
         print("Whoops! We don't have an integer number of charges!")
         break
     r_electrons = int(r_electrons)
 
-    d_electrons = r_electrons - n_electrons
-    r_charge = charge - d_electrons
+    d_electrons  = r_electrons - n_electrons
+    r_charge     = charge - d_electrons
     r_multiplicity = 1
     for i in range(0, len(theta), 2):
         if theta[i] != theta[i + 1]:
@@ -423,12 +446,11 @@ while is_charge_update:
 
     if n_electrons != r_electrons or multiplicity != r_multiplicity:
         print()
-        print("Regresssed electron count or multiplicity doesn't match the assumptions!")
+        print("Regressed electron count or multiplicity doesn't match the assumptions!")
         print("Running again with the natural parameters replacing your assumptions:")
         print(f"charge = {r_charge}")
         print(f"multiplicity = {r_multiplicity}")
         print()
-
-        charge = r_charge
+        charge       = r_charge
         multiplicity = r_multiplicity
         is_charge_update = True
