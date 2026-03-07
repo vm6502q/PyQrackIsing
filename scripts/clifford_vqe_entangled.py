@@ -371,18 +371,37 @@ def fit_ig_entanglement(pl_hamiltonian, bootstrap_theta, n_qubits, ig_edges,
     # Does heuristic Clifford+RZ gate set approximation:
     # dev = qml.device("qrack.stabilizer", wires=n_qubits)
 
+    # Alternative near-Clifford version requires "weak simulation condition"
+    # @qml.set_shots(100)
+    # @qml.qnode(dev, mcm_method="one-shot")
+    # State vector option
     @qml.qnode(dev)
     def circuit(delta, gamma):
         # Initialise to bootstrap computational-basis state
         for i in range(n_qubits):
             if bootstrap_theta[i]:
                 qml.X(wires=i)
+
         # Single-qubit rotations
         for i in range(n_qubits):
             qml.RY(delta[i], wires=i)
+
+        # Alternative near-Clifford single-qubit rotations
+        # for i in range(n_qubits):
+        #     qml.Hadamard(wires=i)
+        #     qml.RZ(delta[i], wires=i)
+        #     qml.Hadamard(wires=i)
+
         # Weak entanglement: one RZZ per interaction-graph edge
         for idx, (a, b) in enumerate(ig_edges):
             qml.IsingZZ(gamma[idx], wires=[a, b])
+
+        # Alternative near-Clifford weak entanglement
+        # for idx, (a, b) in enumerate(ig_edges):
+        #     qml.CNOT(wires=[a, b])
+        #     qml.RZ(gamma[idx], wires=b)
+        #     qml.CNOT(wires=[a, b])
+
         return qml.expval(pl_hamiltonian)
 
     delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
