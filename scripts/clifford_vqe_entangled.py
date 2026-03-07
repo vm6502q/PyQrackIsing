@@ -1,10 +1,7 @@
 # Quantum chemistry example
 # Developed with help from (OpenAI custom GPT) Elara
+# Adapted to parse interaction graph for VQE (Anthropic) Claude
 # (Requires OpenFermion)
-
-import pennylane as qml
-from pennylane import numpy as nppl
-from catalyst import qjit
 
 from openfermion import MolecularData, FermionOperator, jordan_wigner, get_fermion_operator
 from openfermionpyscf import run_pyscf
@@ -15,19 +12,14 @@ import numpy as np
 import os
 import random
 
+import pennylane as qml
+from pennylane import numpy as nppl
 
-# Step 0: Set environment variables (before running script)
-
-# On command line or by .env file, you can set the following variables
-# QRACK_DISABLE_QUNIT_FIDELITY_GUARD=1: For large circuits, automatically "elide," for approximation
-# QRACK_NONCLIFFORD_ROUNDING_THRESHOLD=[0 to 1]: Sacrifices near-Clifford accuracy to reduce overhead
-# QRACK_QUNIT_SEPARABILITY_THRESHOLD=[0 to 1]: Rounds to separable states more aggressively
-# QRACK_QBDT_SEPARABILITY_THRESHOLD=[0 to 0.5]: Rounding for QBDD, if actually used
 
 # Step 1: Define the molecule (Hydrogen, Helium, Lithium, Carbon, Nitrogen, Oxygen)
 
-basis = "sto-3g"  # Minimal Basis Set
-# basis = '6-31g'  # Larger basis set
+# basis = "sto-3g"  # Minimal Basis Set
+basis = '6-31g'  # Larger basis set
 # basis = 'cc-pVDZ' # Even larger basis set!
 multiplicity = 1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
 # multiplicity = 2  # doublet, one unpaired electron (ex.: OH- radical)
@@ -236,268 +228,272 @@ geometry = [
 
 # Step 2: Create OpenFermion molecule
 def geometry_to_atom_str(geometry):
-    """Convert list of (symbol, (x,y,z)) to Pyscf atom string."""
     return "; ".join(
         f"{symbol} {x:.10f} {y:.10f} {z:.10f}"
         for symbol, (x, y, z) in geometry
     )
 
-def initial_energy(theta_bits, z_hamiltonian):
+
+# ── interaction graph ────────────────────────────────────────────────────────
+
+def build_interaction_graph(fermion_ham, n_qubits):
+    """
+    Extract undirected edges (i, j) with i < j where qubits i and j
+    appear together in at least one JW Pauli string.
+    """
+    edges = set()
+    for term, coeff in fermion_ham.terms.items():
+        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))
+        for pauli_string, _ in jw_term.terms.items():
+            qubits = [q for q, op in pauli_string if op != 'I']
+            for a, b in itertools.combinations(sorted(qubits), 2):
+                edges.add((a, b))
+    return sorted(edges)
+
+
+# ── Phase 1: Z-basis bootstrap ───────────────────────────────────────────────
+#
+# Retain only pure-Z Hamiltonian terms (drop X/Y); find the computational-basis
+# state that minimises this diagonal part.  This gives a physically grounded
+# starting point for the variational phase.
+
+def initial_energy(theta, z_hamiltonian):
     energy = 0.0
     for qubits, coeff in z_hamiltonian:
-        for qubit in qubits:
-            if theta_bits[qubit]:
-                coeff *= -1
-        energy += coeff
-
+        sign = 1
+        for q in qubits:
+            if theta[q]:
+                sign *= -1
+        energy += sign * coeff
     return energy
 
 
-def compute_energy(theta_bits, z_hamiltonian, indices, energy):
-    """
-    Computes the exact expectation value of a Hamiltonian on a computational basis state.
-
-    Args:
-        theta_bits: list of 0/1 integers representing the eigenstate in computational basis
-        hamiltonian: list of (coefficient, PauliString) terms
-
-    Returns:
-        energy (float)
-    """
-    indices = set(indices)
-    for qubits, coeff in z_hamiltonian:
-        overlap = set(qubits) & indices
-        if (len(overlap) & 1) == 0:
-            continue
-        # Z/I terms → product of ±1 from computational basis bits
-        value = 2 * coeff
-        for qubit in qubits:
-            if theta_bits[qubit]:
-                value *= -1
-        energy += value
-
-    return energy
-
-
-def bootstrap_worker(theta, z_hamiltonian, indices, energy):
+def bootstrap_worker(theta, z_hamiltonian, indices):
     local_theta = theta.copy()
     for i in indices:
         local_theta[i] = not local_theta[i]
-    energy = compute_energy(local_theta, z_hamiltonian, indices, energy)
-
-    return energy
+    return initial_energy(local_theta, z_hamiltonian)
 
 
-def bootstrap(theta, z_hamiltonian, k, indices_array, energy):
-    n = len(indices_array) // k
+def bootstrap_round(theta, z_hamiltonian, k, combos):
     with multiprocessing.Pool(processes=os.cpu_count()) as pool:
-        args = []
-        for i in range(n):
-            j = i * k
-            args.append((theta, z_hamiltonian, indices_array[j : j + k], energy))
+        args = [(theta, z_hamiltonian, combos[j*k:(j+1)*k])
+                for j in range(len(combos) // k)]
         energies = pool.starmap(bootstrap_worker, args)
-
     return energies
 
 
-def multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=0):
-    best_theta = np.random.randint(2, size=n_qubits)
-    n_qubits = len(z_qubits)
-    print(f"Z qubits: {n_qubits}")
-    min_energy = initial_energy(best_theta, z_hamiltonian)
-
-    combos_list = []
-    reheat_theta = best_theta.copy()
+def phase1_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=1):
+    best_theta        = np.random.randint(2, size=n_qubits).astype(bool)
+    min_energy        = initial_energy(best_theta, z_hamiltonian)
+    combos_list       = []
+    reheat_theta      = best_theta.copy()
     reheat_min_energy = min_energy
+    nz                = len(z_qubits)
+
     for reheat_round in range(reheat_tries + 1):
         improved = True
-        quality = 1
+        quality  = 1
         while improved:
             improved = False
             k = 1
             while k <= quality:
-                if n_qubits < k:
+                if nz < k:
                     break
-
                 if len(combos_list) < k:
-                    combos = np.array(list(
-                        item for sublist in itertools.combinations(z_qubits, k) for item in sublist
-                    ))
+                    combos = list(
+                        item
+                        for sublist in itertools.combinations(z_qubits, k)
+                        for item in sublist
+                    )
                     combos_list.append(combos)
                 else:
                     combos = combos_list[k - 1]
 
-                energies = bootstrap(reheat_theta, z_hamiltonian, k, combos, reheat_min_energy)
-
-                energy = min(energies)
-                index_match = energies.index(energy)
-                indices = combos[(index_match * k) : ((index_match + 1) * k)]
+                energies    = bootstrap_round(reheat_theta, z_hamiltonian, k, combos)
+                energy      = min(energies)
+                idx         = energies.index(energy)
+                indices     = combos[idx*k:(idx+1)*k]
 
                 if energy < reheat_min_energy:
                     reheat_min_energy = energy
                     for i in indices:
                         reheat_theta[i] = not reheat_theta[i]
                     improved = True
-                    if quality < (k + 1):
+                    if quality < k + 1:
                         quality = k + 1
                     if reheat_min_energy < min_energy:
-                        print(f"  Qubits {indices} flip accepted. New energy: {reheat_min_energy}")
-                        print(f"  {reheat_theta}")
+                        print(f"  [P1] Qubits {indices} flipped. Energy: {reheat_min_energy:.10f}")
                     break
-
-                k = k + 1
-                print("  Qubit flips all rejected.")
+                k += 1
+                print("  [P1] All flips rejected.")
 
         if min_energy < reheat_min_energy:
-            reheat_theta = best_theta.copy()
+            reheat_theta      = best_theta.copy()
             reheat_min_energy = min_energy
         else:
             best_theta = reheat_theta.copy()
             min_energy = reheat_min_energy
 
         if reheat_round < reheat_tries:
-            print("  Reheating...")
-            num_to_flip = int(np.round(np.log2(len(reheat_theta))))
-            bits_to_flip = random.sample(list(range(n_qubits)), num_to_flip)
-            for bit in bits_to_flip:
+            print("  [P1] Reheating...")
+            for bit in random.sample(z_qubits, max(1, int(np.round(np.log2(nz))))):
                 reheat_theta[bit] = not reheat_theta[bit]
-            reheat_min_energy = compute_energy(reheat_theta, z_hamiltonian, bits_to_flip, reheat_min_energy)
+            reheat_min_energy = initial_energy(reheat_theta, z_hamiltonian)
 
     return best_theta, min_energy
+
+
+# ── Phase 2: interaction-graph weak-entanglement VQE ─────────────────────────
+#
+# Ansatz (one layer):
+#   1. X(i)          if bootstrap theta[i] == 1   (initialise to bootstrap state)
+#   2. RY(delta[i])  for each qubit i              (single-qubit rotation)
+#   3. RZZ(gamma[e]) for each edge e in the        (weak entanglement on interaction
+#                    interaction graph              graph edges only)
+#
+# Parameters: delta (n_qubits,) + gamma (n_edges,), all initialised near zero.
+# The RZZ gate is exp(-i gamma/2 Z⊗Z), a natural "Ising-coupling" perturbation
+# around the bootstrap product state.  gamma=0 recovers the pure product state.
+
+def fit_ig_entanglement(pl_hamiltonian, bootstrap_theta, n_qubits, ig_edges,
+                        bootstrap_energy, n_steps=200, stepsize=np.pi/1800):
+
+    n_edges = len(ig_edges)
+    print(f"  [P2] Interaction graph: {n_edges} edges.")
+    print(f"  [P2] Variational parameters: {n_qubits} (RY) + {n_edges} (RZZ) = "
+          f"{n_qubits + n_edges} total.")
+
+    dev = qml.device("lightning.qubit", wires=n_qubits)
+
+    @qml.qnode(dev)
+    def circuit(delta, gamma):
+        # Initialise to bootstrap computational-basis state
+        for i in range(n_qubits):
+            if bootstrap_theta[i]:
+                qml.X(wires=i)
+        # Single-qubit rotations
+        for i in range(n_qubits):
+            qml.RY(delta[i], wires=i)
+        # Weak entanglement: one RZZ per interaction-graph edge
+        for idx, (a, b) in enumerate(ig_edges):
+            qml.IsingZZ(gamma[idx], wires=[a, b])
+        return qml.expval(pl_hamiltonian)
+
+    delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
+    gamma = nppl.zeros(n_edges,  dtype=float, requires_grad=True)
+
+    opt        = qml.AdamOptimizer(stepsize=stepsize)
+    min_energy = bootstrap_energy
+    best_delta = delta.copy()
+    best_gamma = gamma.copy()
+
+    for step in range(n_steps):
+        (delta, gamma), energy = opt.step_and_cost(circuit, delta, gamma)
+        print(f"  Step {step+1:3d}: Energy = {float(energy):.10f} Ha")
+        if float(energy) < min_energy:
+            min_energy = float(energy)
+            best_delta = delta.copy()
+            best_gamma = gamma.copy()
+
+    return best_delta, best_gamma, min_energy
+
+
+# ── main loop ────────────────────────────────────────────────────────────────
 
 is_charge_update = True
 while is_charge_update:
     is_charge_update = False
 
-    atom_str = geometry_to_atom_str(geometry)
     molecule_of = MolecularData(geometry, basis, multiplicity=multiplicity, charge=charge)
-    molecule_of = run_pyscf(molecule_of, run_scf=True, run_mp2=False, run_cisd=False, run_ccsd=False, run_fci=False)
+    molecule_of = run_pyscf(molecule_of, run_scf=True, run_mp2=False, run_cisd=False,
+                            run_ccsd=False, run_fci=False)
     fermion_ham = get_fermion_operator(molecule_of.get_molecular_hamiltonian())
     n_electrons = molecule_of.n_electrons
-    n_qubits = molecule_of.n_qubits
-    print(f"Hartree-Fock energy: {molecule_of.hf_energy}")
-    print(f"{n_electrons} electrons...")
-    print(f"{n_qubits} qubits...")
+    n_qubits    = molecule_of.n_qubits
+    print(f"Hartree-Fock energy:  {molecule_of.hf_energy:.10f} Ha")
+    print(f"{n_electrons} electrons, {n_qubits} qubits")
 
-    # Step 3: Iterate JW terms without materializing full op
+    # ── build interaction graph (from full JW Hamiltonian) ───────────────────
+    ig_edges = build_interaction_graph(fermion_ham, n_qubits)
+    print(f"Interaction graph: {len(ig_edges)} undirected edges")
+
+    # ── build Z-only Hamiltonian for bootstrap ───────────────────────────────
     z_hamiltonian = []
-    z_qubits = set()
+    z_qubits      = set()
     for term, coeff in fermion_ham.terms.items():
-        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
-
+        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))
         for pauli_string, jw_coeff in jw_term.terms.items():
-            # Skip terms with X or Y
-            if any(p in ('X', 'Y') for _, p in pauli_string):
+            if any(op in ('X', 'Y') for _, op in pauli_string):
                 continue
-
             q = []
             for qubit, op in pauli_string:
-                # Z/I terms: keep only Z
-                if op != "Z":
-                    continue
-                q.append(qubit)
-                z_qubits.add(qubit)
-
+                if op == 'Z':
+                    q.append(qubit)
+                    z_qubits.add(qubit)
             z_hamiltonian.append((q, jw_coeff.real))
-
     z_qubits = list(z_qubits)
 
-    # Step 4: Bootstrap!
-    theta, min_energy = multiprocessing_bootstrap(z_hamiltonian, z_qubits, n_qubits, 1)
+    # ── Phase 1 ──────────────────────────────────────────────────────────────
+    print("\n── Phase 1: Z-basis bootstrap ──")
+    theta, energy_p1 = phase1_bootstrap(z_hamiltonian, z_qubits, n_qubits, reheat_tries=1)
+    print(f"\nPhase 1 energy: {energy_p1:.10f} Ha")
+    print(f"  θ: {theta.astype(int)}")
 
-    print(f"\nFinal Bootstrap Ground State Energy: {min_energy} Ha")
-    print("Final Bootstrap Parameters:")
-    print(theta)
-
-    r_electrons = theta.sum()
-    d_electrons = r_electrons - n_electrons
-    r_charge = charge - d_electrons
+    # Charge/multiplicity self-consistency check
+    r_electrons    = int(theta.sum())
+    d_electrons    = r_electrons - n_electrons
+    r_charge       = charge - d_electrons
     r_multiplicity = 1
     for i in range(0, len(theta), 2):
         if theta[i] != theta[i + 1]:
             r_multiplicity += 1
 
     if n_electrons != r_electrons or multiplicity != r_multiplicity:
-        print()
-        print("Regresssed electron count or multiplicity doesn't match the assumptions!")
-        print("Running again with the natural parameters replacing your assumptions:")
-        print(f"charge = {r_charge}")
-        print(f"multiplicity = {r_multiplicity}")
-        print()
-
-        charge = r_charge
-        multiplicity = r_multiplicity
+        print("\nRegressed electron count or multiplicity doesn't match assumptions!")
+        print(f"  charge = {r_charge},  multiplicity = {r_multiplicity}")
+        charge           = r_charge
+        multiplicity     = r_multiplicity
         is_charge_update = True
+        continue
 
-# Step 6: Variational Hamiltonian
-coeffs = []
-observables = []
-for term, coeff in fermion_ham.terms.items():
-    jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))  # Transform single term
+    # ── build PennyLane Hamiltonian (full, including X/Y terms) ─────────────
+    coeffs      = []
+    observables = []
+    for term, coeff in fermion_ham.terms.items():
+        jw_term = jordan_wigner(FermionOperator(term=term, coefficient=coeff))
+        for pauli_string, jw_coeff in jw_term.terms.items():
+            ops = []
+            for qubit_idx, pauli in pauli_string:
+                if   pauli == 'X': ops.append(qml.PauliX(qubit_idx))
+                elif pauli == 'Y': ops.append(qml.PauliY(qubit_idx))
+                elif pauli == 'Z': ops.append(qml.PauliZ(qubit_idx))
+            if ops:
+                obs = ops[0]
+                for op in ops[1:]:
+                    obs = obs @ op
+                observables.append(obs)
+            else:
+                observables.append(qml.Identity(0))
+            coeffs.append(nppl.array(jw_coeff.real, requires_grad=False))
+    pl_hamiltonian = qml.Hamiltonian(coeffs, observables)
 
-    for pauli_string, jw_coeff in jw_term.terms.items():
-        pauli_operators = []
-        for qubit_idx, pauli in pauli_string:
-            if pauli == "X":
-                pauli_operators.append(qml.PauliX(qubit_idx))
-            elif pauli == "Y":
-                pauli_operators.append(qml.PauliY(qubit_idx))
-            elif pauli == "Z":
-                pauli_operators.append(qml.PauliZ(qubit_idx))
-        if pauli_operators:
-            observable = pauli_operators[0]
-            for op in pauli_operators[1:]:
-                observable = observable @ op
-            observables.append(observable)
-        else:
-            observables.append(qml.Identity(0))  # Default identity if no operators
-        coeffs.append(qml.numpy.array(jw_coeff.real, requires_grad=False))
+    # ── Phase 2 ──────────────────────────────────────────────────────────────
+    print("\n── Phase 2: interaction-graph weak-entanglement VQE ──")
+    best_delta, best_gamma, energy_p2 = fit_ig_entanglement(
+        pl_hamiltonian, theta, n_qubits, ig_edges, energy_p1,
+        n_steps=200, stepsize=np.pi/1800
+    )
 
-hamiltonian = qml.Hamiltonian(coeffs, observables)
-
-# Step 5: Variational fit
-def fit_entanglement(hamiltonian, best_theta, n_qubits, min_energy):
-    # Fast low-width simulation:
-    dev = qml.device("lightning.qubit", wires=n_qubits)
-    # Ideal simulation with "automatic circuit elision" approximation for large circuits:
-    # dev = qml.device("qrack.simulator", wires=n_qubits, isTensorNetwork=False)
-    # Schmidt-decomposed, and does Clifford+RZ gate set:
-    # dev = qml.device("qrack.simulator", wires=n_qubits, isTensorNetwork=False, isSchmidtDecompose=False, isStabilizerHybrid=True)
-
-    @qml.qnode(dev)
-    def circuit(theta, delta):
-        for i in range(n_qubits):
-            if theta[i] == 1:
-                qml.X(wires=i)
-            qml.RY(delta[i], wires=i)
-            # Near-Clifford:
-            # qml.H(wires=i)
-            # qml.RZ(delta[i], wires=i)
-            # qml.H(wires=i)
-        for i in range(n_qubits-1):
-            qml.CZ(wires=[i, i+1])
-        qml.CZ(wires=[n_qubits-1, 0])
-        return qml.expval(hamiltonian)
-
-    best_delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
-    delta = best_delta.copy()
-    opt = qml.AdamOptimizer(stepsize=(np.pi / 1800)) #one tenth a degree
-    num_steps = 100
-    for step in range(num_steps):
-        delta = opt.step(lambda delta: circuit(best_theta, delta), delta)
-        energy = circuit(best_theta, delta)
-        print(f"Step {step+1}: Energy = {energy} Ha")
-        if energy < min_energy:
-            min_energy = energy
-            best_delta = delta.copy()
-        print(best_delta)
-
-    return best_theta, best_delta, min_energy
-
-# Run threaded bootstrap
-theta, delta, min_energy = fit_entanglement(hamiltonian, theta, n_qubits, min_energy)
-
-print(f"\nFinal Ground State Energy: {min_energy} Ha")
-print("Final Parameters:")
-print(theta)
-print(delta)
+    print(f"\n{'─'*55}")
+    print(f"Hartree-Fock energy:        {molecule_of.hf_energy:.10f} Ha")
+    print(f"Phase 1 (Z bootstrap):      {energy_p1:.10f} Ha")
+    print(f"Phase 2 (IG-VQE):           {energy_p2:.10f} Ha")
+    print(f"{'─'*55}")
+    print(f"Bootstrap θ:  {theta.astype(int)}")
+    print(f"RY  δ:        {np.array(best_delta)}")
+    if len(ig_edges) > 0:
+        print(f"RZZ γ edges:  {ig_edges}")
+        print(f"RZZ γ values: {np.array(best_gamma)}")
+    else:
+        print("No interaction-graph edges — product state is the full ansatz.")
