@@ -1,6 +1,6 @@
 # Quantum chemistry example
 # Developed with help from (OpenAI custom GPT) Elara
-# Adapted to parse interaction graph for VQE (Anthropic) Claude
+# Adapted to parse interaction graph for VQE by (Anthropic) Claude
 # (Requires OpenFermion)
 
 from openfermion import MolecularData, FermionOperator, jordan_wigner, get_fermion_operator
