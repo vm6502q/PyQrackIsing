@@ -52,7 +52,15 @@ print(f"multiplicity = {multiplicity}")
 
 # Lithium (and lighter):
 
-# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.595))]  # LiH Molecule
+# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.596))]  # equilibrium
+# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 2.5))]   # stretched
+geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 4.0))]   # near dissociation
+
+# Beryllium (and lighter):
+
+# geometry = [('H', (0.0, 0.0, -1.335)), ('Be', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.335))]  # equilibrium
+# geometry = [('H', (0.0, 0.0, -2.5)), ('Be', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 2.5))]  # stretched
+# geometry = [('H', (0.0, 0.0, -4.0)), ('Be', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 4.0))]  # near dissociation
 
 # Carbon (and lighter):
 
@@ -67,25 +75,37 @@ print(f"multiplicity = {multiplicity}")
 
 # Nitrogen (and lighter):
 
-# geometry = [('N', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 1.10))]  # N2 Molecule
+# geometry = [('N', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 1.095))]  # N2 Molecule
+# geometry = [('N', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 3.0))]  # stretched
 
 # Ammonia:
-geometry = [
-    ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
-    ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
-    ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
-    ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
-]
+# geometry = [
+#     ('N', (0.0000, 0.0000, 0.0000)),  # Nitrogen at center
+#     ('H', (0.9400, 0.0000, -0.3200)),  # Hydrogen 1
+#     ('H', (-0.4700, 0.8130, -0.3200)), # Hydrogen 2
+#     ('H', (-0.4700, -0.8130, -0.3200)) # Hydrogen 3
+# ]
 
 # Oxygen (and lighter):
 
 # geometry = [('O', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 0.97))]  # OH- Radical
-# geometry = [('O', (0.0000, 0.0000, 0.0000)), ('H', (0.7586, 0.0000, 0.5043)),  ('H', (-0.7586, 0.0000, 0.5043))]  # H2O Molecule
 # geometry = [('C', (0.0000, 0.0000, 0.0000)), ('O', (0.0000, 0.0000, 1.128))]  # CO Molecule
 # geometry = [('C', (0.0000, 0.0000, 0.0000)), ('O', (0.0000, 0.0000, 1.16)), ('O', (0.0000, 0.0000, -1.16))]  # CO2 Molecule
 # geometry = [('O', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 1.55))]  # NO Molecule
 # geometry = [('O', (0.0, 0.0, 0.0)), ('N', (0.0, 0.0, 11.5))]  # NO+ Radical
 # geometry = [('O', (0.0, 0.0, 0.0)), ('O', (0.0, 0.0, 1.21))]  # O2 Molecule
+
+# geometry = [
+#     ('O', (0.0000, 0.0000, 0.1173)),
+#     ('H', (0.0000, 0.7572, -0.4692)),
+#     ('H', (0.0000, -0.7572, -0.4692))
+# ]  # H2O equilibrium, bond length ~0.957 Å, angle ~104.5°
+
+# geometry = [
+#     ('O', (0.0000, 0.0000, 0.0000)),
+#     ('H', (0.0000, 0.7572, -0.4692)),      # fixed
+#     ('H', (0.0000, -2.5000, -0.4692))      # stretched
+# ]
 
 # Nitrogen dioxide (toxic pollutant)
 # geometry = [
