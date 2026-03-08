@@ -44,7 +44,9 @@ geometry = [
 
 # Lithium (and lighter):
 
-# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.595))]  # LiH Molecule
+# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.596))]  # equilibrium
+# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 2.5))]   # stretched
+# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 4.0))]   # near dissociation
 
 # Carbon (and lighter):
 
@@ -506,7 +508,7 @@ while is_charge_update:
     print("\n── Phase 2: interaction-graph weak-entanglement VQE ──")
     best_delta, best_gamma, energy_p2 = fit_ig_entanglement(
         pl_hamiltonian, theta, n_qubits, ig_edges, energy_p1,
-        n_steps=200, stepsize=np.pi/1800
+        n_steps=50, stepsize=np.pi/1800
     )
 
     print(f"\n{'─'*55}")
