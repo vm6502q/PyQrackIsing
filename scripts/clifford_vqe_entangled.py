@@ -18,8 +18,8 @@ from pennylane import numpy as nppl
 
 # Step 1: Define the molecule (Hydrogen, Helium, Lithium, Carbon, Nitrogen, Oxygen)
 
-# basis = "sto-3g"  # Minimal Basis Set
-basis = '6-31g'  # Larger basis set
+basis = "sto-3g"  # Minimal Basis Set
+# basis = '6-31g'  # Larger basis set
 # basis = 'cc-pVDZ' # Even larger basis set!
 multiplicity = 1  # singlet, closed shell, all electrons are paired (neutral molecules with full valence)
 # multiplicity = 2  # doublet, one unpaired electron (ex.: OH- radical)
@@ -33,10 +33,10 @@ print(f"multiplicity = {multiplicity}")
 
 # geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]  # H2 Molecule
 
-geometry = [
-    ("H", (-1.0, 0.0, -1.0)), ("H", (-1.0, 0.0, 1.00)),
-    ("H", (1.0, 0.0, -1.0)), ("H", (1.0, 0.0, 1.00))
-]  # H4 Dissociation (hard for Hartree-Fock)
+# geometry = [
+#     ("H", (-1.0, 0.0, -1.0)), ("H", (-1.0, 0.0, 1.00)),
+#     ("H", (1.0, 0.0, -1.0)), ("H", (1.0, 0.0, 1.00))
+# ]  # H4 Dissociation (hard for Hartree-Fock)
 
 # Helium (and lighter):
 
@@ -46,7 +46,7 @@ geometry = [
 
 # geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 1.596))]  # equilibrium
 # geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 2.5))]   # stretched
-# geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 4.0))]   # near dissociation
+geometry = [('Li', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 4.0))]   # near dissociation
 
 # Beryllium (and lighter):
 
@@ -424,8 +424,8 @@ def fit_ig_entanglement(pl_hamiltonian, bootstrap_theta, n_qubits, ig_edges,
 
         return qml.expval(pl_hamiltonian)
 
-    delta = nppl.zeros(n_qubits, dtype=float, requires_grad=True)
-    gamma = nppl.zeros(n_edges,  dtype=float, requires_grad=True)
+    delta = nppl.array(np.random.uniform(-0.1, 0.1, n_qubits), requires_grad=True)
+    gamma = nppl.array(np.random.uniform(-0.1, 0.1, n_edges), requires_grad=True)
 
     opt        = qml.AdamOptimizer(stepsize=stepsize)
     min_energy = bootstrap_energy
