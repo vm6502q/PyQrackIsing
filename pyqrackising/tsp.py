@@ -321,7 +321,7 @@ def init_G_a_b(G_m, a, b):
 
 
 @njit
-def stich_singlet(G_m, singlet, bulk):
+def stitch_singlet(G_m, singlet, bulk):
     best_path = bulk.copy()
     best_weight = G_m[singlet, bulk[0]]
     weight = G_m[singlet, bulk[-1]]
@@ -344,10 +344,10 @@ def stich_singlet(G_m, singlet, bulk):
 @njit
 def stitch_symmetric(G_m, path_a, path_b):
     if len(path_a) == 1:
-        return stich_singlet(G_m, path_a[0], path_b)
+        return stitch_singlet(G_m, path_a[0], path_b)
 
     if len(path_b) == 1:
-        return stich_singlet(G_m, path_b[0], path_a)
+        return stitch_singlet(G_m, path_b[0], path_a)
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
@@ -380,10 +380,10 @@ def stitch_symmetric(G_m, path_a, path_b):
 @njit
 def stitch_asymmetric(G_m, path_a, path_b):
     if len(path_a) == 1:
-        return stich_singlet(G_m, path_a[0], path_b)
+        return stitch_singlet(G_m, path_a[0], path_b)
 
     if len(path_b) == 1:
-        return stich_singlet(G_m, path_b[0], path_a)
+        return stitch_singlet(G_m, path_b[0], path_a)
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
@@ -399,7 +399,7 @@ def stitch_asymmetric(G_m, path_a, path_b):
 
     for _ in range(2):
         for _ in range(2):
-            path_weight = path_length(path_a, G_m) + path_length(path_a, G_m)
+            path_weight = path_length(path_a, G_m) + path_length(path_b, G_m)
             best_weight = best_connect + path_weight
             for i in range(1, len(path_b)):
                 weight = G_m[terminals_a[0], path_b[i - 1]] + G_m[terminals_a[1], path_b[i]] - G_m[path_b[i - 1], path_b[i]]
@@ -1374,7 +1374,7 @@ def targeted_three_opt_sparse_parallel(path, G_data, G_rows, G_cols, neighbor_li
 
 
 @njit
-def stich_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
+def stitch_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
     best_path = bulk.copy()
     best_weight = get_G_m(G_data, G_rows, G_cols, singlet, bulk[0])
     weight = get_G_m(G_data, G_rows, G_cols, singlet, bulk[-1])
@@ -1401,10 +1401,10 @@ def stich_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
 @njit
 def stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b):
     if len(path_a) == 1:
-        return stich_singlet_sparse(G_data, G_rows, G_cols, path_a[0], path_b)
+        return stitch_singlet_sparse(G_data, G_rows, G_cols, path_a[0], path_b)
 
     if len(path_b) == 1:
-        return stich_singlet_sparse(G_data, G_rows, G_cols, path_b[0], path_a)
+        return stitch_singlet_sparse(G_data, G_rows, G_cols, path_b[0], path_a)
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
@@ -1827,7 +1827,7 @@ def targeted_three_opt_streaming_parallel(path, G_func, neighbor_lists, k_neighb
 
 
 @njit
-def stich_singlet_streaming(G_func, singlet, bulk):
+def stitch_singlet_streaming(G_func, singlet, bulk):
     best_path = bulk.copy()
     best_weight = G_func(singlet, bulk[0])
     weight = G_func(singlet, bulk[-1])
@@ -1850,10 +1850,10 @@ def stich_singlet_streaming(G_func, singlet, bulk):
 @njit
 def stitch_streaming_symmetric(G_func, path_a, path_b):
     if len(path_a) == 1:
-        return stich_singlet_streaming(G_func, path_a[0], path_b)
+        return stitch_singlet_streaming(G_func, path_a[0], path_b)
 
     if len(path_b) == 1:
-        return stich_singlet_streaming(G_func, path_b[0], path_a)
+        return stitch_singlet_streaming(G_func, path_b[0], path_a)
 
     terminals_a = [path_a[0], path_a[-1]]
     terminals_b = [path_b[0], path_b[-1]]
