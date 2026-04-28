@@ -142,7 +142,8 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_data, G_rows
             energies[s] = compute_cut_sparse(seed, G_data, G_rows, G_cols, n)
             seeds[s] = seed
 
-    indices = np.argsort(energies)[::-1]
+    indices = np.argpartition(energies, -thread_count)[-thread_count:]
+    indices = indices[np.argsort(energies[indices])[::-1]]
     best_seeds = np.empty((thread_count, n), dtype=np.bool_)
     best_energies = np.empty(thread_count, dtype=dtype)
     for i in prange(thread_count):
@@ -362,7 +363,7 @@ def run_gray_search_opencl(
     blocks = (n + 63) // 64
     offset = best_x * blocks
     for b in range(blocks):
-        s = max_theta_host[best_x]
+        s = max_theta_host[offset + b]
         b_offset = b << 6
         for i in range(64):
             j = b_offset + i

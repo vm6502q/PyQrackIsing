@@ -99,7 +99,8 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
         energies[s] = compute_cut_diff_between_streaming(best_theta, seed, G_func, nodes, n)
         seeds[s] = seed
 
-    indices = np.argsort(energies)[::-1]
+    indices = np.argpartition(energies, -thread_count)[-thread_count:]
+    indices = indices[np.argsort(energies[indices])[::-1]]
     best_seeds = np.empty((thread_count, n), dtype=np.bool_)
     best_energies = np.empty(thread_count, dtype=dtype)
     for i in prange(thread_count):
