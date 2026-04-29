@@ -152,7 +152,7 @@ def benchmark_tsp_realistic(n_nodes=64):
         warnings.warn("Invalid simulated annealing solution!")
 
     start = time.time()
-    path_q, length_q = tsp_symmetric(G, monte_carlo=False)
+    path_q, length_q = tsp_symmetric(G, monte_carlo=True)
     results["PyQrackIsing"].append((time.time() - start, length_q))
     if not validate_tsp_solution(G, path_q):
         warnings.warn("Invalid PyQrackIsing solution!")
