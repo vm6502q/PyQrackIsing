@@ -419,6 +419,7 @@ def spin_glass_solver_sparse(
         best_guess = None
 
     bitstring = ""
+    cut_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -439,7 +440,12 @@ def spin_glass_solver_sparse(
         )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if is_spin_glass else cut_value
+    if is_spin_glass:
+        max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+    elif cut_value is None:
+        max_energy = compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+    else:
+        max_energy = cut_value
 
     if n_qubits < heuristic_threshold_sparse:
         bitstring, l, r = get_cut(best_theta, nodes, n_qubits)

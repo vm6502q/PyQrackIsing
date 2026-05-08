@@ -109,7 +109,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
         best_energies[i] = energies[idx]
 
     if is_spin_glass:
-        best_energies[0] *= 2.0
+        best_energies *= 2.0
 
     return best_seeds, best_energies[0]
 
@@ -180,6 +180,7 @@ def spin_glass_solver_streaming(
         best_guess = None
 
     bitstring = ""
+    cut_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -199,7 +200,12 @@ def spin_glass_solver_streaming(
         )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    max_energy = compute_energy(best_theta, G_m, n_qubits) if is_spin_glass else cut_value
+    if is_spin_glass:
+        max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
+    elif cut_value is None:
+        max_energy = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
+    else:
+        max_energy = cut_value
 
     if n_qubits < heuristic_threshold:
         bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
