@@ -85,8 +85,9 @@ from pyqrackising import solve_maxcut_exact, solve_maxcut_exact_sparse, solve_ma
 import networkx as nx
 
 G = nx.petersen_graph()
-best_solution_bit_string, best_cut_value, best_node_groups = solve_maxcut_exact(G)
+best_solution_bit_string, best_cut_value, best_node_groups = solve_maxcut_exact(G, time_limit=None)
 ```
+Pass a time limit (in seconds) if desired.
 
 From the MAXCUT solvers, we provide a (recursive) Traveling Salesman Problem (TSP) solver:
 ```py
