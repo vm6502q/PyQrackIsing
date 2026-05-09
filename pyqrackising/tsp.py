@@ -14,7 +14,7 @@ max_parallel_level = np.log2(n_threads)
 
 
 # two_opt() and targeted_three_opt() written by Elara (OpenAI ChatGPT instance)
-@njit
+@njit(cache=True)
 def path_length(path, G_m):
     tot_len = 0.0
     for i in range(len(path) - 1):
@@ -23,7 +23,7 @@ def path_length(path, G_m):
     return tot_len
 
 
-@njit
+@njit(cache=True)
 def one_way_two_opt(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -43,7 +43,7 @@ def one_way_two_opt(best_path, G):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def one_way_two_opt_parallel(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -69,7 +69,7 @@ def one_way_two_opt_parallel(best_path, G):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def anchored_two_opt(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -89,7 +89,7 @@ def anchored_two_opt(best_path, G):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def anchored_two_opt_parallel(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -115,7 +115,7 @@ def anchored_two_opt_parallel(best_path, G):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def two_opt(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -135,7 +135,7 @@ def two_opt(best_path, G):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def two_opt_parallel(best_path, G):
     improved = True
     best_dist = path_length(best_path, G)
@@ -161,7 +161,7 @@ def two_opt_parallel(best_path, G):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def targeted_three_opt(path, W, neighbor_lists, k_neighbors=20):
     """
     Lin-Kernighan style 3-opt heuristic for TSP improvement.
@@ -240,7 +240,7 @@ def targeted_three_opt(path, W, neighbor_lists, k_neighbors=20):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def targeted_three_opt_parallel(path, W, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
@@ -300,7 +300,7 @@ def targeted_three_opt_parallel(path, W, neighbor_lists, k_neighbors=20):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def init_G_a_b(G_m, a, b):
     n_a_nodes = len(a)
     n_b_nodes = len(b)
@@ -320,7 +320,7 @@ def init_G_a_b(G_m, a, b):
     return G_a, G_b
 
 
-@njit
+@njit(cache=True)
 def stitch_singlet(G_m, singlet, bulk):
     best_path = bulk.copy()
     best_weight = G_m[singlet, bulk[0]]
@@ -341,7 +341,7 @@ def stitch_singlet(G_m, singlet, bulk):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def stitch_symmetric(G_m, path_a, path_b):
     if len(path_a) == 1:
         return stitch_singlet(G_m, path_a[0], path_b)
@@ -377,7 +377,7 @@ def stitch_symmetric(G_m, path_a, path_b):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def stitch_asymmetric(G_m, path_a, path_b):
     if len(path_a) == 1:
         return stitch_singlet(G_m, path_a[0], path_b)
@@ -415,7 +415,7 @@ def stitch_asymmetric(G_m, path_a, path_b):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def restitch(G_m, path, is_sym):
     l = len(path)
     mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
@@ -432,7 +432,7 @@ def restitch(G_m, path, is_sym):
     return stitch_asymmetric(G_m, path_a, path_b)
 
 
-@njit
+@njit(cache=True)
 def monte_carlo_driver(n_nodes):
     a, b = [], []
     for i in range(n_nodes):
@@ -444,7 +444,7 @@ def monte_carlo_driver(n_nodes):
     return a, b
 
 
-@njit
+@njit(cache=True)
 def monte_carlo_loop(n_nodes):
     a, b = monte_carlo_driver(n_nodes)
     while (len(a) == 0) or (len(b) == 0):
@@ -454,7 +454,7 @@ def monte_carlo_loop(n_nodes):
 
 
 # Elara suggested replacing base-case handling with her brute-force solver
-@njit
+@njit(cache=True)
 def tsp_bruteforce_cyclic(G_m, perms):
     """
     Brute-force TSP solver for small n.
@@ -488,7 +488,7 @@ def tsp_bruteforce_cyclic(G_m, perms):
     return best_path, best_weight
 
 
-@njit
+@njit(cache=True)
 def tsp_bruteforce_acyclic(G_m, perms):
     """
     Brute-force TSP solver for small n.
@@ -520,7 +520,7 @@ def tsp_bruteforce_acyclic(G_m, perms):
     return best_path, best_weight
 
 
-@njit
+@njit(cache=True)
 def tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
     if n_nodes == 3:
         if is_cyclic:
@@ -555,7 +555,7 @@ def tsp_symmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
     return (nodes, 0)
 
 
-@njit
+@njit(cache=True)
 def tsp_symmetric_driver(
     G_m,
     is_cyclic,
@@ -841,7 +841,7 @@ def tsp_symmetric(
     )
 
 
-@njit
+@njit(cache=True)
 def tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
     if n_nodes == 2:
         weight = G_m[0, 1]
@@ -857,7 +857,7 @@ def tsp_asymmetric_brute_force_driver(G_m, n_nodes, nodes, is_cyclic):
     return (nodes, 0)
 
 
-@njit
+@njit(cache=True)
 def tsp_asymmetric_driver(
     G_m,
     is_reversed,
@@ -1161,7 +1161,7 @@ def tsp_asymmetric(
     )
 
 
-@njit
+@njit(cache=True)
 def get_G_m(G_data, G_rows, G_cols, low, high):
     if high < low:
         low, high = high, low
@@ -1176,7 +1176,7 @@ def get_G_m(G_data, G_rows, G_cols, low, high):
     return 0.0
 
 
-@njit
+@njit(cache=True)
 def path_length_sparse(path, G_data, G_rows, G_cols):
     tot_len = 0.0
     for i in range(len(path) - 1):
@@ -1194,7 +1194,7 @@ def path_length_sparse(path, G_data, G_rows, G_cols):
     return tot_len
 
 
-@njit
+@njit(cache=True)
 def one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols):
     improved = True
     best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
@@ -1214,7 +1214,7 @@ def one_way_two_opt_sparse(best_path, G_data, G_rows, G_cols):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def one_way_two_opt_sparse_parallel(best_path, G_data, G_rows, G_cols):
     improved = True
     best_dist = path_length_sparse(best_path, G_data, G_rows, G_cols)
@@ -1240,7 +1240,7 @@ def one_way_two_opt_sparse_parallel(best_path, G_data, G_rows, G_cols):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
@@ -1313,7 +1313,7 @@ def targeted_three_opt_sparse(path, G_data, G_rows, G_cols, neighbor_lists, k_ne
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def targeted_three_opt_sparse_parallel(path, G_data, G_rows, G_cols, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
@@ -1373,7 +1373,7 @@ def targeted_three_opt_sparse_parallel(path, G_data, G_rows, G_cols, neighbor_li
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def stitch_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
     best_path = bulk.copy()
     best_weight = get_G_m(G_data, G_rows, G_cols, singlet, bulk[0])
@@ -1398,7 +1398,7 @@ def stitch_singlet_sparse(G_data, G_rows, G_cols, singlet, bulk):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b):
     if len(path_a) == 1:
         return stitch_singlet_sparse(G_data, G_rows, G_cols, path_a[0], path_b)
@@ -1438,7 +1438,7 @@ def stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def restitch_sparse(G_data, G_rows, G_cols, path):
     l = len(path)
     mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
@@ -1452,7 +1452,7 @@ def restitch_sparse(G_data, G_rows, G_cols, path):
     return stitch_sparse_symmetric(G_data, G_rows, G_cols, path_a, path_b)
 
 
-@njit
+@njit(cache=True)
 def tsp_sparse_brute_force_driver(G_data, G_rows, G_cols, n_nodes, nodes):
     if n_nodes == 3:
         w_012 = get_G_m(G_data, G_rows, G_cols, 0, 1) + get_G_m(G_data, G_rows, G_cols, 1, 2)
@@ -1473,7 +1473,7 @@ def tsp_sparse_brute_force_driver(G_data, G_rows, G_cols, n_nodes, nodes):
     return (nodes, 0)
 
 
-@njit
+@njit(cache=True)
 def tsp_sparse_bruteforce(G_data, G_rows, G_cols, perms):
     n = len(G_rows) - 1
     best_weight = float("inf")
@@ -1529,7 +1529,7 @@ def init_G_a_b_sparse(G_m, a, b, dtype):
     return G_a.tocsr(), G_b.tocsr()
 
 
-@njit
+@njit(cache=True)
 def tsp_symmetric_sparse_driver(
     G_data,
     G_rows,
@@ -1639,7 +1639,7 @@ def tsp_symmetric_sparse(G, k_neighbors=20, is_top_level=True, is_parallel=True,
     )
 
 
-@njit
+@njit(cache=True)
 def path_length_streaming(path, G_func):
     tot_len = 0.0
     for i in range(len(path) - 1):
@@ -1648,7 +1648,7 @@ def path_length_streaming(path, G_func):
     return tot_len
 
 
-@njit
+@njit(cache=True)
 def one_way_two_opt_streaming(best_path, G_func):
     improved = True
     best_dist = path_length_streaming(best_path, G_func)
@@ -1667,7 +1667,7 @@ def one_way_two_opt_streaming(best_path, G_func):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def one_way_two_opt_streaming_parallel(best_path, G_func):
     improved = True
     best_dist = path_length_streaming(best_path, G_func)
@@ -1693,7 +1693,7 @@ def one_way_two_opt_streaming_parallel(best_path, G_func):
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
@@ -1766,7 +1766,7 @@ def targeted_three_opt_streaming(path, G_func, neighbor_lists, k_neighbors=20):
     return best_path, best_dist
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def targeted_three_opt_streaming_parallel(path, G_func, neighbor_lists, k_neighbors=20):
     n = len(path)
     best_path = path[:]
@@ -1826,7 +1826,7 @@ def targeted_three_opt_streaming_parallel(path, G_func, neighbor_lists, k_neighb
     return best_path, best_dist
 
 
-@njit
+@njit(cache=True)
 def stitch_singlet_streaming(G_func, singlet, bulk):
     best_path = bulk.copy()
     best_weight = G_func(singlet, bulk[0])
@@ -1847,7 +1847,7 @@ def stitch_singlet_streaming(G_func, singlet, bulk):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def stitch_streaming_symmetric(G_func, path_a, path_b):
     if len(path_a) == 1:
         return stitch_singlet_streaming(G_func, path_a[0], path_b)
@@ -1883,7 +1883,7 @@ def stitch_streaming_symmetric(G_func, path_a, path_b):
     return best_path
 
 
-@njit
+@njit(cache=True)
 def restitch_streaming(G_func, path):
     l = len(path)
     mid = ((l + 1) if (l & 1) and (np.random.random() < 0.5) else l) >> 1
@@ -1897,7 +1897,7 @@ def restitch_streaming(G_func, path):
     return stitch_streaming_symmetric(G_func, path_a, path_b)
 
 
-@njit
+@njit(cache=True)
 def tsp_streaming_brute_force_driver(G_func, n_nodes, nodes):
     if n_nodes == 3:
         w_012 = G_func(0, 1) + G_func(1, 2)
@@ -1918,7 +1918,7 @@ def tsp_streaming_brute_force_driver(G_func, n_nodes, nodes):
     return (nodes, 0)
 
 
-@njit
+@njit(cache=True)
 def tsp_streaming_bruteforce(G_func, perms, n):
     best_weight = float("inf")
     best_path = None
@@ -1941,7 +1941,7 @@ def tsp_streaming_bruteforce(G_func, perms, n):
     return best_path, best_weight
 
 
-@njit
+@njit(cache=True)
 def tsp_symmetric_streaming_driver(G_func, is_top_level, k_neighbors, nodes, path_a, path_b, neighbor_lists, is_parallel):
     best_path = stitch_streaming_symmetric(G_func, path_a, path_b)
 

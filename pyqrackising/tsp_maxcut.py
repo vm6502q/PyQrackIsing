@@ -7,7 +7,7 @@ import networkx as nx
 from numba import njit, prange
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def tsp_to_maxcut_bipartition(tsp_path, weights):
     n = len(tsp_path)
     best_cut_value = -float("inf")
@@ -56,7 +56,7 @@ def tsp_to_maxcut_bipartition(tsp_path, weights):
     return best_partition_A, best_partition_B, best_cut_value
 
 
-@njit
+@njit(cache=True)
 def get_cut(bitstring, nodes):
     solution = list(bitstring)
     l, r = [], []
@@ -69,7 +69,7 @@ def get_cut(bitstring, nodes):
     return l, r
 
 
-@njit
+@njit(cache=True)
 def get_bitstring(partition, nodes):
     bitstring = ""
     for node in nodes:
@@ -78,7 +78,7 @@ def get_bitstring(partition, nodes):
     return bitstring
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def early_exit(G_m, partition, nodes):
     n_qubits = len(nodes)
     bitstring = get_bitstring(partition, nodes)
@@ -122,7 +122,7 @@ def tsp_maxcut(G, k_neighbors=20, is_optimized=False, is_parallel=True, **kwargs
     return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
     n = len(tsp_path)
     best_cut_value = -float("inf")
@@ -181,7 +181,7 @@ def tsp_to_maxcut_bipartition_sparse(tsp_path, G_data, G_rows, G_cols):
     return best_partition_A, best_partition_B, best_cut_value
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def early_exit_sparse(G_data, G_rows, G_cols, partition, nodes):
     n_qubits = len(nodes)
     bitstring = get_bitstring(partition, nodes)
@@ -229,7 +229,7 @@ def tsp_maxcut_sparse(G, k_neighbors=20, is_optimized=False, is_parallel=True, *
     return bitstring, cut_value, ([nodes[x] for x in l], [nodes[x] for x in r]), energy
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
     n = len(tsp_path)
     best_cut_value = -float("inf")
@@ -278,7 +278,7 @@ def tsp_to_maxcut_bipartition_streaming(tsp_path, G_func):
     return best_partition_A, best_partition_B, best_cut_value
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def early_exit_streaming(G_func, partition, nodes):
     n_qubits = len(nodes)
     bitstring = get_bitstring(partition, nodes)
