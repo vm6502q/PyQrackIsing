@@ -114,7 +114,7 @@ def _branch_and_bound_streaming(G_func, nodes, warm_theta, warm_energy, n,
     t_start = time.monotonic()
     nodes_explored = 0
     nodes_pruned = 0
-    batch_cap = os.cpu_count() * 4
+    batch_cap = os.cpu_count() ** 2
 
     while stack:
         if time_limit is not None and (time.monotonic() - t_start) > time_limit:

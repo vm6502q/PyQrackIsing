@@ -133,7 +133,7 @@ def _branch_and_bound_sparse(G_data, G_rows, G_cols, warm_theta, warm_energy,
     t_start = time.monotonic()
     nodes_explored = 0
     nodes_pruned = 0
-    batch_cap = os.cpu_count() * 4
+    batch_cap = os.cpu_count() ** 2
 
     while stack:
         if time_limit is not None and (time.monotonic() - t_start) > time_limit:

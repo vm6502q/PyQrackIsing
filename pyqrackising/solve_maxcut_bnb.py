@@ -139,7 +139,7 @@ def _branch_and_bound(G_m, warm_theta, warm_energy, n, is_spin_glass,
     t_start = time.monotonic()
     nodes_explored = 0
     nodes_pruned = 0
-    batch_cap = os.cpu_count() * 4
+    batch_cap = os.cpu_count() ** 2
 
     while stack:
         if time_limit is not None and (time.monotonic() - t_start) > time_limit:
