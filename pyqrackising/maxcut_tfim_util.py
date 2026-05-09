@@ -330,11 +330,14 @@ def compute_energy(sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut(sample, G_m, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    cut = 0
-    for u in l:
-        for v in r:
-            cut += G_m[u, v]
+    # G_m is upper-triangular: iterate u < v pairs only, matching compute_energy.
+    # The previous l×r loop double-counted on symmetric matrices and
+    # gave wrong results on upper-triangular matrices.
+    cut = 0.0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            if sample[u] != sample[v]:
+                cut += G_m[u, v]
 
     return cut
 
@@ -398,13 +401,16 @@ def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
 
 @njit(cache=True)
 def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    s = l if len(l) < len(r) else r
-    cut = 0
-    for u in s:
+    # Iterate all rows with a j > i guard so each edge is counted once,
+    # matching compute_energy_sparse's traversal pattern.
+    # The previous smaller-partition-only approach was correct only for
+    # symmetric CSR; upper-triangular CSR missed edges in the other half.
+    cut = 0.0
+    for u in range(n_qubits):
         u_bit = sample[u]
         for col in range(G_rows[u], G_rows[u + 1]):
-            if u_bit != sample[G_cols[col]]:
+            j = G_cols[col]
+            if j > u and u_bit != sample[j]:
                 cut += G_data[col]
 
     return cut
@@ -424,11 +430,14 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
 
 @njit(cache=True)
 def compute_cut_streaming(sample, G_func, nodes, n_qubits):
-    l, r = get_cut_base(sample, n_qubits)
-    cut = 0
-    for u in l:
-        for v in r:
-            cut += G_func(nodes[u], nodes[v])
+    # Iterate u < v pairs only, matching compute_energy_streaming.
+    # The previous l×r loop double-counted on symmetric G_func and
+    # gave wrong results when G_func is not symmetric.
+    cut = 0.0
+    for u in range(n_qubits):
+        for v in range(u + 1, n_qubits):
+            if sample[u] != sample[v]:
+                cut += G_func(nodes[u], nodes[v])
 
     return cut
 
