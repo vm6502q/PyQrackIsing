@@ -22,7 +22,7 @@ import os
 dtype = opencl_context.dtype
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
     n = len(best_theta)
 
@@ -43,7 +43,7 @@ def run_single_bit_flips(best_theta, is_spin_glass, G_func, nodes):
     return best_energy, best_state
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count):
     n = len(best_theta)
     combo_count = (n * (n - 1)) // 2
@@ -83,7 +83,7 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_func, nodes, thread_count)
     return best_energy, best_state
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes, n, is_spin_glass):
     blocks = (n + 63) >> 6
     block_size = thread_count * gray_seed_multiple
@@ -114,7 +114,7 @@ def pick_gray_seeds(best_theta, thread_count, gray_seed_multiple, G_func, nodes,
     return best_seeds, best_energies[0]
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, is_spin_glass, G_func, nodes):
     n = len(best_theta)
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count

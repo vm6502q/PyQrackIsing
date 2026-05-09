@@ -33,7 +33,7 @@ dtype = opencl_context.dtype
 wgs = opencl_context.work_group_size
 
 
-@njit
+@njit(cache=True)
 def update_repulsion_choice(G_m, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
@@ -49,7 +49,7 @@ def update_repulsion_choice(G_m, weights, n, used, node, repulsion_base):
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
-@njit
+@njit(cache=True)
 def local_repulsion_choice(G_m, repulsion_base, n, m, s):
     """
     Pick m nodes out of n with repulsion bias:
@@ -78,7 +78,7 @@ def local_repulsion_choice(G_m, repulsion_base, n, m, s):
     return used
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_spin_glass):
     shot_segment = (max(1, shots >> 1) + thread_count - 1) // thread_count
     shots = shot_segment * thread_count
@@ -140,7 +140,7 @@ def sample_measurement(G_m, shots, thread_count, thresholds, repulsion_base, is_
     return best_solution, best_energy
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def shot_loop(G_m, thresholds, repulsion_base, n, shots, solutions):
     for s in prange(shots):
         # First dimension: Hamming weight
@@ -190,7 +190,7 @@ def sample_for_opencl(
     return best_solution, float(best_energy)
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def init_J_and_z(G_m, repulsion_base):
     G_min = G_m.min()
     n_qubits = len(G_m)
@@ -289,7 +289,7 @@ def run_cut_opencl(
     return samples[max_index_host[best_x]].copy(), energy
 
 
-@njit
+@njit(cache=True)
 def exact_maxcut(G):
     """Brute-force exact MAXCUT solver using Numba JIT."""
     n = G.shape[0]
@@ -316,7 +316,7 @@ def exact_maxcut(G):
     return best_bits, max_cut
 
 
-@njit
+@njit(cache=True)
 def exact_spin_glass(G):
     """Brute-force exact spin-glass solver using Numba JIT."""
     n = G.shape[0]

@@ -22,7 +22,7 @@ epsilon = opencl_context.epsilon
 dtype = opencl_context.dtype
 
 
-@njit
+@njit(cache=True)
 def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base):
     # Select node
     used[node] = True
@@ -38,7 +38,7 @@ def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_bas
 
 
 # Written by Elara (OpenAI custom GPT) and improved by Dan Strano
-@njit
+@njit(cache=True)
 def local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s):
     """
     Pick m nodes out of n with repulsion bias:
@@ -67,7 +67,7 @@ def local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s):
     return used
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def sample_measurement(G_func, nodes, shots, thread_count, thresholds, n, repulsion_base, is_spin_glass):
     shot_segment = (max(1, shots >> 1) + thread_count - 1) // thread_count
     shots = shot_segment * thread_count
@@ -128,7 +128,7 @@ def sample_measurement(G_func, nodes, shots, thread_count, thresholds, n, repuls
     return best_solution, best_energy
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def init_J_and_z(G_func, nodes, G_min, repulsion_base):
     n_qubits = len(nodes)
     degrees = np.empty(n_qubits, dtype=np.uint32)
@@ -150,7 +150,7 @@ def init_J_and_z(G_func, nodes, G_min, repulsion_base):
     return J_eff, degrees
 
 
-@njit
+@njit(cache=True)
 def find_G_min(G_func, nodes, n_nodes):
     G_min = float("inf")
     for i in range(n_nodes):
@@ -164,7 +164,7 @@ def find_G_min(G_func, nodes, n_nodes):
     return G_min
 
 
-@njit
+@njit(cache=True)
 def exact_maxcut(G_func, n):
     """Brute-force exact MAXCUT solver using Numba JIT."""
     max_cut = -1.0
@@ -190,7 +190,7 @@ def exact_maxcut(G_func, n):
     return best_bits, max_cut
 
 
-@njit
+@njit(cache=True)
 def exact_spin_glass(G_func, n):
     """Brute-force exact spin-glass solver using Numba JIT."""
     max_cut = -1.0
