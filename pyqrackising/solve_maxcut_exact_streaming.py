@@ -16,15 +16,18 @@
 #   edge contribution becomes w_{ij} * (x_i + x_j - 2*y_ij).
 #   Constraints: y_ij <= x_i, y_ij <= x_j, x_i + x_j - y_ij <= 1.
 #   Users may swap in a tighter SDP bound by replacing _lp_upper_bound.
-#
-# Numba is used for all inner loops (cut evaluation, branching heuristic,
-# fixed-contribution accounting). The LP solver call (scipy HiGHS) stays
-# in Python since JIT-compiling an LP solver is not practical.
 
 import time
 import numpy as np
 from numba import njit, prange
-from .maxcut_tfim_util import compute_cut_streaming, compute_energy_streaming
+from .maxcut_tfim_util import (
+    compute_cut_streaming,
+    compute_energy_streaming,
+    get_cut,
+    heuristic_threshold,
+    int_to_bitstring,
+    opencl_context,
+)
 
 try:
     from scipy.optimize import linprog
@@ -33,27 +36,15 @@ except ImportError:
     _HAVE_SCIPY = False
 
 
+dtype = opencl_context.dtype
+
+
 # ---------------------------------------------------------------------------
 # Numba-compiled inner loops (streaming / G_func)
 # ---------------------------------------------------------------------------
 
-# Scoring delegates to maxcut_tfim_util so all PyQrackIsing solvers
-# use a single consistent implementation.
-def _cut_value_streaming(G_func, nodes, bits):
-    n_qubits = len(nodes)
-    return compute_cut_streaming(bits, G_func, nodes, n_qubits)
-
-
-def _energy_value_streaming(G_func, nodes, bits):
-    n_qubits = len(nodes)
-    return compute_energy_streaming(bits, G_func, nodes, n_qubits)
-
-
 @njit(cache=True)
 def _fixed_fixed_streaming(G_func, nodes, fixed_idx, fixed_val):
-    """
-    Exact cut contribution from already-branched variable pairs (streaming).
-    """
     total = 0.0
     nf = len(fixed_idx)
     for a in range(nf):
@@ -72,16 +63,6 @@ def _fixed_fixed_streaming(G_func, nodes, fixed_idx, fixed_val):
 
 @njit(cache=True)
 def _fixed_free_linear_streaming(G_func, nodes, free_arr, fixed_idx, fixed_val):
-    """
-    Decompose fixed-to-free edge contributions for the LP objective (streaming).
-
-      MAXCUT contribution of fixed-free edges
-        = fixed_free_const + sum_k coeff[k] * x_k
-
-    where:
-      fixed_free_const = sum_{k,fj} w_{k,fj} * fval_fj
-      coeff[k]         = sum_{fj} w_{k,fj} * (1 - 2 * fval_fj)
-    """
     n_free = len(free_arr)
     nf = len(fixed_idx)
     coeff = np.zeros(n_free)
@@ -102,10 +83,6 @@ def _fixed_free_linear_streaming(G_func, nodes, free_arr, fixed_idx, fixed_val):
 
 @njit(cache=True)
 def _influence_scores_streaming(G_func, nodes, free_arr):
-    """
-    Branch-variable selection: sum of absolute edge weights to other free
-    variables for each free variable (streaming).
-    """
     n_free = len(free_arr)
     scores = np.zeros(n_free)
     for k in range(n_free):
@@ -120,16 +97,10 @@ def _influence_scores_streaming(G_func, nodes, free_arr):
 
 
 # ---------------------------------------------------------------------------
-# LP upper bound (Python, calls scipy HiGHS)
+# LP upper bound
 # ---------------------------------------------------------------------------
 
 def _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n):
-    """
-    LP relaxation upper bound for the MAXCUT subproblem (streaming).
-    Fixed-variable contributions computed via Numba helpers;
-    free-free relaxation solved by scipy HiGHS.
-    Falls back to a loose but valid bound when scipy is unavailable.
-    """
     ff = _fixed_fixed_streaming(G_func, nodes, fixed_idx, fixed_val)
     n_free = len(free_arr)
 
@@ -140,7 +111,7 @@ def _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n):
         G_func, nodes, free_arr, fixed_idx, fixed_val
     )
 
-    # Collect free-free edges
+    # indices into free_arr, not node indices, since LP vars are indexed by position
     pairs = []
     for a in range(n_free):
         i = int(free_arr[a])
@@ -149,7 +120,7 @@ def _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n):
             ii, jj = (i, j) if i < j else (j, i)
             w = float(G_func(nodes[ii], nodes[jj]))
             if w != 0.0:
-                pairs.append((a, b, w))   # store indices into free_arr
+                pairs.append((a, b, w))
 
     if not _HAVE_SCIPY:
         bound = ff + ff_const
@@ -193,124 +164,13 @@ def _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n):
 
 
 # ---------------------------------------------------------------------------
-# Warm-start parser  (matches PyQrackIsing solver convention)
+# Branch and bound (internal)
 # ---------------------------------------------------------------------------
 
-def _parse_warm_start(
-    best_guess,
-    n_qubits,
-    G_func,
-    nodes,
-    quality=None,
-    shots=None,
-    is_spin_glass=False,
-    anneal_t=None,
-    anneal_h=None,
-    repulsion_base=None,
-):
-    """
-    Resolve a warm-start hint into (bits: ndarray[bool], cut_val: float).
-
-    Accepted formats (matching PyQrackIsing solver convention):
-      str        — bitstring of '0'/'1' characters, length n_qubits
-      int        — integer encoding (LSB = node 0)
-      list[bool] — list of per-node boolean / 0-1 values
-      None       — call maxcut_tfim_streaming or use a random partition
-    """
-    bitstring = ""
-    cut_val = None
-
-    if isinstance(best_guess, str):
-        bitstring = best_guess
-
-    elif isinstance(best_guess, int):
-        bitstring = format(best_guess, f"0{n_qubits}b")[::-1]
-
-    elif isinstance(best_guess, list):
-        bitstring = "".join("1" if b else "0" for b in best_guess)
-
-    else:
-        if G_func is not None:
-            from .spin_glass_solver_streaming import spin_glass_solver_streaming
-            kwargs = {}
-            if quality is not None:       kwargs["quality"]        = quality
-            if shots is not None:         kwargs["shots"]          = shots
-            if anneal_t is not None:      kwargs["anneal_t"]       = anneal_t
-            if anneal_h is not None:      kwargs["anneal_h"]       = anneal_h
-            if repulsion_base is not None: kwargs["repulsion_base"] = repulsion_base
-            bitstring, cut_val, _ = maxcut_tfim_streaming(
-                G_func, nodes, is_spin_glass=is_spin_glass, **kwargs
-            )
-        else:
-            bits = np.random.randint(0, 2, size=n_qubits).astype(np.bool_)
-            score_fn = _energy_value_streaming if is_spin_glass else _cut_value_streaming
-            return bits, float(score_fn(G_func, nodes, bits))
-
-    bits = np.array([b == "1" for b in bitstring], dtype=np.bool_)
-    cut_val = float(
-        _energy_value_streaming(G_func, nodes, bits) if is_spin_glass
-        else _cut_value_streaming(G_func, nodes, bits)
-    )
-    return bits, cut_val
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def maxcut_branch_and_bound_streaming(
-    G_func,
-    nodes,
-    best_guess=None,
-    quality=None,
-    shots=None,
-    is_spin_glass=False,
-    anneal_t=None,
-    anneal_h=None,
-    repulsion_base=None,
-    verbose=True,
-    time_limit=None,
-):
-    """
-    Exact MAXCUT solver via branch and bound with LP relaxation upper bounds
-    (streaming / G_func + nodes variant).
-
-    All inner loops are Numba JIT-compiled. The LP bound uses scipy HiGHS.
-
-    Parameters
-    ----------
-    G_func : callable(u, v) -> float
-        Edge weight function. G_func(u, v) returns the weight of edge (u, v),
-        or 0.0 if the edge does not exist. Must be Numba-callable (@njit).
-    nodes : array-like
-        Ordered sequence of node identifiers passed to G_func.
-    best_guess : str | int | list[bool] | None
-        Warm-start hint in any PyQrackIsing-compatible format:
-          str        — '0101...' bitstring
-          int        — integer encoding (LSB = node 0)
-          list[bool] — list of per-node boolean values
-          None       — call maxcut_tfim_streaming or use a random partition
-    quality, shots, anneal_t, anneal_h, repulsion_base, is_spin_glass
-        Forwarded to maxcut_tfim_streaming when best_guess is None.
-    verbose : bool
-    time_limit : float or None
-        Wall-clock seconds before returning best-so-far (not certified).
-
-    Returns
-    -------
-    best_bits : ndarray[bool]
-    best_value : float
-    certified : bool
-        True iff the returned solution is provably optimal.
-    """
-    nodes = np.asarray(nodes)
-    n = len(nodes)
-
-    best_bits, best_value = _parse_warm_start(
-        best_guess, n, G_func, nodes,
-        quality=quality, shots=shots, is_spin_glass=is_spin_glass,
-        anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base,
-    )
+def _branch_and_bound_streaming(G_func, nodes, warm_theta, warm_energy, n,
+                                 is_spin_glass, verbose=True, time_limit=None):
+    best_bits = warm_theta.copy()
+    best_value = warm_energy
 
     if verbose:
         print(f"Warm-start incumbent: {best_value:.6f}")
@@ -346,8 +206,9 @@ def maxcut_branch_and_bound_streaming(
             for k in range(len(fixed_idx)):
                 bits[fixed_idx[k]] = bool(fixed_val[k])
             val = float(
-                _energy_value_streaming(G_func, nodes, bits) if is_spin_glass
-                else _cut_value_streaming(G_func, nodes, bits)
+                compute_energy_streaming(bits, G_func, nodes, n)
+                if is_spin_glass
+                else compute_cut_streaming(bits, G_func, nodes, n)
             )
             if val > best_value:
                 best_value = val
@@ -376,6 +237,10 @@ def maxcut_branch_and_bound_streaming(
     return best_bits, best_value, True
 
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def solve_maxcut_exact_streaming(
     G_func,
     nodes,
@@ -388,62 +253,103 @@ def solve_maxcut_exact_streaming(
     repulsion_base=None,
     verbose=True,
     time_limit=None,
+    gray_iterations=None,
+    gray_seed_multiple=None,
 ):
     """
-    Run maxcut_tfim_streaming on (G_func, nodes) to produce a warm start
-    (unless best_guess is supplied), then certify it via branch and bound.
+    Exact MAXCUT/spin-glass solver: warm-start from spin_glass_solver_streaming
+    then certify via branch and bound.
+
+    Accepts the same G_func + nodes input as spin_glass_solver_streaming and
+    the same warm-start formats (str, int, list, or None).
 
     Parameters
     ----------
     G_func : callable(u, v) -> float
-        Edge weight function (Numba-callable).
+        Edge weight function (Numba-callable). Returns 0.0 for absent edges.
     nodes : array-like
-        Ordered sequence of node identifiers.
+        Ordered sequence of node identifiers passed to G_func.
     best_guess : str | int | list[bool] | None
-        Optional warm-start hint in any PyQrackIsing-compatible format.
-        If None, maxcut_tfim_streaming is called to produce one.
-    quality, shots, anneal_t, anneal_h, repulsion_base, is_spin_glass
-        Forwarded to maxcut_tfim_streaming when best_guess is None.
+        Warm-start hint in any PyQrackIsing-compatible format. If None,
+        spin_glass_solver_streaming is called to produce one.
+    quality, shots, anneal_t, anneal_h, repulsion_base, is_spin_glass,
+    gray_iterations, gray_seed_multiple
+        Forwarded to spin_glass_solver_streaming when best_guess is None.
     verbose : bool
     time_limit : float or None
+        Wall-clock seconds for the B&B phase.
 
     Returns
     -------
-    heuristic_bits : ndarray[bool]
-    heuristic_value : float
-    exact_bits : ndarray[bool]
-    exact_value : float
+    bitstring : str
+    cut_value : float
+    partition : tuple(list, list)
+    min_energy : float
     certified : bool
     """
     nodes = np.asarray(nodes)
-    n = len(nodes)
+    n_qubits = len(nodes)
 
-    if verbose and best_guess is None:
-        print("Running PyQrackIsing heuristic...")
+    if n_qubits < 3:
+        if n_qubits == 0:
+            return "", 0, ([], []), 0, True
+        if n_qubits == 1:
+            return "0", 0, (list(nodes), []), 0, True
+        if n_qubits == 2:
+            weight = G_func(nodes[0], nodes[1])
+            if weight < 0.0:
+                return "00", 0, (list(nodes), []), weight, True
+            return "01", weight, ([nodes[0]], [nodes[1]]), -weight, True
 
-    t0 = time.monotonic()
-    heuristic_bits, heuristic_value = _parse_warm_start(
-        best_guess, n, G_func, nodes,
-        quality=quality, shots=shots, is_spin_glass=is_spin_glass,
-        anneal_t=anneal_t, anneal_h=anneal_h, repulsion_base=repulsion_base,
+    # Warm-start parser — mirrors spin_glass_solver_streaming exactly
+    bitstring = ""
+    cut_value = 0.0
+    if isinstance(best_guess, str):
+        bitstring = best_guess
+    elif isinstance(best_guess, int):
+        bitstring = int_to_bitstring(best_guess, n_qubits)
+    elif isinstance(best_guess, list):
+        bitstring = "".join(["1" if b else "0" for b in best_guess])
+    else:
+        if verbose:
+            print("Running PyQrackIsing heuristic...")
+        from .spin_glass_solver_streaming import spin_glass_solver_streaming
+        kwargs = {}
+        if quality is not None:           kwargs["quality"]            = quality
+        if shots is not None:             kwargs["shots"]              = shots
+        if anneal_t is not None:          kwargs["anneal_t"]           = anneal_t
+        if anneal_h is not None:          kwargs["anneal_h"]           = anneal_h
+        if repulsion_base is not None:    kwargs["repulsion_base"]     = repulsion_base
+        if gray_iterations is not None:   kwargs["gray_iterations"]    = gray_iterations
+        if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
+        t0 = time.monotonic()
+        bitstring, cut_value, _, _ = spin_glass_solver_streaming(
+            G_func, nodes, is_spin_glass=is_spin_glass, **kwargs
+        )
+        if verbose:
+            print(f"Heuristic value: {cut_value:.6f}  ({time.monotonic()-t0:.3f}s)")
+
+    best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+    max_energy = (
+        compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
+        if is_spin_glass
+        else compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
     )
-    t_heuristic = time.monotonic() - t0
 
     if verbose:
-        print(f"Heuristic value: {heuristic_value:.6f}  ({t_heuristic:.3f}s)")
         print("Starting branch and bound...")
 
-    exact_bits, exact_value, certified = maxcut_branch_and_bound_streaming(
-        G_func,
-        nodes,
-        best_guess=heuristic_bits,
-        verbose=verbose,
-        time_limit=time_limit,
+    best_theta, max_energy, certified = _branch_and_bound_streaming(
+        G_func, nodes, best_theta, max_energy, n_qubits, is_spin_glass,
+        verbose=verbose, time_limit=time_limit,
     )
 
-    if verbose:
-        gap = exact_value - heuristic_value
-        print(f"\nHeuristic gap closed: {gap:.6f}  "
-              f"({'certified exact' if certified else 'time-limited'})")
+    bitstring, l, r = get_cut(best_theta, list(nodes), n_qubits)
+    if is_spin_glass:
+        cut_value = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
+        min_energy = -max_energy
+    else:
+        cut_value = max_energy
+        min_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
 
-    return heuristic_bits, heuristic_value, exact_bits, exact_value, certified
+    return bitstring, float(cut_value), (l, r), float(min_energy), certified
