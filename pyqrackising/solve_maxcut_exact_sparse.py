@@ -3,204 +3,72 @@
 #
 # Initial draft produced by (Anthropic) Claude (Sonnet 4.6).
 #
-# bnb_exact_sparse.py — warm-start branch-and-bound exact MAXCUT solver (sparse)
+# maxcut_exact_sparse.py — exact MAXCUT solver via weighted MaxSAT (sparse)
 #
-# Same parallelism strategy as bnb_exact.py; inner loops work from CSR arrays.
+# Same encoding as maxcut_exact.py; edge list built from CSR arrays.
+# See maxcut_exact.py for full encoding documentation.
 
 import time
-import os
 import networkx as nx
 import numpy as np
-from numba import njit, prange
 from .maxcut_tfim_util import (
     compute_cut_sparse,
     compute_energy_sparse,
     get_cut,
-    heuristic_threshold_sparse,
     int_to_bitstring,
     opencl_context,
     to_scipy_sparse_upper_triangular,
 )
 
+try:
+    from pysat.examples.rc2 import RC2
+    from pysat.formula import WCNF
+    _HAVE_PYSAT = True
+except ImportError:
+    _HAVE_PYSAT = False
+
 dtype = opencl_context.dtype
+_SCALE = 10 ** 9
 
 
-# ---------------------------------------------------------------------------
-# Parallel kernels (sparse CSR)
-# ---------------------------------------------------------------------------
-
-@njit(parallel=True, cache=True)
-def _upper_bound_batch_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
-    """
-    Parallel upper bound for a batch of B&B nodes (sparse CSR).
-    fixed_vars : (batch_size, n) int8, -1=free, 0/1=fixed.
-    """
-    ub = np.empty(batch_size)
-    for b in prange(batch_size):
-        total = 0.0
-        for i in range(n):
-            fi = fixed_vars[b, i]
-            for r in range(G_rows[i], G_rows[i + 1]):
-                j = G_cols[r]
-                if j <= i:
-                    continue
-                w = G_data[r]
-                if w == 0.0:
-                    continue
-                fj = fixed_vars[b, j]
-                if fi >= 0 and fj >= 0:
-                    if fi != fj:
-                        total += w
-                else:
-                    if w > 0.0:
-                        total += w
-        ub[b] = total
-    return ub
-
-
-@njit(parallel=True, cache=True)
-def _eval_leaves_cut_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
-    vals = np.empty(batch_size)
-    for b in prange(batch_size):
-        cut = 0.0
-        for i in range(n):
-            bi = fixed_vars[b, i]
-            for r in range(G_rows[i], G_rows[i + 1]):
-                j = G_cols[r]
-                if j > i and G_data[r] != 0.0 and bi != fixed_vars[b, j]:
-                    cut += G_data[r]
-        vals[b] = cut
-    return vals
-
-
-@njit(parallel=True, cache=True)
-def _eval_leaves_energy_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
-    vals = np.empty(batch_size)
-    for b in prange(batch_size):
-        energy = 0.0
-        for i in range(n):
-            bi = fixed_vars[b, i]
-            for r in range(G_rows[i], G_rows[i + 1]):
-                j = G_cols[r]
-                val = G_data[r]
-                energy += -val if bi == fixed_vars[b, j] else val
-        vals[b] = energy
-    return vals
-
-
-@njit(parallel=True, cache=True)
-def _influence_scores_sparse(G_data, G_rows, G_cols, fixed_row, n):
-    scores = np.full(n, -1.0)
-    free_set = np.zeros(n, dtype=np.bool_)
+def _build_wcnf_sparse(G_data, G_rows, G_cols, n):
+    wcnf = WCNF()
+    total_pos_scaled = 0
+    baseline_neg = 0.0
+    edge_idx = 0
     for i in range(n):
-        if fixed_row[i] < 0:
-            free_set[i] = True
-    for i in prange(n):
-        if not free_set[i]:
-            continue
-        s = 0.0
         for r in range(G_rows[i], G_rows[i + 1]):
-            j = G_cols[r]
-            if free_set[j]:
-                s += abs(G_data[r])
-        # reverse edges (j < i stored in row j)
-        for j in range(i):
-            if not free_set[j]:
+            j = int(G_cols[r])
+            if j <= i:
                 continue
-            for r in range(G_rows[j], G_rows[j + 1]):
-                if G_cols[r] == i:
-                    s += abs(G_data[r])
-                    break
-        scores[i] = s
-    return scores
-
-
-# ---------------------------------------------------------------------------
-# B&B loop
-# ---------------------------------------------------------------------------
-
-def _branch_and_bound_sparse(G_data, G_rows, G_cols, warm_theta, warm_energy,
-                              n, is_spin_glass, verbose=True, time_limit=None):
-    best_bits = warm_theta.copy()
-    best_value = warm_energy
-
-    if verbose:
-        print(f"Warm-start incumbent: {best_value:.6f}")
-
-    root = np.full(n, -1, dtype=np.int8)
-    stack = [root]
-
-    t_start = time.monotonic()
-    nodes_explored = 0
-    nodes_pruned = 0
-    batch_cap = os.cpu_count() * 4
-
-    while stack:
-        if time_limit is not None and (time.monotonic() - t_start) > time_limit:
-            if verbose:
-                print(f"Time limit reached. "
-                      f"Nodes: {nodes_explored}, Pruned: {nodes_pruned}")
-            return best_bits, best_value, False
-
-        batch_size = min(batch_cap, len(stack))
-        batch_nodes = [stack.pop() for _ in range(batch_size)]
-        batch_arr = np.array(batch_nodes, dtype=np.int8)
-
-        nodes_explored += batch_size
-
-        ubs = _upper_bound_batch_sparse(G_data, G_rows, G_cols,
-                                        batch_arr, n, batch_size)
-
-        leaves = []
-        interior = []
-        for k in range(batch_size):
-            if ubs[k] <= best_value + 1e-9:
-                nodes_pruned += 1
+            w = float(G_data[r])
+            if w == 0.0:
                 continue
-            if int(np.sum(batch_arr[k] < 0)) == 0:
-                leaves.append(k)
+            xi = i + 1
+            xj = j + 1
+            s  = n + edge_idx + 1
+            wcnf.append([ xi,  xj, -s])
+            wcnf.append([-xi, -xj, -s])
+            if w >= 0.0:
+                iw = max(1, int(round(w * _SCALE)))
+                total_pos_scaled += iw
+                wcnf.append([s], weight=iw)
             else:
-                interior.append(k)
-
-        if leaves:
-            leaf_arr = batch_arr[np.array(leaves, dtype=np.int64)]
-            leaf_vals = (
-                _eval_leaves_energy_sparse(G_data, G_rows, G_cols,
-                                           leaf_arr, n, len(leaves))
-                if is_spin_glass
-                else _eval_leaves_cut_sparse(G_data, G_rows, G_cols,
-                                             leaf_arr, n, len(leaves))
-            )
-            best_leaf = int(np.argmax(leaf_vals))
-            if leaf_vals[best_leaf] > best_value:
-                best_value = float(leaf_vals[best_leaf])
-                best_bits = (leaf_arr[best_leaf] >= 1).copy()
-                if verbose:
-                    print(f"  New incumbent: {best_value:.6f}"
-                          f"  (nodes: {nodes_explored})")
-
-        for k in interior:
-            row = batch_arr[k]
-            scores = _influence_scores_sparse(G_data, G_rows, G_cols, row, n)
-            branch_var = int(np.argmax(scores))
-            warm_val = int(best_bits[branch_var])
-            for val in [warm_val, 1 - warm_val]:
-                child = row.copy()
-                child[branch_var] = np.int8(val)
-                stack.append(child)
-
-    elapsed = time.monotonic() - t_start
-    if verbose:
-        print(f"\nExact optimum: {best_value:.6f}")
-        print(f"Nodes explored: {nodes_explored}  |  "
-              f"Pruned: {nodes_pruned}  |  Time: {elapsed:.3f}s")
-
-    return best_bits, best_value, True
+                iw = max(1, int(round(-w * _SCALE)))
+                baseline_neg += w
+                wcnf.append([-s], weight=iw)
+            edge_idx += 1
+    return wcnf, total_pos_scaled, baseline_neg
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _model_to_bits(model, n):
+    bits = np.zeros(n, dtype=np.bool_)
+    for lit in model:
+        var = abs(lit) - 1
+        if 0 <= var < n:
+            bits[var] = lit > 0
+    return bits
+
 
 def solve_maxcut_exact_sparse(
     G,
@@ -218,11 +86,12 @@ def solve_maxcut_exact_sparse(
     gray_seed_multiple=None,
 ):
     """
-    Exact MAXCUT/spin-glass solver: warm-start from spin_glass_solver_sparse
-    then certify via branch and bound with parallel Numba kernels.
+    Exact MAXCUT/spin-glass solver via weighted MaxSAT (RC2), sparse variant.
 
     Accepts the same G input as spin_glass_solver_sparse (NetworkX graph or
     scipy CSR matrix) and the same warm-start formats (str, int, list, None).
+
+    Requires:  pip install python-sat
 
     Parameters
     ----------
@@ -242,6 +111,12 @@ def solve_maxcut_exact_sparse(
     min_energy : float
     certified : bool
     """
+    if not _HAVE_PYSAT:
+        raise ImportError(
+            "python-sat is required for solve_maxcut_exact_sparse. "
+            "Install it with:  pip install python-sat"
+        )
+
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
@@ -266,9 +141,6 @@ def solve_maxcut_exact_sparse(
     G_rows = np.asarray(G_m.indptr, dtype=np.int64)
     G_cols = np.asarray(G_m.indices, dtype=np.int64)
 
-    bitstring = ""
-    cut_value = None
-    energy_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -289,34 +161,55 @@ def solve_maxcut_exact_sparse(
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         kwargs["is_maxcut_gpu"] = is_maxcut_gpu
         t0 = time.monotonic()
-        bitstring, cut_value, _, energy_value = spin_glass_solver_sparse(
+        bitstring, cut_value, _, _ = spin_glass_solver_sparse(
             G_m, is_spin_glass=is_spin_glass, **kwargs
         )
         if verbose:
             print(f"Heuristic value: {cut_value:.6f}  ({time.monotonic()-t0:.3f}s)")
 
-    best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    if is_spin_glass:
-        max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if energy_value is None else energy_value
-    elif cut_value is None:
-        max_energy = compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
-    else:
-        max_energy = cut_value
+    warm_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+    wcnf, total_pos_scaled, baseline_neg = _build_wcnf_sparse(
+        G_data, G_rows, G_cols, n_qubits
+    )
 
     if verbose:
-        print("Starting branch and bound...")
+        print("Starting RC2 MaxSAT solver...")
 
-    best_theta, max_energy, certified = _branch_and_bound_sparse(
-        G_data, G_rows, G_cols, best_theta, max_energy, n_qubits, is_spin_glass,
-        verbose=verbose, time_limit=time_limit,
-    )
+    rc2_kwargs = {}
+    if time_limit is not None:
+        rc2_kwargs["time_limit"] = time_limit
+
+    t0 = time.monotonic()
+    with RC2(wcnf, solver="g3", **rc2_kwargs) as rc2:
+        try:
+            for i, bit in enumerate(warm_theta):
+                rc2.oracle.set_phases([i + 1 if bit else -(i + 1)])
+        except AttributeError:
+            pass
+        model = rc2.compute()
+        cost_scaled = rc2.cost
+        certified = model is not None
+
+    elapsed = time.monotonic() - t0
+
+    if model is None:
+        if verbose:
+            print(f"RC2 time limit reached ({elapsed:.3f}s). "
+                  f"Returning warm start.")
+        best_theta = warm_theta
+    else:
+        best_theta = _model_to_bits(model, n_qubits)
+
+    if verbose and model is not None:
+        cut_opt = (total_pos_scaled - cost_scaled) / _SCALE + baseline_neg
+        print(f"RC2 optimum: {cut_opt:.6f}  ({elapsed:.3f}s)")
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:
-        cut_value = compute_cut_sparse(best_theta, G_data, G_rows, G_cols, n_qubits)
-        min_energy = -max_energy
+        cut_value = float(compute_cut_sparse(best_theta, G_data, G_rows, G_cols, n_qubits))
+        min_energy = -float(compute_energy_sparse(best_theta, G_data, G_rows, G_cols, n_qubits))
     else:
-        cut_value = max_energy
-        min_energy = compute_energy_sparse(best_theta, G_data, G_rows, G_cols, n_qubits)
+        cut_value = float(compute_cut_sparse(best_theta, G_data, G_rows, G_cols, n_qubits))
+        min_energy = float(compute_energy_sparse(best_theta, G_data, G_rows, G_cols, n_qubits))
 
-    return bitstring, float(cut_value), (l, r), float(min_energy), certified
+    return bitstring, cut_value, (l, r), min_energy, certified
