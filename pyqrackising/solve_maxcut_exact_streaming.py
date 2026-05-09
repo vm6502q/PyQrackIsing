@@ -330,11 +330,12 @@ def solve_maxcut_exact_streaming(
             print(f"Heuristic value: {cut_value:.6f}  ({time.monotonic()-t0:.3f}s)")
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    max_energy = (
-        compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
-        if is_spin_glass
-        else compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
-    )
+    if is_spin_glass:
+        max_energy = compute_energy(best_theta, G_m, n_qubits)
+    elif cut_value is None:
+        max_energy = compute_cut(best_theta, G_m, n_qubits)
+    else:
+        max_energy = cut_value
 
     if verbose:
         print("Starting branch and bound...")
