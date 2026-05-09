@@ -266,7 +266,8 @@ def solve_maxcut_exact(
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight, True
 
     bitstring = ""
-    cut_value = 0.0
+    cut_value = None
+    energy_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -287,7 +288,7 @@ def solve_maxcut_exact(
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         kwargs["is_maxcut_gpu"] = is_maxcut_gpu
         t0 = time.monotonic()
-        bitstring, cut_value, _, _ = spin_glass_solver(
+        bitstring, cut_value, _, energy_value = spin_glass_solver(
             G_m, is_spin_glass=is_spin_glass, **kwargs
         )
         if verbose:
@@ -295,7 +296,7 @@ def solve_maxcut_exact(
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
-        max_energy = compute_energy(best_theta, G_m, n_qubits)
+        max_energy = compute_energy(best_theta, G_m, n_qubits) if energy_value is None else energy_value
     elif cut_value is None:
         max_energy = compute_cut(best_theta, G_m, n_qubits)
     else:

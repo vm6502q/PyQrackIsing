@@ -267,7 +267,8 @@ def solve_maxcut_exact_sparse(
     G_cols = np.asarray(G_m.indices, dtype=np.int64)
 
     bitstring = ""
-    cut_value = 0.0
+    cut_value = None
+    energy_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -288,7 +289,7 @@ def solve_maxcut_exact_sparse(
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         kwargs["is_maxcut_gpu"] = is_maxcut_gpu
         t0 = time.monotonic()
-        bitstring, cut_value, _, _ = spin_glass_solver_sparse(
+        bitstring, cut_value, _, energy_value = spin_glass_solver_sparse(
             G_m, is_spin_glass=is_spin_glass, **kwargs
         )
         if verbose:
@@ -296,7 +297,7 @@ def solve_maxcut_exact_sparse(
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
-        max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+        max_energy = compute_energy_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits) if energy_value is None else energy_value
     elif cut_value is None:
         max_energy = compute_cut_sparse(best_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
     else:

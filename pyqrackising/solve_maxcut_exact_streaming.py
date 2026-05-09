@@ -238,7 +238,8 @@ def solve_maxcut_exact_streaming(
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight, True
 
     bitstring = ""
-    cut_value = 0.0
+    cut_value = None
+    energy_value = None
     if isinstance(best_guess, str):
         bitstring = best_guess
     elif isinstance(best_guess, int):
@@ -258,7 +259,7 @@ def solve_maxcut_exact_streaming(
         if gray_iterations is not None:    kwargs["gray_iterations"]    = gray_iterations
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         t0 = time.monotonic()
-        bitstring, cut_value, _, _ = spin_glass_solver_streaming(
+        bitstring, cut_value, _, energy_value = spin_glass_solver_streaming(
             G_func, nodes, is_spin_glass=is_spin_glass, **kwargs
         )
         if verbose:
@@ -266,7 +267,7 @@ def solve_maxcut_exact_streaming(
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
-        max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
+        max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits) if energy_value is None else energy_value
     elif cut_value is None:
         max_energy = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
     else:
