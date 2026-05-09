@@ -5,18 +5,10 @@
 #
 # bnb_exact_sparse.py — warm-start branch-and-bound exact MAXCUT solver (sparse)
 #
-# Objective convention (matches PyQrackIsing throughout):
-#   Maximise  sum_{(i,j) in cut} w_{ij}
-#   i.e. edge (i,j) contributes w_{ij} when bits[i] != bits[j].
-#   Edge weights may be positive or negative; no diagonal / self-loops.
-#
-# Upper bound per B&B node: LP relaxation of the MAXCUT objective.
-#   Linearisation: introduce y_ij = x_i * x_j for each free edge pair;
-#   edge contribution becomes w_{ij} * (x_i + x_j - 2*y_ij).
-#   Constraints: y_ij <= x_i, y_ij <= x_j, x_i + x_j - y_ij <= 1.
-#   Users may swap in a tighter SDP bound by replacing _lp_upper_bound.
+# Same parallelism strategy as bnb_exact.py; inner loops work from CSR arrays.
 
 import time
+import os
 import networkx as nx
 import numpy as np
 from numba import njit, prange
@@ -30,189 +22,118 @@ from .maxcut_tfim_util import (
     to_scipy_sparse_upper_triangular,
 )
 
-try:
-    from scipy.optimize import linprog
-    _HAVE_SCIPY = True
-except ImportError:
-    _HAVE_SCIPY = False
-
-
 dtype = opencl_context.dtype
 
 
 # ---------------------------------------------------------------------------
-# Numba-compiled inner loops (sparse CSR)
+# Parallel kernels (sparse CSR)
 # ---------------------------------------------------------------------------
 
-@njit(cache=True)
-def _fixed_fixed_sparse(G_data, G_rows, G_cols, fixed_idx, fixed_val):
-    total = 0.0
-    nf = len(fixed_idx)
-    n = G_rows.shape[0] - 1
-    fixed_pos = np.full(n, -1, dtype=np.int64)
-    for a in range(nf):
-        fixed_pos[fixed_idx[a]] = a
-    for a in range(nf):
-        i = fixed_idx[a]
-        fi = fixed_val[a]
-        for r in range(G_rows[i], G_rows[i + 1]):
-            j = G_cols[r]
-            b = fixed_pos[j]
-            if b >= 0 and j > i and fi != fixed_val[b]:
-                total += G_data[r]
-    return total
+@njit(parallel=True, cache=True)
+def _upper_bound_batch_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
+    """
+    Parallel upper bound for a batch of B&B nodes (sparse CSR).
+    fixed_vars : (batch_size, n) int8, -1=free, 0/1=fixed.
+    """
+    ub = np.empty(batch_size)
+    for b in prange(batch_size):
+        total = 0.0
+        for i in range(n):
+            fi = fixed_vars[b, i]
+            for r in range(G_rows[i], G_rows[i + 1]):
+                j = G_cols[r]
+                if j <= i:
+                    continue
+                w = G_data[r]
+                if w == 0.0:
+                    continue
+                fj = fixed_vars[b, j]
+                if fi >= 0 and fj >= 0:
+                    if fi != fj:
+                        total += w
+                else:
+                    if w > 0.0:
+                        total += w
+        ub[b] = total
+    return ub
+
+
+@njit(parallel=True, cache=True)
+def _eval_leaves_cut_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
+    vals = np.empty(batch_size)
+    for b in prange(batch_size):
+        cut = 0.0
+        for i in range(n):
+            bi = fixed_vars[b, i]
+            for r in range(G_rows[i], G_rows[i + 1]):
+                j = G_cols[r]
+                if j > i and G_data[r] != 0.0 and bi != fixed_vars[b, j]:
+                    cut += G_data[r]
+        vals[b] = cut
+    return vals
+
+
+@njit(parallel=True, cache=True)
+def _eval_leaves_energy_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size):
+    vals = np.empty(batch_size)
+    for b in prange(batch_size):
+        energy = 0.0
+        for i in range(n):
+            bi = fixed_vars[b, i]
+            for r in range(G_rows[i], G_rows[i + 1]):
+                j = G_cols[r]
+                val = G_data[r]
+                energy += -val if bi == fixed_vars[b, j] else val
+        vals[b] = energy
+    return vals
 
 
 @njit(cache=True)
-def _fixed_free_linear_sparse(G_data, G_rows, G_cols, free_arr, fixed_idx, fixed_val):
-    n_free = len(free_arr)
-    nf = len(fixed_idx)
-    n = G_rows.shape[0] - 1
-    coeff = np.zeros(n_free)
-    const = 0.0
-    fixed_pos = np.full(n, -1, dtype=np.int64)
-    for a in range(nf):
-        fixed_pos[fixed_idx[a]] = a
-    for k in range(n_free):
-        i = free_arr[k]
-        # edges where i is the row (i < j, j fixed)
-        for r in range(G_rows[i], G_rows[i + 1]):
-            j = G_cols[r]
-            a = fixed_pos[j]
-            if a < 0:
-                continue
-            fval = fixed_val[a]
-            w = G_data[r]
-            const += w * fval
-            coeff[k] += w * (1.0 - 2.0 * fval)
-        # edges where i is the column (j < i, j fixed)
-        for a in range(nf):
-            j = fixed_idx[a]
-            if j >= i:
-                continue
-            fval = fixed_val[a]
-            for r in range(G_rows[j], G_rows[j + 1]):
-                if G_cols[r] == i:
-                    w = G_data[r]
-                    const += w * fval
-                    coeff[k] += w * (1.0 - 2.0 * fval)
-                    break
-    return const, coeff
-
-
-@njit(cache=True)
-def _influence_scores_sparse(G_data, G_rows, G_cols, free_arr):
-    n_free = len(free_arr)
-    n = G_rows.shape[0] - 1
-    scores = np.zeros(n_free)
+def _influence_scores_sparse(G_data, G_rows, G_cols, fixed_row, n):
+    scores = np.full(n, -1.0)
     free_set = np.zeros(n, dtype=np.bool_)
-    for k in range(n_free):
-        free_set[free_arr[k]] = True
-    for k in range(n_free):
-        i = free_arr[k]
+    for i in range(n):
+        if fixed_row[i] < 0:
+            free_set[i] = True
+    for i in range(n):
+        if not free_set[i]:
+            continue
+        s = 0.0
         for r in range(G_rows[i], G_rows[i + 1]):
             j = G_cols[r]
             if free_set[j]:
-                scores[k] += abs(G_data[r])
-        for m in range(n_free):
-            j = free_arr[m]
-            if j >= i:
+                s += abs(G_data[r])
+        # reverse edges (j < i stored in row j)
+        for j in range(i):
+            if not free_set[j]:
                 continue
             for r in range(G_rows[j], G_rows[j + 1]):
                 if G_cols[r] == i:
-                    scores[k] += abs(G_data[r])
+                    s += abs(G_data[r])
                     break
+        scores[i] = s
     return scores
 
 
 # ---------------------------------------------------------------------------
-# LP upper bound
+# B&B loop
 # ---------------------------------------------------------------------------
 
-def _lp_upper_bound(G_data, G_rows, G_cols, free_arr, fixed_idx, fixed_val, n):
-    ff = _fixed_fixed_sparse(G_data, G_rows, G_cols, fixed_idx, fixed_val)
-    n_free = len(free_arr)
-
-    if n_free == 0:
-        return ff
-
-    ff_const, coeff = _fixed_free_linear_sparse(
-        G_data, G_rows, G_cols, free_arr, fixed_idx, fixed_val
-    )
-
-    free_set_map = {int(free_arr[k]): k for k in range(n_free)}
-    pairs = []
-    for a in range(n_free):
-        i = int(free_arr[a])
-        for r in range(G_rows[i], G_rows[i + 1]):
-            j = int(G_cols[r])
-            if j in free_set_map and j > i:
-                pairs.append((i, j, float(G_data[r])))
-
-    if not _HAVE_SCIPY:
-        bound = ff + ff_const
-        for k in range(n_free):
-            bound += max(0.0, coeff[k])
-        for _, _, w in pairs:
-            bound += max(0.0, w)
-        return bound
-
-    n_pairs = len(pairs)
-    total_vars = n_free + n_pairs
-
-    c = np.zeros(total_vars)
-    for k in range(n_free):
-        c[k] = -coeff[k]
-    for p, (i, j, w) in enumerate(pairs):
-        ki, kj = free_set_map[i], free_set_map[j]
-        c[ki] -= w
-        c[kj] -= w
-        c[n_free + p] += 2.0 * w
-
-    bounds = [(0.0, 1.0)] * total_vars
-
-    if not pairs:
-        lp_val = sum(-c[k] if c[k] < 0.0 else 0.0 for k in range(n_free))
-        return ff + ff_const + lp_val
-
-    rows = 3 * n_pairs
-    A = np.zeros((rows, total_vars))
-    b_ub = np.empty(rows)
-    for p, (i, j, _) in enumerate(pairs):
-        ki, kj = free_set_map[i], free_set_map[j]
-        r = 3 * p
-        A[r,   ki] = -1.0; A[r,   n_free + p] =  1.0; b_ub[r]   = 0.0
-        A[r+1, kj] = -1.0; A[r+1, n_free + p] =  1.0; b_ub[r+1] = 0.0
-        A[r+2, ki] =  1.0; A[r+2, kj]         =  1.0
-        A[r+2, n_free + p] = -1.0;                      b_ub[r+2] = 1.0
-
-    res = linprog(c, A_ub=A, b_ub=b_ub, bounds=bounds,
-                  method="highs", options={"disp": False})
-
-    return (ff + ff_const + (-res.fun)) if res.success else float("inf")
-
-
-# ---------------------------------------------------------------------------
-# Branch and bound (internal)
-# ---------------------------------------------------------------------------
-
-def _branch_and_bound_sparse(G_m, warm_theta, warm_energy, n, is_spin_glass,
-                              verbose=True, time_limit=None):
-    G_data = np.asarray(G_m.data, dtype=np.float64)
-    G_rows = np.asarray(G_m.indptr, dtype=np.int64)
-    G_cols = np.asarray(G_m.indices, dtype=np.int64)
-
+def _branch_and_bound_sparse(G_data, G_rows, G_cols, warm_theta, warm_energy,
+                              n, is_spin_glass, verbose=True, time_limit=None):
     best_bits = warm_theta.copy()
     best_value = warm_energy
 
     if verbose:
         print(f"Warm-start incumbent: {best_value:.6f}")
 
+    root = np.full(n, -1, dtype=np.int8)
+    stack = [root]
+
     t_start = time.monotonic()
     nodes_explored = 0
     nodes_pruned = 0
-
-    stack = [(np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64))]
+    batch_cap = os.cpu_count() * 4
 
     while stack:
         if time_limit is not None and (time.monotonic() - t_start) > time_limit:
@@ -221,46 +142,52 @@ def _branch_and_bound_sparse(G_m, warm_theta, warm_energy, n, is_spin_glass,
                       f"Nodes: {nodes_explored}, Pruned: {nodes_pruned}")
             return best_bits, best_value, False
 
-        fixed_idx, fixed_val = stack.pop()
-        nodes_explored += 1
+        batch_size = min(batch_cap, len(stack))
+        batch_nodes = [stack.pop() for _ in range(batch_size)]
+        batch_arr = np.array(batch_nodes, dtype=np.int8)
 
-        fixed_set = set(int(fixed_idx[k]) for k in range(len(fixed_idx)))
-        free_arr = np.array([i for i in range(n) if i not in fixed_set],
-                            dtype=np.int64)
+        nodes_explored += batch_size
 
-        ub = _lp_upper_bound(G_data, G_rows, G_cols, free_arr,
-                             fixed_idx, fixed_val, n)
+        ubs = _upper_bound_batch_sparse(G_data, G_rows, G_cols,
+                                        batch_arr, n, batch_size)
 
-        if ub <= best_value + 1e-9:
-            nodes_pruned += 1
-            continue
+        leaves = []
+        interior = []
+        for k in range(batch_size):
+            if ubs[k] <= best_value + 1e-9:
+                nodes_pruned += 1
+                continue
+            if int(np.sum(batch_arr[k] < 0)) == 0:
+                leaves.append(k)
+            else:
+                interior.append(k)
 
-        if len(free_arr) == 0:
-            bits = np.zeros(n, dtype=np.bool_)
-            for k in range(len(fixed_idx)):
-                bits[fixed_idx[k]] = bool(fixed_val[k])
-            val = float(
-                compute_energy_sparse(bits, G_data, G_rows, G_cols, n)
+        if leaves:
+            leaf_arr = batch_arr[np.array(leaves, dtype=np.int64)]
+            leaf_vals = (
+                _eval_leaves_energy_sparse(G_data, G_rows, G_cols,
+                                           leaf_arr, n, len(leaves))
                 if is_spin_glass
-                else compute_cut_sparse(bits, G_data, G_rows, G_cols, n)
+                else _eval_leaves_cut_sparse(G_data, G_rows, G_cols,
+                                             leaf_arr, n, len(leaves))
             )
-            if val > best_value:
-                best_value = val
-                best_bits = bits.copy()
+            best_leaf = int(np.argmax(leaf_vals))
+            if leaf_vals[best_leaf] > best_value:
+                best_value = float(leaf_vals[best_leaf])
+                best_bits = (leaf_arr[best_leaf] >= 1).copy()
                 if verbose:
                     print(f"  New incumbent: {best_value:.6f}"
                           f"  (nodes: {nodes_explored})")
-            continue
 
-        scores = _influence_scores_sparse(G_data, G_rows, G_cols, free_arr)
-        branch_var = int(free_arr[int(np.argmax(scores))])
-
-        warm_val = int(best_bits[branch_var])
-        for val in [warm_val, 1 - warm_val]:
-            stack.append((
-                np.append(fixed_idx, branch_var).astype(np.int64),
-                np.append(fixed_val, val).astype(np.int64),
-            ))
+        for k in interior:
+            row = batch_arr[k]
+            scores = _influence_scores_sparse(G_data, G_rows, G_cols, row, n)
+            branch_var = int(np.argmax(scores))
+            warm_val = int(best_bits[branch_var])
+            for val in [warm_val, 1 - warm_val]:
+                child = row.copy()
+                child[branch_var] = np.int8(val)
+                stack.append(child)
 
     elapsed = time.monotonic() - t_start
     if verbose:
@@ -292,7 +219,7 @@ def solve_maxcut_exact_sparse(
 ):
     """
     Exact MAXCUT/spin-glass solver: warm-start from spin_glass_solver_sparse
-    then certify via branch and bound.
+    then certify via branch and bound with parallel Numba kernels.
 
     Accepts the same G input as spin_glass_solver_sparse (NetworkX graph or
     scipy CSR matrix) and the same warm-start formats (str, int, list, None).
@@ -300,16 +227,12 @@ def solve_maxcut_exact_sparse(
     Parameters
     ----------
     G : networkx.Graph or scipy CSR matrix
-        Graph or pre-built sparse adjacency matrix.
     best_guess : str | int | list[bool] | None
-        Warm-start hint in any PyQrackIsing-compatible format. If None,
-        spin_glass_solver_sparse is called to produce one.
     quality, shots, anneal_t, anneal_h, repulsion_base, is_maxcut_gpu,
     is_spin_glass, gray_iterations, gray_seed_multiple
         Forwarded to spin_glass_solver_sparse when best_guess is None.
     verbose : bool
     time_limit : float or None
-        Wall-clock seconds for the B&B phase.
 
     Returns
     -------
@@ -319,7 +242,6 @@ def solve_maxcut_exact_sparse(
     min_energy : float
     certified : bool
     """
-    # Mirror spin_glass_solver_sparse's G -> G_m conversion exactly
     if isinstance(G, nx.Graph):
         nodes = list(G.nodes())
         n_qubits = len(nodes)
@@ -344,7 +266,6 @@ def solve_maxcut_exact_sparse(
     G_rows = np.asarray(G_m.indptr, dtype=np.int64)
     G_cols = np.asarray(G_m.indices, dtype=np.int64)
 
-    # Warm-start parser — mirrors spin_glass_solver_sparse exactly
     bitstring = ""
     cut_value = 0.0
     if isinstance(best_guess, str):
@@ -358,12 +279,12 @@ def solve_maxcut_exact_sparse(
             print("Running PyQrackIsing heuristic...")
         from .spin_glass_solver_sparse import spin_glass_solver_sparse
         kwargs = {}
-        if quality is not None:           kwargs["quality"]            = quality
-        if shots is not None:             kwargs["shots"]              = shots
-        if anneal_t is not None:          kwargs["anneal_t"]           = anneal_t
-        if anneal_h is not None:          kwargs["anneal_h"]           = anneal_h
-        if repulsion_base is not None:    kwargs["repulsion_base"]     = repulsion_base
-        if gray_iterations is not None:   kwargs["gray_iterations"]    = gray_iterations
+        if quality is not None:            kwargs["quality"]            = quality
+        if shots is not None:              kwargs["shots"]              = shots
+        if anneal_t is not None:           kwargs["anneal_t"]           = anneal_t
+        if anneal_h is not None:           kwargs["anneal_h"]           = anneal_h
+        if repulsion_base is not None:     kwargs["repulsion_base"]     = repulsion_base
+        if gray_iterations is not None:    kwargs["gray_iterations"]    = gray_iterations
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         kwargs["is_maxcut_gpu"] = is_maxcut_gpu
         t0 = time.monotonic()
@@ -385,13 +306,9 @@ def solve_maxcut_exact_sparse(
         print("Starting branch and bound...")
 
     best_theta, max_energy, certified = _branch_and_bound_sparse(
-        G_m, best_theta, max_energy, n_qubits, is_spin_glass,
+        G_data, G_rows, G_cols, best_theta, max_energy, n_qubits, is_spin_glass,
         verbose=verbose, time_limit=time_limit,
     )
-
-    G_data = np.asarray(G_m.data, dtype=np.float64)
-    G_rows = np.asarray(G_m.indptr, dtype=np.int64)
-    G_cols = np.asarray(G_m.indices, dtype=np.int64)
 
     bitstring, l, r = get_cut(best_theta, nodes, n_qubits)
     if is_spin_glass:

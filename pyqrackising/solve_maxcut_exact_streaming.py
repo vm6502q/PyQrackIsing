@@ -6,18 +6,10 @@
 # bnb_exact_streaming.py — warm-start branch-and-bound exact MAXCUT solver
 #                           (streaming / G_func + nodes variant)
 #
-# Objective convention (matches PyQrackIsing throughout):
-#   Maximise  sum_{(i,j) in cut} w_{ij}
-#   i.e. edge (i,j) contributes w_{ij} when bits[i] != bits[j].
-#   Edge weights may be positive or negative; no diagonal / self-loops.
-#
-# Upper bound per B&B node: LP relaxation of the MAXCUT objective.
-#   Linearisation: introduce y_ij = x_i * x_j for each free edge pair;
-#   edge contribution becomes w_{ij} * (x_i + x_j - 2*y_ij).
-#   Constraints: y_ij <= x_i, y_ij <= x_j, x_i + x_j - y_ij <= 1.
-#   Users may swap in a tighter SDP bound by replacing _lp_upper_bound.
+# Same parallelism strategy as bnb_exact.py; inner loops call G_func.
 
 import time
+import os
 import numpy as np
 from numba import njit, prange
 from .maxcut_tfim_util import (
@@ -29,142 +21,83 @@ from .maxcut_tfim_util import (
     opencl_context,
 )
 
-try:
-    from scipy.optimize import linprog
-    _HAVE_SCIPY = True
-except ImportError:
-    _HAVE_SCIPY = False
-
-
 dtype = opencl_context.dtype
 
 
 # ---------------------------------------------------------------------------
-# Numba-compiled inner loops (streaming / G_func)
+# Parallel kernels (streaming)
 # ---------------------------------------------------------------------------
 
-@njit(cache=True)
-def _fixed_fixed_streaming(G_func, nodes, fixed_idx, fixed_val):
-    total = 0.0
-    nf = len(fixed_idx)
-    for a in range(nf):
-        i = fixed_idx[a]
-        fi = fixed_val[a]
-        for b in range(a + 1, nf):
-            j = fixed_idx[b]
-            fj = fixed_val[b]
-            if fi != fj:
-                ii, jj = (i, j) if i < j else (j, i)
-                w = G_func(nodes[ii], nodes[jj])
-                if w != 0.0:
-                    total += w
-    return total
+@njit(parallel=True, cache=True)
+def _upper_bound_batch_streaming(G_func, nodes, fixed_vars, n, batch_size):
+    ub = np.empty(batch_size)
+    for b in prange(batch_size):
+        total = 0.0
+        for i in range(n):
+            fi = fixed_vars[b, i]
+            for j in range(i + 1, n):
+                w = G_func(nodes[i], nodes[j])
+                if w == 0.0:
+                    continue
+                fj = fixed_vars[b, j]
+                if fi >= 0 and fj >= 0:
+                    if fi != fj:
+                        total += w
+                else:
+                    if w > 0.0:
+                        total += w
+        ub[b] = total
+    return ub
+
+
+@njit(parallel=True, cache=True)
+def _eval_leaves_cut_streaming(G_func, nodes, fixed_vars, n, batch_size):
+    vals = np.empty(batch_size)
+    for b in prange(batch_size):
+        cut = 0.0
+        for i in range(n):
+            bi = fixed_vars[b, i]
+            for j in range(i + 1, n):
+                w = G_func(nodes[i], nodes[j])
+                if w != 0.0 and bi != fixed_vars[b, j]:
+                    cut += w
+        vals[b] = cut
+    return vals
+
+
+@njit(parallel=True, cache=True)
+def _eval_leaves_energy_streaming(G_func, nodes, fixed_vars, n, batch_size):
+    vals = np.empty(batch_size)
+    for b in prange(batch_size):
+        energy = 0.0
+        for i in range(n):
+            bi = fixed_vars[b, i]
+            for j in range(i + 1, n):
+                val = G_func(nodes[i], nodes[j])
+                energy += -val if bi == fixed_vars[b, j] else val
+        vals[b] = energy
+    return vals
 
 
 @njit(cache=True)
-def _fixed_free_linear_streaming(G_func, nodes, free_arr, fixed_idx, fixed_val):
-    n_free = len(free_arr)
-    nf = len(fixed_idx)
-    coeff = np.zeros(n_free)
-    const = 0.0
-    for k in range(n_free):
-        i = free_arr[k]
-        for a in range(nf):
-            j = fixed_idx[a]
-            fval = fixed_val[a]
-            ii, jj = (i, j) if i < j else (j, i)
-            w = G_func(nodes[ii], nodes[jj])
-            if w == 0.0:
+def _influence_scores_streaming(G_func, nodes, fixed_row, n):
+    scores = np.full(n, -1.0)
+    for i in range(n):
+        if fixed_row[i] >= 0:
+            continue
+        s = 0.0
+        for j in range(n):
+            if i == j or fixed_row[j] >= 0:
                 continue
-            const += w * fval
-            coeff[k] += w * (1.0 - 2.0 * fval)
-    return const, coeff
-
-
-@njit(cache=True)
-def _influence_scores_streaming(G_func, nodes, free_arr):
-    n_free = len(free_arr)
-    scores = np.zeros(n_free)
-    for k in range(n_free):
-        i = free_arr[k]
-        for m in range(n_free):
-            if k == m:
-                continue
-            j = free_arr[m]
-            ii, jj = (i, j) if i < j else (j, i)
-            scores[k] += abs(G_func(nodes[ii], nodes[jj]))
+            ii = i if i < j else j
+            jj = j if i < j else i
+            s += abs(G_func(nodes[ii], nodes[jj]))
+        scores[i] = s
     return scores
 
 
 # ---------------------------------------------------------------------------
-# LP upper bound
-# ---------------------------------------------------------------------------
-
-def _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n):
-    ff = _fixed_fixed_streaming(G_func, nodes, fixed_idx, fixed_val)
-    n_free = len(free_arr)
-
-    if n_free == 0:
-        return ff
-
-    ff_const, coeff = _fixed_free_linear_streaming(
-        G_func, nodes, free_arr, fixed_idx, fixed_val
-    )
-
-    # indices into free_arr, not node indices, since LP vars are indexed by position
-    pairs = []
-    for a in range(n_free):
-        i = int(free_arr[a])
-        for b in range(a + 1, n_free):
-            j = int(free_arr[b])
-            ii, jj = (i, j) if i < j else (j, i)
-            w = float(G_func(nodes[ii], nodes[jj]))
-            if w != 0.0:
-                pairs.append((a, b, w))
-
-    if not _HAVE_SCIPY:
-        bound = ff + ff_const
-        for k in range(n_free):
-            bound += max(0.0, coeff[k])
-        for _, _, w in pairs:
-            bound += max(0.0, w)
-        return bound
-
-    n_pairs = len(pairs)
-    total_vars = n_free + n_pairs
-
-    c = np.zeros(total_vars)
-    for k in range(n_free):
-        c[k] = -coeff[k]
-    for p, (ka, kb, w) in enumerate(pairs):
-        c[ka] -= w
-        c[kb] -= w
-        c[n_free + p] += 2.0 * w
-
-    bounds = [(0.0, 1.0)] * total_vars
-
-    if not pairs:
-        lp_val = sum(-c[k] if c[k] < 0.0 else 0.0 for k in range(n_free))
-        return ff + ff_const + lp_val
-
-    rows = 3 * n_pairs
-    A = np.zeros((rows, total_vars))
-    b_ub = np.empty(rows)
-    for p, (ka, kb, _) in enumerate(pairs):
-        r = 3 * p
-        A[r,   ka] = -1.0; A[r,   n_free + p] =  1.0; b_ub[r]   = 0.0
-        A[r+1, kb] = -1.0; A[r+1, n_free + p] =  1.0; b_ub[r+1] = 0.0
-        A[r+2, ka] =  1.0; A[r+2, kb]         =  1.0
-        A[r+2, n_free + p] = -1.0;                      b_ub[r+2] = 1.0
-
-    res = linprog(c, A_ub=A, b_ub=b_ub, bounds=bounds,
-                  method="highs", options={"disp": False})
-
-    return (ff + ff_const + (-res.fun)) if res.success else float("inf")
-
-
-# ---------------------------------------------------------------------------
-# Branch and bound (internal)
+# B&B loop
 # ---------------------------------------------------------------------------
 
 def _branch_and_bound_streaming(G_func, nodes, warm_theta, warm_energy, n,
@@ -175,11 +108,13 @@ def _branch_and_bound_streaming(G_func, nodes, warm_theta, warm_energy, n,
     if verbose:
         print(f"Warm-start incumbent: {best_value:.6f}")
 
+    root = np.full(n, -1, dtype=np.int8)
+    stack = [root]
+
     t_start = time.monotonic()
     nodes_explored = 0
     nodes_pruned = 0
-
-    stack = [(np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64))]
+    batch_cap = os.cpu_count() * 4
 
     while stack:
         if time_limit is not None and (time.monotonic() - t_start) > time_limit:
@@ -188,45 +123,49 @@ def _branch_and_bound_streaming(G_func, nodes, warm_theta, warm_energy, n,
                       f"Nodes: {nodes_explored}, Pruned: {nodes_pruned}")
             return best_bits, best_value, False
 
-        fixed_idx, fixed_val = stack.pop()
-        nodes_explored += 1
+        batch_size = min(batch_cap, len(stack))
+        batch_nodes = [stack.pop() for _ in range(batch_size)]
+        batch_arr = np.array(batch_nodes, dtype=np.int8)
 
-        fixed_set = set(int(fixed_idx[k]) for k in range(len(fixed_idx)))
-        free_arr = np.array([i for i in range(n) if i not in fixed_set],
-                            dtype=np.int64)
+        nodes_explored += batch_size
 
-        ub = _lp_upper_bound(G_func, nodes, free_arr, fixed_idx, fixed_val, n)
+        ubs = _upper_bound_batch_streaming(G_func, nodes, batch_arr, n, batch_size)
 
-        if ub <= best_value + 1e-9:
-            nodes_pruned += 1
-            continue
+        leaves = []
+        interior = []
+        for k in range(batch_size):
+            if ubs[k] <= best_value + 1e-9:
+                nodes_pruned += 1
+                continue
+            if int(np.sum(batch_arr[k] < 0)) == 0:
+                leaves.append(k)
+            else:
+                interior.append(k)
 
-        if len(free_arr) == 0:
-            bits = np.zeros(n, dtype=np.bool_)
-            for k in range(len(fixed_idx)):
-                bits[fixed_idx[k]] = bool(fixed_val[k])
-            val = float(
-                compute_energy_streaming(bits, G_func, nodes, n)
+        if leaves:
+            leaf_arr = batch_arr[np.array(leaves, dtype=np.int64)]
+            leaf_vals = (
+                _eval_leaves_energy_streaming(G_func, nodes, leaf_arr, n, len(leaves))
                 if is_spin_glass
-                else compute_cut_streaming(bits, G_func, nodes, n)
+                else _eval_leaves_cut_streaming(G_func, nodes, leaf_arr, n, len(leaves))
             )
-            if val > best_value:
-                best_value = val
-                best_bits = bits.copy()
+            best_leaf = int(np.argmax(leaf_vals))
+            if leaf_vals[best_leaf] > best_value:
+                best_value = float(leaf_vals[best_leaf])
+                best_bits = (leaf_arr[best_leaf] >= 1).copy()
                 if verbose:
                     print(f"  New incumbent: {best_value:.6f}"
                           f"  (nodes: {nodes_explored})")
-            continue
 
-        scores = _influence_scores_streaming(G_func, nodes, free_arr)
-        branch_var = int(free_arr[int(np.argmax(scores))])
-
-        warm_val = int(best_bits[branch_var])
-        for val in [warm_val, 1 - warm_val]:
-            stack.append((
-                np.append(fixed_idx, branch_var).astype(np.int64),
-                np.append(fixed_val, val).astype(np.int64),
-            ))
+        for k in interior:
+            row = batch_arr[k]
+            scores = _influence_scores_streaming(G_func, nodes, row, n)
+            branch_var = int(np.argmax(scores))
+            warm_val = int(best_bits[branch_var])
+            for val in [warm_val, 1 - warm_val]:
+                child = row.copy()
+                child[branch_var] = np.int8(val)
+                stack.append(child)
 
     elapsed = time.monotonic() - t_start
     if verbose:
@@ -258,7 +197,7 @@ def solve_maxcut_exact_streaming(
 ):
     """
     Exact MAXCUT/spin-glass solver: warm-start from spin_glass_solver_streaming
-    then certify via branch and bound.
+    then certify via branch and bound with parallel Numba kernels.
 
     Accepts the same G_func + nodes input as spin_glass_solver_streaming and
     the same warm-start formats (str, int, list, or None).
@@ -270,14 +209,11 @@ def solve_maxcut_exact_streaming(
     nodes : array-like
         Ordered sequence of node identifiers passed to G_func.
     best_guess : str | int | list[bool] | None
-        Warm-start hint in any PyQrackIsing-compatible format. If None,
-        spin_glass_solver_streaming is called to produce one.
     quality, shots, anneal_t, anneal_h, repulsion_base, is_spin_glass,
     gray_iterations, gray_seed_multiple
         Forwarded to spin_glass_solver_streaming when best_guess is None.
     verbose : bool
     time_limit : float or None
-        Wall-clock seconds for the B&B phase.
 
     Returns
     -------
@@ -301,7 +237,6 @@ def solve_maxcut_exact_streaming(
                 return "00", 0, (list(nodes), []), weight, True
             return "01", weight, ([nodes[0]], [nodes[1]]), -weight, True
 
-    # Warm-start parser — mirrors spin_glass_solver_streaming exactly
     bitstring = ""
     cut_value = 0.0
     if isinstance(best_guess, str):
@@ -315,12 +250,12 @@ def solve_maxcut_exact_streaming(
             print("Running PyQrackIsing heuristic...")
         from .spin_glass_solver_streaming import spin_glass_solver_streaming
         kwargs = {}
-        if quality is not None:           kwargs["quality"]            = quality
-        if shots is not None:             kwargs["shots"]              = shots
-        if anneal_t is not None:          kwargs["anneal_t"]           = anneal_t
-        if anneal_h is not None:          kwargs["anneal_h"]           = anneal_h
-        if repulsion_base is not None:    kwargs["repulsion_base"]     = repulsion_base
-        if gray_iterations is not None:   kwargs["gray_iterations"]    = gray_iterations
+        if quality is not None:            kwargs["quality"]            = quality
+        if shots is not None:              kwargs["shots"]              = shots
+        if anneal_t is not None:           kwargs["anneal_t"]           = anneal_t
+        if anneal_h is not None:           kwargs["anneal_h"]           = anneal_h
+        if repulsion_base is not None:     kwargs["repulsion_base"]     = repulsion_base
+        if gray_iterations is not None:    kwargs["gray_iterations"]    = gray_iterations
         if gray_seed_multiple is not None: kwargs["gray_seed_multiple"] = gray_seed_multiple
         t0 = time.monotonic()
         bitstring, cut_value, _, _ = spin_glass_solver_streaming(
