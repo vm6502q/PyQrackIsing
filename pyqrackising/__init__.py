@@ -15,3 +15,6 @@ from .convert_tensor_network_to_tsp import convert_tensor_network_to_tsp, conver
 from .solve_maxcut_exact import solve_maxcut_exact
 from .solve_maxcut_exact_sparse import solve_maxcut_exact_sparse
 from .solve_maxcut_exact_streaming import solve_maxcut_exact_streaming
+from .solve_maxcut_bnb import solve_maxcut_bnb
+from .solve_maxcut_bnb_sparse import solve_maxcut_bnb_sparse
+from .solve_maxcut_bnb_streaming import solve_maxcut_bnb_streaming
