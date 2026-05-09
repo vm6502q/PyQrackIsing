@@ -34,9 +34,10 @@ dtype = opencl_context.dtype
 _SCALE = 2 ** 32
 
 
-def _build_wcnf_streaming(G_func, nodes, n):
+def _build_wcnf_streaming(G_func, nodes, n, has_negative):
     wcnf = WCNF()
     total_pos_scaled = 0
+    neg_scaled_total = 0
     baseline_neg = 0.0
     edge_idx = 0
     for i in range(n):
@@ -47,8 +48,11 @@ def _build_wcnf_streaming(G_func, nodes, n):
             xi = i + 1
             xj = j + 1
             s  = n + edge_idx + 1
-            wcnf.append([ xi,  xj, -s])
-            wcnf.append([-xi, -xj, -s])
+            wcnf.append([ xi,  xj, -s])   # xi=0,xj=0 -> s=0
+            wcnf.append([-xi, -xj, -s])   # xi=1,xj=1 -> s=0
+            if has_negative:
+                wcnf.append([-xi,  xj,  s])   # xi=1,xj=0 -> s=1
+                wcnf.append([ xi, -xj,  s])   # xi=0,xj=1 -> s=1
             if w >= 0.0:
                 iw = max(1, int(round(w * _SCALE)))
                 total_pos_scaled += iw
@@ -56,9 +60,10 @@ def _build_wcnf_streaming(G_func, nodes, n):
             else:
                 iw = max(1, int(round(-w * _SCALE)))
                 baseline_neg += w
+                neg_scaled_total += iw
                 wcnf.append([-s], weight=iw)
             edge_idx += 1
-    return wcnf, total_pos_scaled, baseline_neg
+    return wcnf, total_pos_scaled, neg_scaled_total, baseline_neg
 
 
 def _model_to_bits(model, n):
@@ -160,8 +165,12 @@ def solve_maxcut_exact_streaming(
             print(f"Heuristic value: {cut_value:.6f}  ({time.monotonic()-t0:.3f}s)")
 
     warm_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
-    wcnf, total_pos_scaled, baseline_neg = _build_wcnf_streaming(
-        G_func, nodes, n_qubits
+    has_negative = any(
+        G_func(nodes[i], nodes[j]) < 0.0
+        for i in range(n_qubits) for j in range(i + 1, n_qubits)
+    )
+    wcnf, total_pos_scaled, neg_scaled_total, baseline_neg = _build_wcnf_streaming(
+        G_func, nodes, n_qubits, has_negative
     )
 
     if verbose:
@@ -174,8 +183,9 @@ def solve_maxcut_exact_streaming(
     t0 = time.monotonic()
     with RC2(wcnf, solver="g3", **rc2_kwargs) as rc2:
         try:
-            for i, bit in enumerate(warm_theta):
-                rc2.oracle.set_phases([i + 1 if bit else -(i + 1)])
+            phases = [i + 1 if warm_theta[i] else -(i + 1)
+                      for i in range(len(warm_theta))]
+            rc2.oracle.set_phases(phases)
         except AttributeError:
             pass
         model = rc2.compute()
@@ -193,7 +203,7 @@ def solve_maxcut_exact_streaming(
         best_theta = _model_to_bits(model, n_qubits)
 
     if verbose and model is not None:
-        cut_opt = (total_pos_scaled - cost_scaled) / _SCALE + baseline_neg
+        cut_opt = baseline_neg + (total_pos_scaled + neg_scaled_total - cost_scaled) / _SCALE
         print(f"RC2 optimum: {cut_opt:.6f}  ({elapsed:.3f}s)")
 
     bitstring, l, r = get_cut(best_theta, list(nodes), n_qubits)

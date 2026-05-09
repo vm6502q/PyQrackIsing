@@ -12,9 +12,16 @@
 # --------
 # For each edge (i, j, w):
 #   Introduce a selector variable s_ij (var index n + edge_idx + 1).
-#   Hard clauses force s_ij = 1  iff  x_i != x_j  (edge is cut):
-#     [ x_i  v  x_j  v ~s_ij ]
-#     [~x_i  v ~x_j  v ~s_ij ]
+#   Hard clauses encode s_ij <=> (x_i XOR x_j):
+#     [ x_i  v  x_j  v ~s_ij ]   xi=0,xj=0 -> s=0  (always added)
+#     [~x_i  v ~x_j  v ~s_ij ]   xi=1,xj=1 -> s=0  (always added)
+#     [~x_i  v  x_j  v  s_ij ]   xi=1,xj=0 -> s=1  (only when min_w < 0)
+#     [ x_i  v ~x_j  v  s_ij ]   xi=0,xj=1 -> s=1  (only when min_w < 0)
+#   When all weights are non-negative RC2 already wants s=1 to claim the
+#   reward, so the ->s clauses are redundant and omitted to halve the
+#   clause count.  When negative edges are present the ->s clauses are
+#   critical: without them s can stay 0 while the edge is cut, letting
+#   RC2 fraudulently claim the [-s] soft reward.
 #
 #   Positive weight w > 0: we *want* the edge cut.
 #     Soft clause [s_ij] with weight  round(w * SCALE).
@@ -70,7 +77,7 @@ _SCALE = 2 ** 32
 # Encoding helpers
 # ---------------------------------------------------------------------------
 
-def _build_wcnf(edges, n):
+def _build_wcnf(edges, n, has_negative):
     """
     Build a WCNF formula for MAXCUT on n nodes with the given edge list.
 
@@ -84,6 +91,7 @@ def _build_wcnf(edges, n):
     """
     wcnf = WCNF()
     total_pos_scaled = 0
+    neg_scaled_total = 0
     baseline_neg = 0.0
 
     for idx, (i, j, w) in enumerate(edges):
@@ -91,9 +99,15 @@ def _build_wcnf(edges, n):
         xj  = j + 1          # 1-indexed SAT variable for node j
         s   = n + idx + 1    # selector variable for this edge
 
-        # Hard clauses: s <=> (x_i XOR x_j)
-        wcnf.append([ xi,  xj, -s])   # ~s -> x_i v x_j
-        wcnf.append([-xi, -xj, -s])   # ~s -> ~x_i v ~x_j
+        # s=1 when edge not cut is always suboptimal for positive edges,
+        # so the two ->s direction clauses are only needed when negative
+        # edges are present (otherwise they would double the clause count
+        # for no benefit).
+        wcnf.append([ xi,  xj, -s])   # xi=0,xj=0 -> s=0
+        wcnf.append([-xi, -xj, -s])   # xi=1,xj=1 -> s=0
+        if has_negative:
+            wcnf.append([-xi,  xj,  s])   # xi=1,xj=0 -> s=1
+            wcnf.append([ xi, -xj,  s])   # xi=0,xj=1 -> s=1
 
         if w >= 0.0:
             iw = max(1, int(round(w * _SCALE)))
@@ -102,9 +116,10 @@ def _build_wcnf(edges, n):
         else:
             iw = max(1, int(round(-w * _SCALE)))
             baseline_neg += w             # this is already negative
+            neg_scaled_total += iw
             wcnf.append([-s], weight=iw)  # soft: want edge NOT cut
 
-    return wcnf, total_pos_scaled, baseline_neg
+    return wcnf, total_pos_scaled, neg_scaled_total, baseline_neg
 
 
 def _model_to_bits(model, n):
@@ -236,7 +251,8 @@ def solve_maxcut_exact(
         bitstring, l, r = get_cut(warm_theta, nodes, n_qubits)
         return bitstring, 0.0, (l, r), 0.0, True
 
-    wcnf, total_pos_scaled, baseline_neg = _build_wcnf(edges, n_qubits)
+    has_negative = any(w < 0.0 for _, _, w in edges)
+    wcnf, total_pos_scaled, neg_scaled_total, baseline_neg = _build_wcnf(edges, n_qubits, has_negative)
 
     if verbose:
         print("Starting RC2 MaxSAT solver...")
@@ -252,9 +268,9 @@ def solve_maxcut_exact(
         # RC2 uses Glucose3 internally; we set variable polarities to match the
         # warm start so the first SAT call explores the warm-start region first.
         try:
-            for i, bit in enumerate(warm_theta):
-                # oracle.set_phases expects a list of signed literals
-                rc2.oracle.set_phases([i + 1 if bit else -(i + 1)])
+            phases = [i + 1 if warm_theta[i] else -(i + 1)
+                      for i in range(len(warm_theta))]
+            rc2.oracle.set_phases(phases)
         except AttributeError:
             pass  # solver doesn't support phase setting; continue without
 
@@ -274,7 +290,7 @@ def solve_maxcut_exact(
         best_theta = _model_to_bits(model, n_qubits)
 
     if verbose and model is not None:
-        cut_opt = (total_pos_scaled - cost_scaled) / _SCALE + baseline_neg
+        cut_opt = baseline_neg + (total_pos_scaled + neg_scaled_total - cost_scaled) / _SCALE
         print(f"RC2 optimum: {cut_opt:.6f}  ({elapsed:.3f}s)")
 
     # --- final scoring (matches spin_glass_solver return convention) ---
