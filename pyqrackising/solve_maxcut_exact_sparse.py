@@ -28,7 +28,12 @@ except ImportError:
     _HAVE_PYSAT = False
 
 dtype = opencl_context.dtype
-_SCALE = 10 ** 9
+
+# Integer scaling factor: edge weights are multiplied by this and rounded
+# to integers for the WCNF encoding.  2**32 gives sub-ppb precision for
+# weights in the typical PyQrackIsing range of [-1, 1] and is half 64-bit
+# integer precision.
+_SCALE = 2 ** 32
 
 
 def _build_wcnf_sparse(G_data, G_rows, G_cols, n):

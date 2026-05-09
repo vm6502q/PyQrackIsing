@@ -60,9 +60,10 @@ except ImportError:
 dtype = opencl_context.dtype
 
 # Integer scaling factor: edge weights are multiplied by this and rounded
-# to integers for the WCNF encoding.  1e6 gives sub-ppm precision for
-# weights in the typical PyQrackIsing range of [-1, 1].
-_SCALE = 10 ** 9
+# to integers for the WCNF encoding.  2**32 gives sub-ppb precision for
+# weights in the typical PyQrackIsing range of [-1, 1] and is half 64-bit
+# integer precision.
+_SCALE = 2 ** 32
 
 
 # ---------------------------------------------------------------------------
