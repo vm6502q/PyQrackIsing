@@ -79,10 +79,10 @@ def _eval_leaves_energy_streaming(G_func, nodes, fixed_vars, n, batch_size):
     return vals
 
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _influence_scores_streaming(G_func, nodes, fixed_row, n):
     scores = np.full(n, -1.0)
-    for i in range(n):
+    for i in prange(n):
         if fixed_row[i] >= 0:
             continue
         s = 0.0

@@ -88,14 +88,14 @@ def _eval_leaves_energy_sparse(G_data, G_rows, G_cols, fixed_vars, n, batch_size
     return vals
 
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _influence_scores_sparse(G_data, G_rows, G_cols, fixed_row, n):
     scores = np.full(n, -1.0)
     free_set = np.zeros(n, dtype=np.bool_)
     for i in range(n):
         if fixed_row[i] < 0:
             free_set[i] = True
-    for i in range(n):
+    for i in prange(n):
         if not free_set[i]:
             continue
         s = 0.0

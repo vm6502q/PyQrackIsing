@@ -103,11 +103,11 @@ def _eval_leaves_energy(G_m, fixed_vars, n, batch_size):
     return vals
 
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _influence_scores(G_m, fixed_row, n):
     """Sum of absolute free-to-free edge weights for each free variable."""
     scores = np.full(n, -1.0)
-    for i in range(n):
+    for i in prange(n):
         if fixed_row[i] >= 0:
             continue
         s = 0.0
