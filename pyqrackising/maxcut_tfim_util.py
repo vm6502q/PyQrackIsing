@@ -301,7 +301,7 @@ def make_best_theta_buf_64(theta):
     return theta_buf
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def convert_bool_to_uint(samples):
     shots = samples.shape[0]
     n = samples.shape[1]
@@ -316,7 +316,7 @@ def convert_bool_to_uint(samples):
     return theta
 
 
-@njit
+@njit(cache=True)
 def compute_energy(sample, G_m, n_qubits):
     energy = 0.0
     for u in range(n_qubits):
@@ -328,7 +328,7 @@ def compute_energy(sample, G_m, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut(sample, G_m, n_qubits):
     l, r = get_cut_base(sample, n_qubits)
     cut = 0
@@ -339,7 +339,7 @@ def compute_cut(sample, G_m, n_qubits):
     return cut
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff(u, sample, G_m, n_qubits):
     energy = 0.0
     u_bit = sample[u]
@@ -354,7 +354,7 @@ def compute_cut_diff(u, sample, G_m, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
     if l < k:
         t = k
@@ -384,7 +384,7 @@ def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
     energy = 0.0
     for u in range(n_qubits):
@@ -396,7 +396,7 @@ def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
     l, r = get_cut_base(sample, n_qubits)
     s = l if len(l) < len(r) else r
@@ -410,7 +410,7 @@ def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
     return cut
 
 
-@njit
+@njit(cache=True)
 def compute_energy_streaming(sample, G_func, nodes, n_qubits):
     energy = 0.0
     for u in range(n_qubits):
@@ -422,7 +422,7 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_streaming(sample, G_func, nodes, n_qubits):
     l, r = get_cut_base(sample, n_qubits)
     cut = 0
@@ -433,7 +433,7 @@ def compute_cut_streaming(sample, G_func, nodes, n_qubits):
     return cut
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
     energy = 0.0
     u_bit = sample[u]
@@ -447,7 +447,7 @@ def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
     if l < k:
         t = k
@@ -475,7 +475,7 @@ def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff_between(o_theta, n_theta, G_m, n_qubits):
     energy = 0.0
 
@@ -494,7 +494,7 @@ def compute_cut_diff_between(o_theta, n_theta, G_m, n_qubits):
     return energy
 
 
-@njit
+@njit(cache=True)
 def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n_qubits):
     energy = 0.0
 
@@ -512,7 +512,7 @@ def compute_cut_diff_between_streaming(o_theta, n_theta, G_func, nodes, n_qubits
     return energy
 
 
-@njit
+@njit(cache=True)
 def get_cut(solution, nodes, n):
     bit_string = ""
     l, r = [], []
@@ -527,7 +527,7 @@ def get_cut(solution, nodes, n):
     return bit_string, l, r
 
 
-@njit
+@njit(cache=True)
 def get_cut_base(solution, n):
     l, r = [], []
     for i in range(n):
@@ -544,7 +544,7 @@ def int_to_bitstring(integer, length):
     return (bin(integer)[2:].zfill(length))[::-1]
 
 
-@njit
+@njit(cache=True)
 def binary_search(l, t):
     left = 0
     right = len(l) - 1
@@ -575,7 +575,7 @@ def to_scipy_sparse_upper_triangular(G, nodes, n_nodes):
     return lil.tocsr()
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def init_theta(h_mult, n_qubits, J_eff, degrees):
     theta = np.empty(n_qubits, dtype=np.float64)
     h_mult = abs(h_mult)
@@ -608,7 +608,7 @@ def init_thresholds(n_qubits):
     return thresholds
 
 
-@njit
+@njit(cache=True)
 def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega=1.5 * np.pi):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
@@ -634,7 +634,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, om
     return bias
 
 
-@njit
+@njit(cache=True)
 def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, h_mult, omega=1.5 * np.pi):
     n_steps = 1 << quality
     delta_t = tot_t / n_steps
@@ -670,7 +670,7 @@ def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, 
     return cum_prob
 
 
-@njit
+@njit(cache=True)
 def sample_mag(cum_prob):
     p = np.random.random()
     m = 0
@@ -690,7 +690,7 @@ def sample_mag(cum_prob):
     return m
 
 
-@njit
+@njit(cache=True)
 def bit_pick(weights, used, n):
     # Count available
     p = 0.0
@@ -714,7 +714,7 @@ def bit_pick(weights, used, n):
     return node
 
 
-@njit
+@njit(cache=True)
 def gray_code_next(state, curr_idx, offset):
     prev = curr_idx
     curr = curr_idx + 1
@@ -727,7 +727,7 @@ def gray_code_next(state, curr_idx, offset):
     return flip_bit
 
 
-@njit
+@njit(cache=True)
 def gray_mutation(index, seed_bits, offset):
     """Apply Gray-code-indexed bit flips to a seed bitstring."""
     n = seed_bits.shape[0]
