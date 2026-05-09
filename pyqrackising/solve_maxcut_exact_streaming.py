@@ -331,9 +331,9 @@ def solve_maxcut_exact_streaming(
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
-        max_energy = compute_energy(best_theta, G_m, n_qubits)
+        max_energy = compute_energy_streaming(best_theta, G_func, nodes, n_qubits)
     elif cut_value is None:
-        max_energy = compute_cut(best_theta, G_m, n_qubits)
+        max_energy = compute_cut_streaming(best_theta, G_func, nodes, n_qubits)
     else:
         max_energy = cut_value
 
