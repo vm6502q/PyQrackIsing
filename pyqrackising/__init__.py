@@ -12,3 +12,6 @@ from .spin_glass_solver_streaming import spin_glass_solver_streaming
 from .tsp import tsp_symmetric, tsp_asymmetric
 from .tsp_maxcut import tsp_maxcut, tsp_maxcut_sparse, tsp_maxcut_streaming
 from .convert_tensor_network_to_tsp import convert_tensor_network_to_tsp, convert_quimb_tree_to_tsp
+from .solve_maxcut_exact import solve_maxcut_exact
+from .solve_maxcut_exact_sparse import solve_maxcut_exact_sparse
+from .solve_maxcut_exact_streaming import solve_maxcut_exact_streaming
