@@ -78,14 +78,15 @@ solution_bit_string, cut_value, node_groups, energy = spin_glass_solver(G, quali
 ```
 We also provide `spin_glass_solver_sparse(G)` and `spin_glass_solver_streaming(G_func, nodes)`. `best_guess` gives the option to seed the algorithm with a best guess as to the maximal cut (as an integer, binary string, or list of booleans). By default, `spin_glass_solver()` uses `maxcut_tfim(G)` with passed-through `quality` as `best_guess`, which typically works well, but it could be seeded with higher `maxcut_tfim()` `quality` or Goemans-Williamson, for example. `is_spin_glass` controls whether the solver optimizes for cut value or spin-glass energy. This function is designed with a sign convention for weights such that it can immediately be used as a MAXCUT solver itself: you might need to reverse the sign convention on your weights for spin glass graphs, but this is only convention. `gray_iterations` gives manual control over how many iterations are carried out of a parallel Gray-code search on `best_guess`. `gray_seed_multiple` controls how many parallel search seeds (as a multiple of your CPU thread count) are tested for the best parallel seeds, and a value of `1` will perfectly cover the search space without collision if your node count is a power of 2.
 
-These solvers above can be used as a "warm state" for _branch and bound,_ potentially to reach _exact_ solutions to MAXCUT:
+These solvers above can be used as a "warm state" for _MaxSAT-based_ solvers or _branch-and-bound_ solvers, potentially to reach _exact_ solutions to MAXCUT:
 
 ```py
 from pyqrackising import solve_maxcut_exact, solve_maxcut_exact_sparse, solve_maxcut_exact_streaming
+from pyqrackising import solve_maxcut_bnb, solve_maxcut_bnb_sparse, solve_maxcut_bnb_streaming
 import networkx as nx
 
 G = nx.petersen_graph()
-best_solution_bit_string, best_cut_value, best_node_groups = solve_maxcut_exact(G, time_limit=None)
+best_solution_bit_string, best_cut_value, best_node_groups = solve_maxcut_bnb(G, time_limit=None)
 ```
 Pass a time limit (in seconds) if desired.
 
