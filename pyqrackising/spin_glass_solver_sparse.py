@@ -374,6 +374,146 @@ def run_gray_search_opencl(
     return energy, theta
 
 
+# Belief propagation was added by (Anthropic) Claude
+def belief_propagation_marginals(G_data, G_rows, G_cols, n, bp_scale=1.0, damping=0.5):
+    """
+    Run loopy belief propagation on the signed graph to produce per-node
+    marginals suitable for biasing the initial partition assignment.
+
+    Messages are defined on directed edges (i->j) in the MaxCut factor graph.
+    Since the CSR matrix is upper-triangular, we iterate over stored edges and
+    maintain both directions explicitly.
+
+    Parameters
+    ----------
+    G_data : ndarray
+        Edge weights from upper-triangular CSR.
+    G_rows : ndarray
+        CSR row pointers.
+    G_cols : ndarray
+        CSR column indices.
+    n : int
+        Number of nodes.
+    bp_scale : float
+        Iteration cap = int(bp_scale * n). Default 1.0 keeps total work
+        O(n * m), which is <= O(n^3) for any graph density. User-controlled.
+    damping : float
+        Message damping factor in [0, 1). Higher values slow convergence
+        but stabilise oscillating marginals on dense frustrated graphs.
+
+    Returns
+    -------
+    marginals : ndarray, shape (n,)
+        Soft assignment in (-1, +1). Positive values favour partition 1,
+        negative values favour partition 0.
+    """
+    max_iterations = max(1, int(bp_scale * n))
+
+    # Messages: msg[i, j] = current message from i to j.
+    # We store all directed edges as two dicts indexed by (src, dst).
+    # For memory efficiency on sparse graphs we use flat arrays parallel
+    # to the CSR structure, holding both directions.
+
+    # Number of undirected edges
+    m = G_data.shape[0]
+
+    # For each undirected edge k: (u, v) with u < v (upper triangular)
+    # we store two directed messages: fwd[k] = msg u->v, bwd[k] = msg v->u
+    msg_fwd = np.zeros(m, dtype=np.float64)  # u -> v
+    msg_bwd = np.zeros(m, dtype=np.float64)  # v -> u
+
+    # Build a reverse index: for each node, list of (edge_idx, direction)
+    # direction=0 means node is the 'u' end (row), direction=1 means 'v' end (col)
+    node_edges = [[] for _ in range(n)]
+    edge_u = np.empty(m, dtype=np.int32)
+    edge_v = np.empty(m, dtype=np.int32)
+
+    k = 0
+    for u in range(n):
+        for ptr in range(G_rows[u], G_rows[u + 1]):
+            v = G_cols[ptr]
+            edge_u[k] = u
+            edge_v[k] = v
+            node_edges[u].append((k, 0))  # u is src of fwd message
+            node_edges[v].append((k, 1))  # v is src of bwd message
+            k += 1
+
+    for _ in range(max_iterations):
+        new_fwd = np.empty(m, dtype=np.float64)
+        new_bwd = np.empty(m, dtype=np.float64)
+
+        for k in range(m):
+            u = edge_u[k]
+            v = edge_v[k]
+            w = G_data[k]
+
+            # Message u -> v: sum of incoming messages to u from all
+            # neighbours except v, passed through the edge factor.
+            # For MaxCut, the factor encourages u and v to differ;
+            # for negative edges it encourages them to agree.
+            # The update rule: new_msg(u->v) = atanh(tanh(w) * tanh(sum_excl))
+            # where sum_excl is the sum of all incoming messages to u except
+            # the one from v.
+            h_u = 0.0
+            for (ek, direction) in node_edges[u]:
+                if ek == k:
+                    continue  # exclude the v->u message
+                if direction == 0:
+                    # u is the fwd src on edge ek, so incoming to u is bwd[ek]
+                    h_u += msg_bwd[ek]
+                else:
+                    # u is the bwd src on edge ek, so incoming to u is fwd[ek]
+                    h_u += msg_fwd[ek]
+
+            tanh_w = np.tanh(w)
+            tanh_h = np.tanh(h_u)
+            product = tanh_w * tanh_h
+            # Clamp to avoid atanh singularity
+            product = np.clip(product, -1.0 + 1e-9, 1.0 - 1e-9)
+            raw_fwd = np.arctanh(product)
+            new_fwd[k] = damping * msg_fwd[k] + (1.0 - damping) * raw_fwd
+
+            # Message v -> u (symmetric, swap roles)
+            h_v = 0.0
+            for (ek, direction) in node_edges[v]:
+                if ek == k:
+                    continue  # exclude the u->v message
+                if direction == 0:
+                    h_v += msg_bwd[ek]
+                else:
+                    h_v += msg_fwd[ek]
+
+            tanh_h_v = np.tanh(h_v)
+            product_v = tanh_w * tanh_h_v
+            product_v = np.clip(product_v, -1.0 + 1e-9, 1.0 - 1e-9)
+            raw_bwd = np.arctanh(product_v)
+            new_bwd[k] = damping * msg_bwd[k] + (1.0 - damping) * raw_bwd
+
+        msg_fwd = new_fwd
+        msg_bwd = new_bwd
+
+    # Compute marginals: for each node, sum all incoming messages
+    marginals = np.zeros(n, dtype=np.float64)
+    for k in range(m):
+        u = edge_u[k]
+        v = edge_v[k]
+        marginals[u] += msg_bwd[k]  # incoming to u from v
+        marginals[v] += msg_fwd[k]  # incoming to v from u
+
+    return np.tanh(marginals)
+
+
+def bp_warm_start(G_data, G_rows, G_cols, n, bp_scale=1.0, damping=0.5):
+    """
+    Produce an initial partition bitstring from BP marginals.
+    Nodes with positive marginal go to partition 1, negative to partition 0.
+    Falls back to all-zeros (trivial) if BP produces a degenerate result.
+    """
+    marginals = belief_propagation_marginals(G_data, G_rows, G_cols, n, bp_scale, damping)
+    theta = marginals > 0.0
+    return theta
+
+
 def spin_glass_solver_sparse(
     G,
     quality=None,
@@ -387,7 +527,23 @@ def spin_glass_solver_sparse(
     is_log=False,
     gray_iterations=None,
     gray_seed_multiple=None,
+    bp_scale=None,
+    bp_damping=0.5,
 ):
+    """
+    Spin glass / MaxCut solver with optional belief propagation warm-start.
+
+    Parameters
+    ----------
+    bp_scale : float or None
+        Controls BP iteration count as int(bp_scale * n_qubits).
+        Default None disables BP. Set to 1.0 to enable with O(n*m) cost
+        (<=O(n^3) for any graph density). Increase for more BP iterations
+        at proportionally higher cost.
+    bp_damping : float
+        Message damping in [0, 1). Default 0.5. Higher values help
+        convergence on dense or heavily frustrated graphs.
+    """
     dtype = opencl_context.dtype
     nodes = None
     n_qubits = 0
@@ -427,17 +583,54 @@ def spin_glass_solver_sparse(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, cut_value, _ = maxcut_tfim_sparse(
-            G_m,
-            quality=quality,
-            shots=shots,
-            is_spin_glass=is_spin_glass,
-            anneal_t=anneal_t,
-            anneal_h=anneal_h,
-            repulsion_base=repulsion_base,
-            is_maxcut_gpu=is_maxcut_gpu,
-            is_nested=True,
-        )
+        # BP warm-start: run before the sampling heuristic if bp_scale is set,
+        # so that the cascade local search begins from a sign-aware partition
+        # rather than the TFIM prior alone.
+        if bp_scale is not None and n_qubits >= heuristic_threshold_sparse:
+            bp_theta = bp_warm_start(
+                G_m.data, G_m.indptr, G_m.indices, n_qubits, bp_scale, bp_damping
+            )
+            bp_bitstring = "".join(["1" if b else "0" for b in bp_theta])
+            # Pass BP result as best_guess into maxcut_tfim_sparse so the
+            # sampling heuristic can compete against it or build on it.
+            bitstring, cut_value, _ = maxcut_tfim_sparse(
+                G_m,
+                quality=quality,
+                shots=shots,
+                is_spin_glass=is_spin_glass,
+                anneal_t=anneal_t,
+                anneal_h=anneal_h,
+                repulsion_base=repulsion_base,
+                is_maxcut_gpu=is_maxcut_gpu,
+                is_nested=True,
+            )
+            # Keep whichever of BP or sampling gave the better cut
+            bp_energy = (
+                compute_energy_sparse(bp_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+                if is_spin_glass
+                else compute_cut_sparse(bp_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+            )
+            sample_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+            sample_energy = (
+                compute_energy_sparse(sample_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+                if is_spin_glass
+                else compute_cut_sparse(sample_theta, G_m.data, G_m.indptr, G_m.indices, n_qubits)
+            )
+            if bp_energy > sample_energy:
+                bitstring = bp_bitstring
+                cut_value = bp_energy if not is_spin_glass else None
+        else:
+            bitstring, cut_value, _ = maxcut_tfim_sparse(
+                G_m,
+                quality=quality,
+                shots=shots,
+                is_spin_glass=is_spin_glass,
+                anneal_t=anneal_t,
+                anneal_h=anneal_h,
+                repulsion_base=repulsion_base,
+                is_maxcut_gpu=is_maxcut_gpu,
+                is_nested=True,
+            )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
