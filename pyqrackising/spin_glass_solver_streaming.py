@@ -144,6 +144,122 @@ def run_gray_optimization(best_theta, iterators, gray_iterations, thread_count, 
     return best_energy, best_state
 
 
+# Belief propagation was added by (Anthropic) Claude
+def belief_propagation_marginals_streaming(G_func, nodes, n, bp_scale=1.0, damping=0.5):
+    """
+    Run loopy belief propagation using the streaming edge accessor to produce
+    per-node marginals for warm-starting the partition.
+
+    Since the streaming solver has no pre-built adjacency structure, we make
+    one O(n^2) pass over node pairs to discover non-zero edges before running
+    BP iterations. This matches the streaming solver's own access pattern and
+    keeps total cost O(n * m) iterations on top of the O(n^2) discovery pass,
+    remaining <= O(n^3) overall.
+
+    Parameters
+    ----------
+    G_func : callable
+        Edge weight accessor: G_func(u, v) -> float. Returns 0.0 for absent edges.
+    nodes : sequence
+        Node identifiers corresponding to qubit indices.
+    n : int
+        Number of nodes.
+    bp_scale : float
+        Iteration cap = int(bp_scale * n). User-controlled; default 1.0
+        keeps total work <= O(n^3).
+    damping : float
+        Message damping factor in [0, 1).
+
+    Returns
+    -------
+    marginals : ndarray, shape (n,)
+        Soft assignment in (-1, +1).
+    """
+    max_iterations = max(1, int(bp_scale * n))
+
+    # Discover edges via one O(n^2) pass — unavoidable for the streaming case
+    us = []
+    vs = []
+    ws = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            w = G_func(nodes[i], nodes[j])
+            if abs(w) > 1e-12:
+                us.append(i)
+                vs.append(j)
+                ws.append(w)
+
+    m = len(us)
+    if m == 0:
+        return np.zeros(n, dtype=np.float64)
+
+    us = np.array(us, dtype=np.int32)
+    vs = np.array(vs, dtype=np.int32)
+    ws = np.array(ws, dtype=np.float64)
+
+    # msg_fwd[k] = message from us[k] -> vs[k]
+    # msg_bwd[k] = message from vs[k] -> us[k]
+    msg_fwd = np.zeros(m, dtype=np.float64)
+    msg_bwd = np.zeros(m, dtype=np.float64)
+
+    # Build neighbour index: node -> list of (edge_idx, direction)
+    # direction=0: node is 'u' end, incoming = msg_bwd[k]
+    # direction=1: node is 'v' end, incoming = msg_fwd[k]
+    node_edges = [[] for _ in range(n)]
+    for k in range(m):
+        node_edges[us[k]].append((k, 0))
+        node_edges[vs[k]].append((k, 1))
+
+    for _ in range(max_iterations):
+        new_fwd = np.empty(m, dtype=np.float64)
+        new_bwd = np.empty(m, dtype=np.float64)
+
+        for k in range(m):
+            u = us[k]
+            v = vs[k]
+            w = ws[k]
+
+            # Message u -> v: aggregate incoming to u excluding v
+            h_u = 0.0
+            for (ek, direction) in node_edges[u]:
+                if ek == k:
+                    continue
+                h_u += msg_bwd[ek] if direction == 0 else msg_fwd[ek]
+
+            tanh_w = np.tanh(w)
+            product = tanh_w * np.tanh(h_u)
+            product = np.clip(product, -1.0 + 1e-9, 1.0 - 1e-9)
+            new_fwd[k] = damping * msg_fwd[k] + (1.0 - damping) * np.arctanh(product)
+
+            # Message v -> u: aggregate incoming to v excluding u
+            h_v = 0.0
+            for (ek, direction) in node_edges[v]:
+                if ek == k:
+                    continue
+                h_v += msg_bwd[ek] if direction == 0 else msg_fwd[ek]
+
+            product_v = tanh_w * np.tanh(h_v)
+            product_v = np.clip(product_v, -1.0 + 1e-9, 1.0 - 1e-9)
+            new_bwd[k] = damping * msg_bwd[k] + (1.0 - damping) * np.arctanh(product_v)
+
+        msg_fwd = new_fwd
+        msg_bwd = new_bwd
+
+    # Marginals: sum all incoming messages per node
+    marginals = np.zeros(n, dtype=np.float64)
+    for k in range(m):
+        marginals[us[k]] += msg_bwd[k]
+        marginals[vs[k]] += msg_fwd[k]
+
+    return np.tanh(marginals)
+
+
+def bp_warm_start_streaming(G_func, nodes, n, bp_scale=1.0, damping=0.5):
+    """Partition bitstring from BP marginals over the streaming graph."""
+    marginals = belief_propagation_marginals_streaming(G_func, nodes, n, bp_scale, damping)
+    return marginals > 0.0
+
+
 def spin_glass_solver_streaming(
     G_func,
     nodes,
@@ -158,7 +274,23 @@ def spin_glass_solver_streaming(
     is_log=False,
     gray_iterations=None,
     gray_seed_multiple=None,
+    bp_scale=None,
+    bp_damping=0.5,
 ):
+    """
+    Streaming spin glass / MaxCut solver with optional belief propagation warm-start.
+
+    Parameters
+    ----------
+    bp_scale : float or None
+        Controls BP iteration count as int(bp_scale * n_qubits).
+        Default None disables BP. Set to 1.0 to enable with O(n*m) cost
+        (<=O(n^3) for any graph density). Note: the streaming solver incurs
+        an additional O(n^2) edge-discovery pass when BP is enabled, since
+        no adjacency structure is pre-built.
+    bp_damping : float
+        Message damping in [0, 1). Default 0.5.
+    """
     dtype = opencl_context.dtype
     n_qubits = len(nodes)
 
@@ -188,16 +320,47 @@ def spin_glass_solver_streaming(
     elif isinstance(best_guess, list):
         bitstring = "".join(["1" if b else "0" for b in best_guess])
     else:
-        bitstring, cut_value, _ = maxcut_tfim_streaming(
-            G_func,
-            nodes,
-            quality=quality,
-            shots=shots,
-            is_spin_glass=is_spin_glass,
-            anneal_t=anneal_t,
-            anneal_h=anneal_h,
-            repulsion_base=repulsion_base,
-        )
+        # BP warm-start: run before the sampling heuristic if bp_scale is set,
+        # so that the cascade local search begins from a sign-aware partition
+        # rather than the TFIM prior alone.
+        if bp_scale is not None and n_qubits >= heuristic_threshold:
+            bp_theta = bp_warm_start_streaming(G_func, nodes, n_qubits, bp_scale, bp_damping)
+            bitstring, cut_value, _ = maxcut_tfim_streaming(
+                G_func,
+                nodes,
+                quality=quality,
+                shots=shots,
+                is_spin_glass=is_spin_glass,
+                anneal_t=anneal_t,
+                anneal_h=anneal_h,
+                repulsion_base=repulsion_base,
+            )
+            # Keep whichever of BP or sampling gave the better cut
+            bp_energy = (
+                compute_energy_streaming(bp_theta, G_func, nodes, n_qubits)
+                if is_spin_glass
+                else compute_cut_streaming(bp_theta, G_func, nodes, n_qubits)
+            )
+            sample_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
+            sample_energy = (
+                compute_energy_streaming(sample_theta, G_func, nodes, n_qubits)
+                if is_spin_glass
+                else compute_cut_streaming(sample_theta, G_func, nodes, n_qubits)
+            )
+            if bp_energy > sample_energy:
+                bitstring = "".join(["1" if b else "0" for b in bp_theta])
+                cut_value = bp_energy if not is_spin_glass else None
+        else:
+            bitstring, cut_value, _ = maxcut_tfim_streaming(
+                G_func,
+                nodes,
+                quality=quality,
+                shots=shots,
+                is_spin_glass=is_spin_glass,
+                anneal_t=anneal_t,
+                anneal_h=anneal_h,
+                repulsion_base=repulsion_base,
+            )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
     if is_spin_glass:
