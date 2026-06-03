@@ -246,7 +246,7 @@ def main():
     for q in range(n_qubits):
         qc_aer.ry(theta, q)
 
-    control = QrackSimulator(n_qubits, isTensorNetwork=False)
+    control = QrackSimulator(n_qubits)
     basis_gates = QrackSimulator.get_qiskit_basis_gates()
     qc_aer = transpile(qc_aer, basis_gates=basis_gates)
     control.run_qiskit_circuit(qc_aer)
