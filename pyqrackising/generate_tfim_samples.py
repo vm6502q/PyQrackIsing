@@ -176,7 +176,7 @@ def sample_fixed_hamming_weight(h_weight, count, n_rows, n_cols, burnin=10):
     return samples
 
 
-@njit
+@njit(cache=True)
 def factor_width(width, is_transpose=False):
     col_len = math.floor(math.sqrt(width))
     while ((width // col_len) * col_len) != width:
@@ -186,7 +186,7 @@ def factor_width(width, is_transpose=False):
     return (col_len, row_len) if is_transpose else (row_len, col_len)
 
 
-@njit
+@njit(cache=True)
 def comb(n, k):
     if (k < 0) or (k > n):
         return 0
@@ -198,7 +198,7 @@ def comb(n, k):
     return res
 
 
-@njit
+@njit(cache=True)
 def fix_cdf(hamming_prob):
     tot_prob = 0.0
     n_bias = len(hamming_prob)
@@ -211,55 +211,7 @@ def fix_cdf(hamming_prob):
     return cum_prob
 
 
-@njit
-def _apply_time_envelope(bias, t, n_qubits):
-    """
-    Multiply bias[k] by exp(-|k - n/2| / max(t, epsilon)) for each k.
-
-    This is the time-dependent Hamming weight envelope:
-      - At small t: peaks sharply at half-filling k = n/2 (AFM sector).
-      - At large t: envelope -> 1, recovering the original bias exactly.
-
-    The differential effect is greatest at initialization (small t),
-    which is where the ESD / adiabatic physics lives.
-
-    alpha = 1.0 is hardcoded as the natural physical invariant.
-    It is the least contrived value that produces the correct qualitative
-    behaviour, and is left fixed rather than tuned empirically.
-
-    Authors: Claude (Anthropic) and D. Strano
-    """
-    alpha = 1.0
-    half = n_qubits / 2.0
-    # Numba-safe floor of t for the epsilon guard
-    t_eff = t if t > 1e-9 else 1e-9
-
-    out = np.empty(n_qubits + 1, dtype=np.float64)
-    tot = 0.0
-    for k in range(n_qubits + 1):
-        dist = k - half
-        if dist < 0.0:
-            dist = -dist
-        envelope = math.exp(-alpha * dist / t_eff)
-        val = bias[k] * envelope
-        out[k] = val
-        tot += val
-
-    if tot <= 0.0:
-        # Pathological underflow: collapse to half-filling delta
-        for k in range(n_qubits + 1):
-            out[k] = 0.0
-        mid = n_qubits // 2
-        out[mid] = 1.0
-        return out
-
-    for k in range(n_qubits + 1):
-        out[k] /= tot
-
-    return out
-
-
-@njit
+@njit(cache=True)
 def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, omega=1.5 * np.pi):
     if abs(t) <= epsilon:
         p = (1.0 - np.cos(theta)) / 2.0
@@ -277,11 +229,7 @@ def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
             bias[0] = 1.0
         return bias
 
-    bias = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, normalized=True, omega=omega)
-
-    # Apply time-dependent envelope: maximum differential at small t,
-    # recovers original distribution as t -> inf.
-    return _apply_time_envelope(bias / bias.sum(), t, n_qubits)
+    return probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, normalized=True, omega=omega)
 
 
 def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100):

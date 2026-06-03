@@ -618,6 +618,54 @@ def init_thresholds(n_qubits):
 
 
 @njit(cache=True)
+def _apply_time_envelope(bias, t, n_qubits):
+    """
+    Multiply bias[k] by exp(-|k - n/2| / max(t, epsilon)) for each k.
+
+    This is the time-dependent Hamming weight envelope:
+      - At small t: peaks sharply at half-filling k = n/2 (AFM sector).
+      - At large t: envelope -> 1, recovering the original bias exactly.
+
+    The differential effect is greatest at initialization (small t),
+    which is where the ESD / adiabatic physics lives.
+
+    alpha = 1.0 is hardcoded as the natural physical invariant.
+    It is the least contrived value that produces the correct qualitative
+    behaviour, and is left fixed rather than tuned empirically.
+
+    Authors: Claude (Anthropic) and D. Strano
+    """
+    alpha = 1.0
+    half = n_qubits / 2.0
+    # Numba-safe floor of t for the epsilon guard
+    t_eff = t if t > 1e-9 else 1e-9
+
+    out = np.empty(n_qubits + 1, dtype=np.float64)
+    tot = 0.0
+    for k in range(n_qubits + 1):
+        dist = k - half
+        if dist < 0.0:
+            dist = -dist
+        envelope = math.exp(-alpha * dist / t_eff)
+        val = bias[k] * envelope
+        out[k] = val
+        tot += val
+
+    if tot <= 0.0:
+        # Pathological underflow: collapse to half-filling delta
+        for k in range(n_qubits + 1):
+            out[k] = 0.0
+        mid = n_qubits // 2
+        out[mid] = 1.0
+        return out
+
+    for k in range(n_qubits + 1):
+        out[k] /= tot
+
+    return out
+
+
+@njit(cache=True)
 def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega=1.5 * np.pi):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
@@ -640,7 +688,9 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, om
     if normalized:
         bias /= bias.sum()
 
-    return bias
+    # Apply time-dependent envelope: maximum differential at small t,
+    # recovers original distribution as t -> inf.
+    return _apply_time_envelope(bias / bias.sum(), t, n_bias - 1)
 
 
 @njit(cache=True)
