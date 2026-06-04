@@ -35,26 +35,31 @@ gnl = opencl_context.GRAY_NODE_LIMIT
 @njit(parallel=True, cache=True)
 def run_single_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols):
     n = len(best_theta)
+    deltas = np.empty(n, dtype=dtype)
 
-    energies = np.empty(n, dtype=dtype)
+    for i in prange(n):
+        # Compute delta: walk only adjacency list of i (O(degree(i)))
+        old_bit = best_theta[i]
+        new_bit = not old_bit
+        delta = dtype(0)
+        for col in range(G_rows[i], G_rows[i + 1]):
+            v = G_cols[col]
+            val = G_data[col]
+            v_bit = best_theta[v]
+            old_cut = old_bit != v_bit
+            new_cut = new_bit != v_bit
+            if old_cut != new_cut:
+                delta += val if new_cut else -val
+        if is_spin_glass:
+            delta *= dtype(2)
+        deltas[i] = delta
 
-    if is_spin_glass:
-        for i in prange(n):
-            state = best_theta.copy()
-            state[i] = not state[i]
-            energies[i] = compute_energy_sparse(state, G_data, G_rows, G_cols, n)
-    else:
-        for i in prange(n):
-            state = best_theta.copy()
-            state[i] = not state[i]
-            energies[i] = compute_cut_sparse(state, G_data, G_rows, G_cols, n)
-
-    best_index = np.argmax(energies)
-    best_energy = energies[best_index]
+    best_index = np.argmax(deltas)
+    best_delta = deltas[best_index]
     best_state = best_theta.copy()
     best_state[best_index] = not best_state[best_index]
 
-    return best_energy, best_state
+    return best_delta, best_state
 
 
 @njit(parallel=True, cache=True)
@@ -64,58 +69,65 @@ def run_double_bit_flips(best_theta, is_spin_glass, G_data, G_rows, G_cols, thre
     thread_batch = (combo_count + thread_count - 1) // thread_count
 
     states = np.empty((thread_count, n), dtype=np.bool_)
-    energies = np.empty(thread_count, dtype=dtype)
+    deltas = np.empty(thread_count, dtype=dtype)
 
-    if is_spin_glass:
-        for t in prange(thread_count):
-            s = int(t)
-            while s < combo_count:
-                c = int(s)
-                i = int(0)
-                lcv = int(n - 1)
-                while c >= lcv:
-                    c -= lcv
-                    i += 1
-                    lcv -= 1
-                    if not lcv:
-                        break
-                j = int(c + i + 1)
+    for t in prange(thread_count):
+        s = int(t)
+        while s < combo_count:
+            c = int(s)
+            i = int(0)
+            lcv = int(n - 1)
+            while c >= lcv:
+                c -= lcv
+                i += 1
+                lcv -= 1
+                if not lcv:
+                    break
+            j = int(c + i + 1)
 
-                state = best_theta.copy()
-                state[i] = not state[i]
-                state[j] = not state[j]
+            # Delta: walk adjacency lists of i and j only
+            old_i = best_theta[i]
+            new_i = not old_i
+            old_j = best_theta[j]
+            new_j = not old_j
+            delta = dtype(0)
 
-                states[t], energies[t] = state, compute_energy_sparse(state, G_data, G_rows, G_cols, n)
+            for col in range(G_rows[i], G_rows[i + 1]):
+                v = G_cols[col]
+                if v == j:
+                    continue   # k-l edge: both flip, XOR unchanged, zero delta
+                val = G_data[col]
+                v_bit = best_theta[v]
+                if (old_i != v_bit) != (new_i != v_bit):
+                    delta += val if (new_i != v_bit) else -val
 
-                s += thread_batch
-    else:
-        for t in prange(thread_count):
-            s = int(t)
-            while s < combo_count:
-                c = int(s)
-                i = int(0)
-                lcv = int(n - 1)
-                while c >= lcv:
-                    c -= lcv
-                    i += 1
-                    lcv -= 1
-                    if not lcv:
-                        break
-                j = int(c + i + 1)
+            for col in range(G_rows[j], G_rows[j + 1]):
+                v = G_cols[col]
+                if v == i:
+                    continue
+                val = G_data[col]
+                v_bit = best_theta[v]
+                if (old_j != v_bit) != (new_j != v_bit):
+                    delta += val if (new_j != v_bit) else -val
 
-                state = best_theta.copy()
-                state[i] = not state[i]
-                state[j] = not state[j]
+            if is_spin_glass:
+                delta *= dtype(2)
 
-                states[t], energies[t] = state, compute_cut_sparse(state, G_data, G_rows, G_cols, n)
+            states[t, i] = new_i
+            states[t, j] = new_j
+            # copy other bits (only need to track i,j changes)
+            for k in range(n):
+                if k != i and k != j:
+                    states[t, k] = best_theta[k]
+            deltas[t] = delta
 
-                s += thread_batch
+            s += thread_batch
 
-    best_index = np.argmax(energies)
-    best_energy = energies[best_index]
+    best_index = np.argmax(deltas)
+    best_delta = deltas[best_index]
     best_state = states[best_index]
 
-    return best_energy, best_state
+    return best_delta, best_state
 
 
 @njit(parallel=True, cache=True)
@@ -170,36 +182,32 @@ def run_gray_optimization(
     thread_iterations = (gray_iterations + thread_count - 1) // thread_count
     blocks = (n + 63) >> 6
 
-    if is_spin_glass:
-        for i in prange(thread_count):
-            iterator = iterators[i]
-            best_energy = energies[i]
-            for curr_idx in range(thread_iterations):
-                for block in range(blocks):
-                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_energy_sparse(iterator, G_data, G_rows, G_cols, n)
-                    if energy > best_energy:
-                        best_energy = energy
-                    else:
-                        # Revert iterator
-                        iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > energies[i]:
-                    energies[i] = best_energy
-    else:
-        for i in prange(thread_count):
-            iterator = iterators[i]
-            best_energy = energies[i]
-            for curr_idx in range(thread_iterations):
-                for block in range(blocks):
-                    flip_bit = gray_code_next(iterator, curr_idx, block << 6)
-                    energy = compute_cut_sparse(iterator, G_data, G_rows, G_cols, n)
-                    if energy > best_energy:
-                        best_energy = energy
-                    else:
-                        # Revert iterator
-                        iterator[flip_bit] = not iterator[flip_bit]
-                if best_energy > energies[i]:
-                    energies[i] = best_energy
+    for i in prange(thread_count):
+        iterator = iterators[i]
+        best_energy = energies[i]
+        for curr_idx in range(thread_iterations):
+            for block in range(blocks):
+                flip_bit = gray_code_next(iterator, curr_idx, block << 6)
+                # Incremental delta: walk only adjacency list of flip_bit
+                new_bit = iterator[flip_bit]
+                old_bit = not new_bit
+                delta = dtype(0)
+                for col in range(G_rows[flip_bit], G_rows[flip_bit + 1]):
+                    v = G_cols[col]
+                    val = G_data[col]
+                    v_bit = iterator[v]
+                    old_cut = old_bit != v_bit
+                    new_cut = new_bit != v_bit
+                    if old_cut != new_cut:
+                        delta += val if new_cut else -val
+                if is_spin_glass:
+                    delta *= dtype(2)
+                if delta > dtype(0):
+                    best_energy += delta
+                else:
+                    iterator[flip_bit] = not iterator[flip_bit]
+        if best_energy > energies[i]:
+            energies[i] = best_energy
 
     best_index = np.argmax(energies)
     best_energy = energies[best_index]
@@ -212,7 +220,6 @@ def run_bit_flips_opencl(
     is_double,
     n,
     kernel,
-    best_energy,
     theta,
     theta_buf,
     G_data_buf,
@@ -269,13 +276,13 @@ def run_bit_flips_opencl(
     # Queue read for results we might not need
     cl.enqueue_copy(queue, max_index_host, max_index_buf)
 
-    # Find global minimum
+    # Find global best delta
     best_x = np.argmax(max_energy_host)
     energy = max_energy_host[best_x]
 
-    if energy <= best_energy:
-        # No improvement: we can exit early
-        return best_energy, theta
+    if energy <= 0.0:
+        # No improvement: best delta is non-positive, exit early.
+        return 0.0, theta
 
     # We need the best index
     queue.finish()
@@ -708,7 +715,6 @@ def spin_glass_solver_sparse(
                 False,
                 n_qubits,
                 single_bit_flips_kernel,
-                max_energy,
                 best_theta,
                 theta_buf,
                 G_data_buf,
@@ -719,8 +725,8 @@ def spin_glass_solver_sparse(
             )
         else:
             energy, state = run_single_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -732,7 +738,6 @@ def spin_glass_solver_sparse(
                 True,
                 n_qubits,
                 double_bit_flips_kernel,
-                max_energy,
                 best_theta,
                 theta_buf,
                 G_data_buf,
@@ -743,8 +748,8 @@ def spin_glass_solver_sparse(
             )
         else:
             energy, state = run_double_bit_flips(best_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -810,7 +815,6 @@ def spin_glass_solver_sparse(
                 False,
                 n_qubits,
                 single_bit_flips_kernel,
-                max_energy,
                 reheat_theta,
                 theta_buf,
                 G_data_buf,
@@ -821,8 +825,8 @@ def spin_glass_solver_sparse(
             )
         else:
             energy, state = run_single_bit_flips(reheat_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
             continue
@@ -837,7 +841,6 @@ def spin_glass_solver_sparse(
                 True,
                 n_qubits,
                 double_bit_flips_kernel,
-                max_energy,
                 reheat_theta,
                 theta_buf,
                 G_data_buf,
@@ -848,8 +851,8 @@ def spin_glass_solver_sparse(
             )
         else:
             energy, state = run_double_bit_flips(reheat_theta, is_spin_glass, G_m.data, G_m.indptr, G_m.indices, thread_count)
-        if energy > max_energy:
-            max_energy = energy
+        if energy > 0.0:
+            max_energy += energy
             best_theta = state
             improved = True
 

@@ -285,29 +285,31 @@ __kernel void calculate_cut_sparse(
 }
 
 real1 single_bit_flip_worker_sparse(__constant uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass, const int k) {
-    real1 energy = ZERO_R1;
-    for (int u = 0; u < n; ++u) {
-        bool u_bit = get_const_bit(theta, u);
-        if (u == k) {
-            u_bit = !u_bit;
-        }
-        const size_t mCol = G_rows[u + 1];
-        for (int col = G_rows[u]; col < mCol; ++col) {
-            const int v = G_cols[col];
-            const real1 val = G_data[col];
-            bool v_bit = get_const_bit(theta, v);
-            if (v == k) {
-                v_bit = !v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+    // Only edges incident to k change when k is flipped.
+    // Walk only the adjacency list of k: O(degree(k)) instead of O(n * degree).
+    // Returns the energy DELTA (new_energy - base_energy) for this flip.
+    // All threads share the same base state (best_theta), so deltas are
+    // directly comparable for finding the best single-bit flip.
+    const bool k_bit_old = get_const_bit(theta, k);
+    const bool k_bit_new = !k_bit_old;
+    real1 delta = ZERO_R1;
+    const uint row_end = G_rows[k + 1];
+    for (uint col = G_rows[k]; col < row_end; ++col) {
+        const int v = G_cols[col];
+        const real1 val = G_data[col];
+        const bool v_bit = get_const_bit(theta, v);
+        const bool old_cut = k_bit_old != v_bit;
+        const bool new_cut = k_bit_new != v_bit;
+        if (old_cut != new_cut) {
+            delta += new_cut ? val : -val;
         }
     }
-
-    return energy;
+    // For spin glass, the same edge contributes to both cut and non-cut terms,
+    // so the delta magnitude doubles (unlike-becomes-like costs twice: lose val + gain -val).
+    if (is_spin_glass) {
+        delta *= 2.0;
+    }
+    return delta;
 }
 
 __kernel void single_bit_flips_sparse(
@@ -315,8 +317,8 @@ __kernel void single_bit_flips_sparse(
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant uint* best_theta,
-    __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* max_energy_ptr,     // output: per-group min energy
+    __constant int* args,               // args[0] = n, args[1] = is_spin_glass
+    __global real1* max_energy_ptr,     // output: per-group best delta
     __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
@@ -331,6 +333,8 @@ __kernel void single_bit_flips_sparse(
     int best_i = i;
 
     for (; i < n; i += max_i) {
+        // Worker returns delta; sign determines accept/reject.
+        // Only the largest positive delta matters for selecting the best flip.
         const real1 energy = single_bit_flip_worker_sparse(best_theta, G_data, G_rows, G_cols, n, is_spin_glass, i);
         if (energy > best_energy) {
             best_energy = energy;
@@ -342,29 +346,53 @@ __kernel void single_bit_flips_sparse(
 }
 
 real1 double_bit_flip_worker_sparse(__constant uint* theta, __global const real1* G_data, __global const uint* G_rows, __global const uint* G_cols, const int n, const bool is_spin_glass, const int k, const int l) {
-    real1 energy = ZERO_R1;
-    for (int u = 0; u < n; ++u) {
-        bool u_bit = get_const_bit(theta, u);
-        if ((u == k) || (u == l)) {
-            u_bit = !u_bit;
-        }
-        const size_t mCol = G_rows[u + 1];
-        for (int col = G_rows[u]; col < mCol; ++col) {
-            const int v = G_cols[col];
-            const real1 val = G_data[col];
-            bool v_bit = get_const_bit(theta, v);
-            if ((v == k) || (v == l)) {
-                v_bit = !v_bit;
-            }
-            if (u_bit != v_bit) {
-                energy += val;
-            } else if (is_spin_glass) {
-                energy -= val;
-            }
+    // Only edges incident to k or l change when both are flipped simultaneously.
+    // Walk adjacency lists of k and l: O(degree(k) + degree(l)) instead of O(n * degree).
+    // Returns the energy DELTA for this double flip.
+    const bool k_bit_old = get_const_bit(theta, k);
+    const bool k_bit_new = !k_bit_old;
+    const bool l_bit_old = get_const_bit(theta, l);
+    const bool l_bit_new = !l_bit_old;
+    real1 delta = ZERO_R1;
+
+    // Contribution from edges incident to k (excluding the k-l edge, handled below)
+    const uint k_row_end = G_rows[k + 1];
+    for (uint col = G_rows[k]; col < k_row_end; ++col) {
+        const int v = G_cols[col];
+        if (v == l) continue;   // handle k-l edge separately
+        const real1 val = G_data[col];
+        // v is not flipped, so v_bit unchanged
+        const bool v_bit = get_const_bit(theta, v);
+        const bool old_cut = k_bit_old != v_bit;
+        const bool new_cut = k_bit_new != v_bit;
+        if (old_cut != new_cut) {
+            delta += new_cut ? val : -val;
         }
     }
 
-    return energy;
+    // Contribution from edges incident to l (excluding the k-l edge)
+    const uint l_row_end = G_rows[l + 1];
+    for (uint col = G_rows[l]; col < l_row_end; ++col) {
+        const int v = G_cols[col];
+        if (v == k) continue;   // handle k-l edge separately
+        const real1 val = G_data[col];
+        const bool v_bit = get_const_bit(theta, v);
+        const bool old_cut = l_bit_old != v_bit;
+        const bool new_cut = l_bit_new != v_bit;
+        if (old_cut != new_cut) {
+            delta += new_cut ? val : -val;
+        }
+    }
+
+    // Handle the k-l edge: both endpoints flip, so XOR status may or may not change.
+    // old_cut = (k_bit_old != l_bit_old); new_cut = (k_bit_new != l_bit_new).
+    // Since both bits flip, new_cut == old_cut — the k-l edge contribution is unchanged.
+    // No delta from the k-l edge. (Included here explicitly for clarity.)
+
+    if (is_spin_glass) {
+        delta *= 2.0;
+    }
+    return delta;
 }
 
 __kernel void double_bit_flips_sparse(
@@ -372,8 +400,8 @@ __kernel void double_bit_flips_sparse(
     __global const uint* G_rows,
     __global const uint* G_cols,
     __constant uint* best_theta,
-    __constant int* args,               // args[0] = n, args[1] = k
-    __global real1* max_energy_ptr,     // output: per-group min energy
+    __constant int* args,               // args[0] = n, args[1] = is_spin_glass
+    __global real1* max_energy_ptr,     // output: per-group best delta
     __global int* max_index_ptr,        // output: per-group best index (i)
     __local real1* loc_energy,          // local memory buffer
     __local int* loc_index              // local memory buffer
@@ -403,6 +431,7 @@ __kernel void double_bit_flips_sparse(
         }
         const int l = c + k + 1;
 
+        // Worker returns delta; sign determines accept/reject.
         const real1 energy = double_bit_flip_worker_sparse(best_theta, G_data, G_rows, G_cols, n, is_spin_glass, k, l);
         if (energy > best_energy) {
             best_energy = energy;
@@ -879,12 +908,10 @@ inline size_t gray_code_next(ulong* theta, const size_t curr_idx, const size_t o
     size_t curr = curr_idx + 1U;
     prev = prev ^ (prev >> 1U);
     curr = curr ^ (curr >> 1U);
-    size_t diff = prev ^ curr;
-    size_t flip_bit = 0;
-    while (!((diff >> flip_bit) & 1U)) {
-        ++flip_bit;
-    }
-    flip_bit += offset;
+    const ulong diff = prev ^ curr;
+    // ctz gives the position of the lowest set bit in a single native instruction.
+    // diff is always non-zero (consecutive Gray codes differ in exactly one bit).
+    const size_t flip_bit = (size_t)ctz(diff) + offset;
     theta[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
 
     return flip_bit;
@@ -1117,25 +1144,31 @@ __kernel void gray_sparse(
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
-            real1 energy = ZERO_R1;
-            for (uint u = 0; u < n; u++) {
-                const bool u_bit = get_local_bit(theta_local, u);
-                const size_t mCol = G_rows[u + 1];
-                for (int col = G_rows[u]; col < mCol; ++col) {
-                    const int v = G_cols[col];
-                    const real1 val = G_data[col];
-                    const bool v_bit = get_local_bit(theta_local, v);
-                    if (u_bit != v_bit) {
-                        energy += val;
-                    } else if (is_spin_glass) {
-                        energy -= val;
-                    }
+            // Incremental update: only edges incident to flip_bit change.
+            // After gray_code_next, theta_local already has the bit flipped.
+            // Determine the new and old bit values.
+            const bool new_bit = get_local_bit(theta_local, flip_bit);
+            const bool old_bit = !new_bit;
+            real1 delta = ZERO_R1;
+            const uint row_end = G_rows[flip_bit + 1];
+            for (uint col = G_rows[flip_bit]; col < row_end; ++col) {
+                const uint v = G_cols[col];
+                const real1 val = G_data[col];
+                const bool v_bit = get_local_bit(theta_local, v);
+                const bool old_cut = old_bit != v_bit;
+                const bool new_cut = new_bit != v_bit;
+                if (old_cut != new_cut) {
+                    delta += new_cut ? val : -val;
                 }
             }
+            if (is_spin_glass) {
+                delta *= 2.0;
+            }
 
-            if (energy > best_energy) {
-                best_energy = energy;
+            if (delta > ZERO_R1) {
+                best_energy += delta;
             } else {
+                // Reject: undo the flip
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
         }
@@ -1204,25 +1237,27 @@ __kernel void gray_sparse_segmented(
     for (; i < gray_iterations; i += max_i) {
         for (int block = 0; block < blocks; ++block) {
             const size_t flip_bit = gray_code_next(theta_local, i, block << 6U);
-            real1 energy = ZERO_R1;
-            for (uint u = 0; u < n; u++) {
-                const size_t u_offset = u * n;
-                const bool u_bit = get_local_bit(theta_local, u);
-                const uint row_end = G_rows[u + 1];
-                for (uint col = G_rows[u]; col < row_end; ++col) {
-                    const int v = G_cols[col];
-                    const real1 val = get_G_m(G_data, col, segment_size);
-                    const bool v_bit = get_local_bit(theta_local, v);
-                    if (u_bit != v_bit) {
-                        energy += val;
-                    } else if (is_spin_glass) {
-                        energy -= val;
-                    }
+            // Incremental update: only edges incident to flip_bit change.
+            const bool new_bit = get_local_bit(theta_local, flip_bit);
+            const bool old_bit = !new_bit;
+            real1 delta = ZERO_R1;
+            const uint row_end = G_rows[flip_bit + 1];
+            for (uint col = G_rows[flip_bit]; col < row_end; ++col) {
+                const int v = G_cols[col];
+                const real1 val = get_G_m(G_data, col, segment_size);
+                const bool v_bit = get_local_bit(theta_local, v);
+                const bool old_cut = old_bit != v_bit;
+                const bool new_cut = new_bit != v_bit;
+                if (old_cut != new_cut) {
+                    delta += new_cut ? val : -val;
                 }
             }
+            if (is_spin_glass) {
+                delta *= 2.0;
+            }
 
-            if (energy > best_energy) {
-                best_energy = energy;
+            if (delta > ZERO_R1) {
+                best_energy += delta;
             } else {
                 theta_local[flip_bit >> 6U] ^= 1UL << (flip_bit & 63U);
             }
