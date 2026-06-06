@@ -417,55 +417,6 @@ def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
 
 
 @njit(cache=True)
-def compute_cut_diff_sparse(u, sample, G_data, G_rows, G_cols, n_qubits):
-    energy = 0.0
-    u_bit = sample[u]
-    for col in range(G_rows[u], G_rows[u + 1]):
-        v = G_cols[col]
-        val = G_data[col]
-        energy += -val if u_bit == sample[v] else val
-
-    return energy
-
-
-@njit(cache=True)
-def compute_energy_diff_sparse(u, sample, G_data, G_rows, G_cols, n_qubits):
-    energy = 0.0
-    u_bit = sample[u]
-    for col in range(G_rows[u], G_rows[u + 1]):
-        v = G_cols[col]
-        val = G_data[col]
-        energy += -val if u_bit == sample[v] else val
-
-    return energy
-
-
-@njit(cache=True)
-def compute_cut_diff_2_sparse(k, l, sample, G_data, G_rows, G_cols, n_qubits):
-    if l < k:
-        t = k
-        k = l
-        l = t
-    energy = 0.0
-    k_bit = sample[k]
-    l_bit = sample[l]
-    for col in range(G_rows[k], G_rows[k + 1]):
-        v = G_cols[col]
-        if v == l:
-            continue
-        val = G_data[col]
-        energy += -val if k_bit == sample[v] else val
-    for col in range(G_rows[l], G_rows[l + 1]):
-        v = G_cols[col]
-        if v == k:
-            continue
-        val = G_data[col]
-        energy += -val if l_bit == sample[v] else val
-
-    return energy
-
-
-@njit(cache=True)
 def compute_energy_streaming(sample, G_func, nodes, n_qubits):
     energy = 0.0
     for u in range(n_qubits):
