@@ -330,14 +330,13 @@ def compute_energy(sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut(sample, G_m, n_qubits):
-    # G_m is upper-triangular: iterate u < v pairs only, matching compute_energy.
-    # The previous l×r loop double-counted on symmetric matrices and
-    # gave wrong results on upper-triangular matrices.
     cut = 0.0
     for u in range(n_qubits):
+        u_bit = sample[u]
+        G_u = G_m[u]
         for v in range(u + 1, n_qubits):
-            if sample[u] != sample[v]:
-                cut += G_m[u, v]
+            if u_bit != sample[v]:
+                cut += G_u[v]
 
     return cut
 
@@ -401,10 +400,6 @@ def compute_energy_sparse(sample, G_data, G_rows, G_cols, n_qubits):
 
 @njit(cache=True)
 def compute_cut_sparse(sample, G_data, G_rows, G_cols, n_qubits):
-    # Iterate all rows with a j > i guard so each edge is counted once,
-    # matching compute_energy_sparse's traversal pattern.
-    # The previous smaller-partition-only approach was correct only for
-    # symmetric CSR; upper-triangular CSR missed edges in the other half.
     cut = 0.0
     for u in range(n_qubits):
         u_bit = sample[u]
@@ -421,8 +416,9 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
     energy = 0.0
     for u in range(n_qubits):
         u_bit = sample[u]
+        u_node = nodes[u]
         for v in range(u + 1, n_qubits):
-            val = G_func(nodes[u], nodes[v])
+            val = G_func(u_node, nodes[v])
             energy += -val if u_bit == sample[v] else val
 
     return energy
@@ -430,14 +426,13 @@ def compute_energy_streaming(sample, G_func, nodes, n_qubits):
 
 @njit(cache=True)
 def compute_cut_streaming(sample, G_func, nodes, n_qubits):
-    # Iterate u < v pairs only, matching compute_energy_streaming.
-    # The previous l×r loop double-counted on symmetric G_func and
-    # gave wrong results when G_func is not symmetric.
     cut = 0.0
     for u in range(n_qubits):
+        u_bit = sample[u]
+        u_node = nodes[u]
         for v in range(u + 1, n_qubits):
-            if sample[u] != sample[v]:
-                cut += G_func(nodes[u], nodes[v])
+            if u_bit != sample[v]:
+                cut += G_func(u_node, nodes[v])
 
     return cut
 
@@ -446,11 +441,12 @@ def compute_cut_streaming(sample, G_func, nodes, n_qubits):
 def compute_cut_diff_streaming(u, sample, G_func, nodes, n_qubits):
     energy = 0.0
     u_bit = sample[u]
+    u_node = nodes[u]
     for v in range(u):
-        val = G_func(nodes[u], nodes[v])
+        val = G_func(u_node, nodes[v])
         energy += -val if u_bit == sample[v] else val
     for v in range(u + 1, n_qubits):
-        val = G_func(nodes[u], nodes[v])
+        val = G_func(u_node, nodes[v])
         energy += -val if u_bit == sample[v] else val
 
     return energy
@@ -464,21 +460,23 @@ def compute_cut_diff_2_streaming(k, l, sample, G_func, nodes, n_qubits):
         l = t
     energy = 0.0
     k_bit = sample[k]
+    k_node = nodes[k]
     l_bit = sample[l]
+    l_node = nodes[l]
     for v in range(k):
-        val = G_func(nodes[k], nodes[v])
+        val = G_func(k_node, nodes[v])
         energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
+        val = G_func(l_node, nodes[v])
         energy += -val if l_bit == sample[v] else val
     for v in range(k + 1, l):
-        val = G_func(nodes[k], nodes[v])
+        val = G_func(k_node, nodes[v])
         energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
+        val = G_func(l_node, nodes[v])
         energy += -val if l_bit == sample[v] else val
     for v in range(l + 1, n_qubits):
-        val = G_func(nodes[k], nodes[v])
+        val = G_func(k_node, nodes[v])
         energy += -val if k_bit == sample[v] else val
-        val = G_func(nodes[l], nodes[v])
+        val = G_func(l_node, nodes[v])
         energy += -val if l_bit == sample[v] else val
 
     return energy
