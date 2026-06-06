@@ -430,7 +430,6 @@ def spin_glass_solver(
     is_spin_glass=True,
     anneal_t=None,
     anneal_h=None,
-    repulsion_base=None,
     is_log=False,
     gray_iterations=None,
     gray_seed_multiple=None,
@@ -502,9 +501,6 @@ def spin_glass_solver(
                 is_spin_glass=is_spin_glass,
                 anneal_t=anneal_t,
                 anneal_h=anneal_h,
-                repulsion_base=repulsion_base,
-                is_maxcut_gpu=is_maxcut_gpu,
-                is_nested=True,
             )
             # Keep whichever of BP or sampling gave the better cut
             bp_energy = (
@@ -529,9 +525,6 @@ def spin_glass_solver(
                 is_spin_glass=is_spin_glass,
                 anneal_t=anneal_t,
                 anneal_h=anneal_h,
-                repulsion_base=repulsion_base,
-                is_maxcut_gpu=is_maxcut_gpu,
-                is_nested=True,
             )
 
     best_theta = np.array([b == "1" for b in list(bitstring)], dtype=np.bool_)
