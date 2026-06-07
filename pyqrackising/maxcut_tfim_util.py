@@ -708,21 +708,14 @@ def sample_mag(cum_prob):
 
 
 @njit(cache=True)
-def bit_pick(weights, used, n):
+def bit_pick(weights, n):
     # Count available
-    p = 0.0
-    for i in range(n):
-        if used[i]:
-            continue
-        p += weights[i]
-
+    p = weights.sum()
     # Normalize & sample
     p *= np.random.rand()
     cum = 0.0
     node = 0
     for i in range(n):
-        if used[i]:
-            continue
         cum += weights[i]
         if p < cum:
             node = i

@@ -35,9 +35,9 @@ wgs = opencl_context.work_group_size
 
 
 @njit(cache=True)
-def update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base):
+def update_repulsion_choice(G_data, G_rows, G_cols, weights, n, node, repulsion_base):
     # Select node
-    used[node] = True
+    weights[node] = 0.0
 
     if abs(1.0 - repulsion_base) <= epsilon:
         return
@@ -45,12 +45,12 @@ def update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repu
     # Repulsion: penalize neighbors
     for j in range(G_rows[node], G_rows[node + 1]):
         nbr = G_cols[j]
-        if used[nbr]:
+        if weights[nbr] == 0.0:
             continue
         weights[nbr] *= repulsion_base ** (-G_data[j])
 
     for nbr in range(node):
-        if used[nbr]:
+        if weights[nbr] == 0.0:
             continue
         start = G_rows[nbr]
         end = G_rows[nbr + 1]
@@ -68,25 +68,24 @@ def local_repulsion_choice(G_data, G_rows, G_cols, repulsion_base, n, m, s):
     - After choosing a node, its neighbors' probabilities are further reduced
     """
 
-    used = np.zeros(n, dtype=np.bool_)  # False = available, True = used
-
     # First bit:
     node = s % n
     if m == 1:
+        used = np.zeros(n, dtype=np.bool_)
         used[node] = True
         return used
 
     weights = np.ones(n, dtype=np.float64)
-    update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base)
+    update_repulsion_choice(G_data, G_rows, G_cols, weights, n, node, repulsion_base)
 
     for _ in range(1, m - 1):
-        node = bit_pick(weights, used, n)
-        update_repulsion_choice(G_data, G_rows, G_cols, weights, n, used, node, repulsion_base)
+        node = bit_pick(weights, n)
+        update_repulsion_choice(G_data, G_rows, G_cols, weights, n, node, repulsion_base)
 
-    node = bit_pick(weights, used, n)
-    used[node] = True
+    node = bit_pick(weights, n)
+    weights[node] = 0.0
 
-    return used
+    return weights == 0.0
 
 
 @njit(parallel=True, cache=True)

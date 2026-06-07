@@ -23,16 +23,16 @@ dtype = opencl_context.dtype
 
 
 @njit(cache=True)
-def update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base):
+def update_repulsion_choice(G_func, nodes, weights, n, node, repulsion_base):
     # Select node
-    used[node] = True
+    weights[node] = 0.0
 
     if abs(1.0 - repulsion_base) <= epsilon:
         return
 
     # Repulsion: penalize neighbors
     for nbr in range(n):
-        if used[nbr]:
+        if weights[nbr] == 0.0:
             continue
         weights[nbr] *= repulsion_base ** (-G_func(nodes[node], nodes[nbr]))
 
@@ -46,25 +46,24 @@ def local_repulsion_choice(G_func, nodes, repulsion_base, n, m, s):
     - After choosing a node, its neighbors' probabilities are further reduced
     """
 
-    used = np.zeros(n, dtype=np.bool_)  # False = available, True = used
-
     # First bit:
     node = s % n
     if m == 1:
+        used = np.zeros(n, dtype=np.bool_)
         used[node] = True
         return used
 
     weights = np.ones(n, dtype=np.float64)
-    update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
+    update_repulsion_choice(G_func, nodes, weights, n, node, repulsion_base)
 
     for _ in range(1, m - 1):
-        node = bit_pick(weights, used, n)
-        update_repulsion_choice(G_func, nodes, weights, n, used, node, repulsion_base)
+        node = bit_pick(weights, n)
+        update_repulsion_choice(G_func, nodes, weights, n, node, repulsion_base)
 
-    node = bit_pick(weights, used, n)
-    used[node] = True
+    node = bit_pick(weights, n)
+    weights[node] = 0.0
 
-    return used
+    return weights == 0.0
 
 
 @njit(parallel=True, cache=True)
