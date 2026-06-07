@@ -337,7 +337,7 @@ def compute_cut(sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut_diff(u, sample, G_m, n_qubits):
-    return G_m[u] * (((sample[u] ^ sample) << 1) - 1)
+    return (G_m[u] * (((sample[u] ^ sample) << 1) - 1)).sum()
 
 
 @njit(cache=True)
@@ -349,7 +349,7 @@ def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
     l_fac[k] = 0
     l_fac[l] = 0
 
-    return (G_m[k] * k_fac) + (G_m[l] * l_fac)
+    return (G_m[k] * k_fac).sum() + (G_m[l] * l_fac).sum()
 
 
 @njit(cache=True)
