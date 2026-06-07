@@ -321,7 +321,7 @@ def compute_energy(sample, G_m, n_qubits):
     orig = np.repeat(sample, n_qubits)
     result = orig.copy()
     result = result.reshape(-1, n_qubits) ^ orig.reshape(-2, n_qubits)
-    result = (result * 2) - 1
+    result = (result << 1) - 1
 
     return (result * G_m).sum() / 2.0
 
@@ -337,47 +337,12 @@ def compute_cut(sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut_diff(u, sample, G_m, n_qubits):
-    energy = 0.0
-    u_bit = sample[u]
-    G_u = G_m[u]
-    for v in range(u):
-        val = G_u[v]
-        energy += -val if u_bit == sample[v] else val
-    for v in range(u + 1, n_qubits):
-        val = G_u[v]
-        energy += -val if u_bit == sample[v] else val
-
-    return energy
+    return G_m[u] * (((sample[u] ^ sample) << 1) - 1)
 
 
 @njit(cache=True)
 def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
-    if l < k:
-        t = k
-        k = l
-        l = t
-    energy = 0.0
-    k_bit = sample[k]
-    l_bit = sample[l]
-    G_k = G_m[k]
-    G_l = G_m[l]
-    for v in range(k):
-        val = G_k[v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_l[v]
-        energy += -val if l_bit == sample[v] else val
-    for v in range(k + 1, l):
-        val = G_k[v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_l[v]
-        energy += -val if l_bit == sample[v] else val
-    for v in range(l + 1, n_qubits):
-        val = G_k[v]
-        energy += -val if k_bit == sample[v] else val
-        val = G_l[v]
-        energy += -val if l_bit == sample[v] else val
-
-    return energy
+    return compute_cut_diff(k, sample, G_m, n_qubits) + compute_cut_diff(l, sample, G_m, n_qubits)
 
 
 @njit(cache=True)
