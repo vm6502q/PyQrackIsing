@@ -318,9 +318,7 @@ def convert_bool_to_uint(samples):
 
 @njit(cache=True)
 def compute_energy(sample, G_m, n_qubits):
-    orig = np.repeat(sample, n_qubits)
-    result = orig.copy()
-    result = result.reshape(-1, n_qubits) ^ orig.reshape(-2, n_qubits)
+    result = np.repeat(sample, n_qubits).reshape(-1, n_qubits) ^ np.broadcast_to(sample, (n_qubits, n_qubits))
     result = (result << 1) - 1
 
     return (result * G_m).sum() / 2.0
@@ -328,9 +326,7 @@ def compute_energy(sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut(sample, G_m, n_qubits):
-    orig = np.repeat(sample, n_qubits)
-    result = orig.copy()
-    result = result.reshape(-1, n_qubits) ^ orig.reshape(-2, n_qubits)
+    result = np.repeat(sample, n_qubits).reshape(-1, n_qubits) ^ np.broadcast_to(sample, (n_qubits, n_qubits))
 
     return (result * G_m).sum() / 2.0
 
@@ -342,14 +338,7 @@ def compute_cut_diff(u, sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
-    k_fac = (((sample[k] ^ sample) << 1) - 1)
-    l_fac = (((sample[l] ^ sample) << 1) - 1)
-    k_fac[k] = 0
-    k_fac[l] = 0
-    l_fac[k] = 0
-    l_fac[l] = 0
-
-    return (G_m[k] * k_fac).sum() + (G_m[l] * l_fac).sum()
+    return compute_cut_diff(k, sample, G_m, n_qubits) + compute_cut_diff(l, sample, G_m, n_qubits)
 
 
 @njit(cache=True)
