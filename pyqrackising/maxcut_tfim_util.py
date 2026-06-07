@@ -318,27 +318,21 @@ def convert_bool_to_uint(samples):
 
 @njit(cache=True)
 def compute_energy(sample, G_m, n_qubits):
-    energy = 0.0
     orig = np.repeat(sample, n_qubits)
     result = orig.copy()
     result = result.reshape(-1, n_qubits) ^ orig.reshape(-2, n_qubits)
     result = (result * 2) - 1
-    for u in range(n_qubits):
-        energy += (result[u] * G_m[u]).sum()
 
-    return energy / 2.0
+    return (result * G_m).sum() / 2.0
 
 
 @njit(cache=True)
 def compute_cut(sample, G_m, n_qubits):
-    cut = 0.0
     orig = np.repeat(sample, n_qubits)
     result = orig.copy()
     result = result.reshape(-1, n_qubits) ^ orig.reshape(-2, n_qubits)
-    for u in range(n_qubits):
-        cut += (result[u] * G_m[u]).sum()
 
-    return cut / 2.0
+    return (result * G_m).sum() / 2.0
 
 
 @njit(cache=True)
