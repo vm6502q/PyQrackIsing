@@ -342,7 +342,14 @@ def compute_cut_diff(u, sample, G_m, n_qubits):
 
 @njit(cache=True)
 def compute_cut_diff_2(k, l, sample, G_m, n_qubits):
-    return compute_cut_diff(k, sample, G_m, n_qubits) + compute_cut_diff(l, sample, G_m, n_qubits)
+    k_fac = (((sample[k] ^ sample) << 1) - 1)
+    l_fac = (((sample[l] ^ sample) << 1) - 1)
+    k_fac[k] = 0
+    k_fac[l] = 0
+    l_fac[k] = 0
+    l_fac[l] = 0
+
+    return (G_m[k] * k_fac) + (G_m[l] * l_fac)
 
 
 @njit(cache=True)
