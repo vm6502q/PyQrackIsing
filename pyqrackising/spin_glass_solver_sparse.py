@@ -655,7 +655,7 @@ def spin_glass_solver_sparse(
         gray_iterations = n_qubits * n_qubits
 
     if gray_seed_multiple is None:
-        gray_seed_multiple = os.cpu_count()
+        gray_seed_multiple = max(2, os.cpu_count())
 
     is_opencl = is_maxcut_gpu and IS_OPENCL_AVAILABLE
 
@@ -696,7 +696,7 @@ def spin_glass_solver_sparse(
             )
             gray_kernel = opencl_context.gray_sparse_segmented_kernel if is_segmented else opencl_context.gray_sparse_kernel
 
-    thread_count = os.cpu_count() ** 2
+    thread_count = gray_seed_multiple
     improved = True
     while improved:
         improved = False

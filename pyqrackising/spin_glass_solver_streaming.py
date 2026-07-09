@@ -385,9 +385,9 @@ def spin_glass_solver_streaming(
         gray_iterations = n_qubits * n_qubits
 
     if gray_seed_multiple is None:
-        gray_seed_multiple = os.cpu_count()
+        gray_seed_multiple = max(2, os.cpu_count())
 
-    thread_count = os.cpu_count() ** 2
+    thread_count = gray_seed_multiple
     improved = True
     while improved:
         improved = False
