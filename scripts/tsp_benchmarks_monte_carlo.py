@@ -103,6 +103,54 @@ def tsp_simulated_annealing(G, temp=1000, cooling=0.995, max_iter=5000):
     return best, best_length
 
 
+# --- Simulated-annealing parallel dispatch -----------------------------
+# Python 3.14 changed the default multiprocessing start method on POSIX from
+# 'fork' to 'forkserver' (see https://docs.python.org/3/library/multiprocessing.html,
+# "Changed in version 3.14"). This breaks two different assumptions a naive
+# (or previously-suggested) version of this dispatch might rely on:
+#
+# 1. Setting G as a module-level global BEFORE creating the Pool, relying on
+#    fork()'s copy-on-write semantics so children inherit it for free, is
+#    fork-specific. forkserver workers are children of a separate,
+#    early-spawned helper process, not of this running script, so they never
+#    see runtime state this module set later -- they instead re-import the
+#    whole module from scratch to reconstruct what they need.
+#
+# 2. Because that re-import re-executes every top-level statement, a script
+#    whose benchmark-running loop sits unguarded at module level will,
+#    under forkserver/spawn, re-trigger that entire loop inside each new
+#    worker's bootstrap -- which tries to create MORE Pools from a
+#    half-initialized process, colliding with its own startup. That's the
+#    root cause of the RuntimeError/ConnectionResetError cascade.
+#
+# Fix for (1): use Pool's initializer/initargs parameters, which are
+# explicitly designed to pass data to each worker exactly once, at worker
+# startup, correctly under fork, forkserver, AND spawn alike.
+#
+# Fix for (2): guard the whole execution loop with
+# `if __name__ == "__main__":`, the universally-required idiom for any
+# script that uses multiprocessing, now unconditionally necessary since
+# 3.14 no longer defaults to fork on any platform.
+_sa_graph = None  # populated once per worker, via initializer, at Pool startup
+
+
+def _sa_pool_init(G):
+    global _sa_graph
+    _sa_graph = G
+
+
+def _sa_worker(_):
+    return tsp_simulated_annealing(_sa_graph)
+
+
+def run_parallel_simulated_annealing(G, multi_start):
+    with multiprocessing.Pool(
+        processes=multi_start, initializer=_sa_pool_init, initargs=(G,)
+    ) as pool:
+        mp_results = pool.map(_sa_worker, range(multi_start))
+    return mp_results
+
+
 def tsp_qrack(args):
     shm_name, shape, dtype = args
     # Reattach to existing shared memory by name
@@ -151,11 +199,10 @@ def benchmark_tsp_realistic(n_nodes=64):
     if not validate_tsp_solution(G, path_c):
         warnings.warn("Invalid Christofides solution!")
 
-    # Simulated annealing
-    args = [G] * multi_start
+    # Simulated annealing (initializer/initargs pattern, see above -- portable
+    # across fork, forkserver, and spawn)
     start = time.time()
-    with multiprocessing.Pool(processes=multi_start) as pool:
-        mp_results = pool.map(tsp_simulated_annealing, args)
+    mp_results = run_parallel_simulated_annealing(G, multi_start)
     mp_results.sort(key=lambda r: r[1])
     path_s, length_s = mp_results[0]
     results["Simulated Annealing"].append((time.time() - start, length_s))
@@ -185,22 +232,29 @@ def benchmark_tsp_realistic(n_nodes=64):
     return results
 
 
-# Run benchmark for 32 through 4096 nodes
-for i in range(5, 12):
-    n_nodes = 1 << i
-    results_dict = benchmark_tsp_realistic(n_nodes)
-    for key, value in results_dict.items():
-        transposed = list(zip(*value))
-        seconds = sum(transposed[0]) / len(transposed[0])
-        length = min(transposed[1])
-        results_dict[key] = {"seconds": seconds, "length": length}
-    # Combine into dataframe
-    df = pd.DataFrame(
-        {
-            f"Nearest Neighbor ({n_nodes})": results_dict["Nearest Neighbor"],
-            f"Christofides ({n_nodes})": results_dict["Christofides"],
-            f"Simulated Annealing ({n_nodes})": results_dict["Simulated Annealing"],
-            f"PyQrackIsing ({n_nodes})": results_dict["PyQrackIsing"],
-        }
-    )
-    print(df)
+# Run benchmark for 32 through 4096 nodes.
+# Guarded by __name__ == "__main__": REQUIRED as of Python 3.14, where
+# forkserver (which re-imports this module in every worker) is the default
+# start method on all POSIX platforms. Without this guard, each worker's
+# bootstrap re-triggers this entire loop, recursively creating more Pools
+# from inside a half-initialized process -- the actual cause of the
+# ConnectionResetError/RuntimeError cascade in the original report.
+if __name__ == "__main__":
+    for i in range(5, 13):
+        n_nodes = 1 << i
+        results_dict = benchmark_tsp_realistic(n_nodes)
+        for key, value in results_dict.items():
+            transposed = list(zip(*value))
+            seconds = sum(transposed[0]) / len(transposed[0])
+            length = min(transposed[1])
+            results_dict[key] = {"seconds": seconds, "length": length}
+        # Combine into dataframe
+        df = pd.DataFrame(
+            {
+                f"Nearest Neighbor ({n_nodes})": results_dict["Nearest Neighbor"],
+                f"Christofides ({n_nodes})": results_dict["Christofides"],
+                f"Simulated Annealing ({n_nodes})": results_dict["Simulated Annealing"],
+                f"PyQrackIsing ({n_nodes})": results_dict["PyQrackIsing"],
+            }
+        )
+        print(df)
