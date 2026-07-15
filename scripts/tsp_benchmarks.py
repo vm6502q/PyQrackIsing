@@ -103,6 +103,50 @@ def tsp_simulated_annealing(G, temp=1000, cooling=0.995, max_iter=5000):
     return best, best_length
 
 
+# --- Simulated-annealing parallel dispatch -----------------------------
+# Root cause of the original ConnectionResetError: passing `[G] * multi_start`
+# to Pool.map() pickles and transmits a FULL, INDEPENDENT copy of the graph to
+# every worker process, simultaneously, through multiprocessing's internal
+# task queue. At larger n_nodes (the graph is a complete graph, so its size
+# grows quadratically with n_nodes) and higher core counts, this pushes
+# gigabytes of redundant serialization traffic through the pipe machinery at
+# once, which reliably triggers an OOM-kill on a worker mid-transfer -- and a
+# worker dying mid-pipe-write is exactly what surfaces to the parent process
+# as ConnectionResetError: [Errno 104] Connection reset by peer.
+#
+# The PyQrackIsing path (tsp_qrack, below) already avoids this correctly via
+# SharedMemory. This fix gives simulated annealing the equivalent protection,
+# but via a simpler mechanism appropriate to its still-NetworkX-Graph-based
+# internals: set G as a module-level global BEFORE the Pool is created, so
+# forked worker processes inherit it directly from parent memory via
+# copy-on-write semantics, at zero serialization cost. Each task then only
+# needs to pass a throwaway integer, not the graph itself.
+_sa_graph = None  # populated in the parent process before Pool() is created
+
+
+def _sa_worker(_):
+    return tsp_simulated_annealing(_sa_graph)
+
+
+def run_parallel_simulated_annealing(G, multi_start):
+    global _sa_graph
+    _sa_graph = G  # set BEFORE Pool() so fork's COW semantics inherit it for free
+    with multiprocessing.Pool(processes=multi_start) as pool:
+        mp_results = pool.map(_sa_worker, range(multi_start))
+    return mp_results
+
+
+def tsp_qrack(args):
+    shm_name, shape, dtype = args
+    # Reattach to existing shared memory by name
+    existing_shm = shared_memory.SharedMemory(name=shm_name)
+    G = np.ndarray(shape, dtype=dtype, buffer=existing_shm.buf)
+    path, length = tsp_symmetric(G)
+    existing_shm.close()
+
+    return path, length
+
+
 # Validation: check if path is a Hamiltonian cycle
 def validate_tsp_solution(G, path):
     return len(path) == len(G.nodes) + 1 and set(path[:-1]) == set(G.nodes)
@@ -140,28 +184,42 @@ def benchmark_tsp_realistic(n_nodes=64):
     if not validate_tsp_solution(G, path_c):
         warnings.warn("Invalid Christofides solution!")
 
-    # Simulated annealing
-    args = [G] * multi_start
+    # Simulated annealing (fork-COW global pattern, see run_parallel_simulated_annealing above)
     start = time.time()
-    with multiprocessing.Pool(processes=multi_start) as pool:
-        mp_results = pool.map(tsp_simulated_annealing, args)
+    mp_results = run_parallel_simulated_annealing(G, multi_start)
     mp_results.sort(key=lambda r: r[1])
     path_s, length_s = mp_results[0]
     results["Simulated Annealing"].append((time.time() - start, length_s))
     if not validate_tsp_solution(G, path_s + [path_s[0]]):
         warnings.warn("Invalid simulated annealing solution!")
 
+    # allocate shared memory
+    _G_m = nx.to_numpy_array(G, weight="weight", nonedge=0.0)
+    shm = shared_memory.SharedMemory(create=True, size=_G_m.nbytes)
+    G_m = np.ndarray(_G_m.shape, dtype=_G_m.dtype, buffer=shm.buf)
+    G_m[:] = _G_m[:]  # copy initial data
+    args = [(shm.name, G_m.shape, G_m.dtype)] * multi_start
+
     start = time.time()
-    path_q, length_q = tsp_symmetric(G, monte_carlo=True)
+    with multiprocessing.Pool(processes=multi_start) as pool:
+        mp_results = pool.map(tsp_qrack, args)
+    mp_results.sort(key=lambda r: r[1])
+    path_q, length_q = mp_results[0]
     results["PyQrackIsing"].append((time.time() - start, length_q))
     if not validate_tsp_solution(G, path_q):
         warnings.warn("Invalid PyQrackIsing solution!")
+
+    G_m = None
+    shm.close()
+    shm.unlink()
 
     return results
 
 
 # Run benchmark for 32 through 4096 nodes
-for i in range(5, 12):
+# (range(5, 13) -> exponents 5..12 -> n_nodes = 32 .. 4096, matching this comment;
+#  the original range(5, 12) stopped one power short, at 2048.)
+for i in range(5, 13):
     n_nodes = 1 << i
     results_dict = benchmark_tsp_realistic(n_nodes)
     for key, value in results_dict.items():
