@@ -136,15 +136,8 @@ def run_parallel_simulated_annealing(G, multi_start):
     return mp_results
 
 
-def tsp_qrack(args):
-    shm_name, shape, dtype = args
-    # Reattach to existing shared memory by name
-    existing_shm = shared_memory.SharedMemory(name=shm_name)
-    G = np.ndarray(shape, dtype=dtype, buffer=existing_shm.buf)
-    path, length = tsp_symmetric(G)
-    existing_shm.close()
-
-    return path, length
+def tsp_qrack(G):
+    return tsp_symmetric(G)
 
 
 # Validation: check if path is a Hamiltonian cycle
@@ -194,15 +187,10 @@ def benchmark_tsp_realistic(n_nodes=64):
         warnings.warn("Invalid simulated annealing solution!")
 
     # allocate shared memory
-    _G_m = nx.to_numpy_array(G, weight="weight", nonedge=0.0)
-    shm = shared_memory.SharedMemory(create=True, size=_G_m.nbytes)
-    G_m = np.ndarray(_G_m.shape, dtype=_G_m.dtype, buffer=shm.buf)
-    G_m[:] = _G_m[:]  # copy initial data
-    args = [(shm.name, G_m.shape, G_m.dtype)] * multi_start
+    G_m = nx.to_numpy_array(G, weight="weight", nonedge=0.0)
 
     start = time.time()
-    with multiprocessing.Pool(processes=multi_start) as pool:
-        mp_results = pool.map(tsp_qrack, args)
+    tsp_qrack(G_m)
     mp_results.sort(key=lambda r: r[1])
     path_q, length_q = mp_results[0]
     results["PyQrackIsing"].append((time.time() - start, length_q))
