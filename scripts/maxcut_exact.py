@@ -18,14 +18,28 @@ def int_to_bitstring(integer, length):
 
 @njit(parallel=True)
 def evaluate_cut_edges_numba(state, flat_edges):
-    cut_edges = []
-    for i in prange(len(flat_edges) // 2):
+    n_edges = len(flat_edges) // 2
+    # Write into a pre-allocated array in parallel (safe: each prange
+    # iteration writes to its own distinct index, no shared mutable
+    # structure). Only afterward, serially, build the actual edge list --
+    # list.append() from inside prange is not thread-safe (a long-standing,
+    # well-documented numba limitation, see numba/numba#2408 and #6859),
+    # and was the actual cause of the segfault, not any supply-chain issue.
+    is_cut = np.zeros(n_edges, dtype=np.bool_)
+    for i in prange(n_edges):
         i2 = i << 1
         u, v = flat_edges[i2], flat_edges[i2 + 1]
-        if ((state >> u) & 1) != ((state >> v) & 1):
-            cut_edges.append((u, v))
+        is_cut[i] = ((state >> u) & 1) != ((state >> v) & 1)
 
-    return len(cut_edges), state, cut_edges
+    cut_edges = []
+    cut_count = 0
+    for i in range(n_edges):
+        if is_cut[i]:
+            i2 = i << 1
+            cut_edges.append((flat_edges[i2], flat_edges[i2 + 1]))
+            cut_count += 1
+
+    return cut_count, state, cut_edges
 
 
 @njit(parallel=True)
