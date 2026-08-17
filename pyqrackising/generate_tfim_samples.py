@@ -252,11 +252,43 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
     np.random.shuffle(samples)
     return samples
 
+# Fermi-Hubbard "v2" completely by (Anthropic) Claude Sonnet 5
 
-def generate_fermi_hubbard_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi):
-    shots_x, shots_y, shots_z = np.random.multinomial(shots, [1 / 3, 1 / 3, 1 / 3])
-    return (
-        generate_tfim_samples(J=J,  h=h,  z=z, theta=theta,              t=t, n_qubits=n_qubits, shots=shots_z)
-        + generate_tfim_samples(J=-h, h=-J, z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits, shots=shots_x)
-        + generate_tfim_samples(J=J,  h=h,  z=z, theta=theta + np.pi / 2, t=t, n_qubits=n_qubits, shots=shots_y)
-    )
+# Fitted closed-form beta(t), 4 free parameters, NOT a per-point lookup:
+A, omega_b, phi, tau = 13.63910749, 4.04434375, -1.47950087, 0.29746355
+
+def beta_formula(t, Jxy):
+    return A * np.sin(omega_b * Jxy * t + phi) / (1.0 + (t / tau))
+
+
+def tilt(bias, beta, n_qubits):
+    ks = np.arange(n_qubits + 1)
+    w = bias * np.exp(beta * ks)
+    return w / w.sum()
+
+
+def sample_from_bias(bias, shots, n_qubits):
+    n_rows, n_cols = factor_width(n_qubits)
+    counts = np.random.multinomial(shots, bias)
+    samples = []
+    samples += [0] * counts[0]
+    samples += [(1 << n_qubits) - 1] * counts[-1]
+    if n_qubits > 1:
+        samples += [int(1 << np.random.randint(n_qubits)) for _ in range(counts[1])]
+    if n_qubits > 2:
+        mask = (1 << n_qubits) - 1
+        samples += [(mask ^ int(1 << np.random.randint(n_qubits))) for _ in range(counts[-2])]
+    for hw in range(2, len(bias) - 2):
+        samples += sample_fixed_hamming_weight(hw, counts[hw], n_rows, n_cols)
+    np.random.shuffle(samples)
+    return samples
+
+
+def generate_fermi_hubbard_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi, Jxy=None):
+    if Jxy is None:
+        Jxy = J
+    z_bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, omega=omega)
+    beta = beta_formula(t, Jxy)
+    tilted = tilt(z_bias, beta, n_qubits)
+    return sample_from_bias(tilted, shots, n_qubits)
+
