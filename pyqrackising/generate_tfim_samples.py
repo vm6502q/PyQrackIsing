@@ -258,16 +258,19 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 # These are actually a "guess" to move from FITTED to analytical closed-form beta(t)
 A, omega_b, phi, tau = 13.5, 4.0, -1.5, 0.3
 
+omega_b, phi, tau = 4.0, -1.5, 0.3
+A_peak = 15.0
 
-def beta_formula(t, Jxy):
-    return A * np.sin(omega_b * Jxy * t + phi) / (1.0 + (t / tau))
+def A_of_r(J, h, z):
+    r = h / (z * J)
+    return A_peak * 4 * abs(r) / (1 + abs(r))**2
 
+def beta_formula(t, J, h, z):
+    return A_of_r(J, h, z) * np.sin(omega_b * J * t + phi) / (1.0 + (t / tau))
 
 def tilt(bias, beta, n_qubits):
-    ks = np.arange(n_qubits + 1)
-    w = bias * np.exp(beta * ks)
+    w = bias * np.exp(beta * np.arange(n_qubits + 1))
     return w / w.sum()
-
 
 def sample_from_bias(bias, shots, n_qubits):
     n_rows, n_cols = factor_width(n_qubits)
@@ -285,12 +288,7 @@ def sample_from_bias(bias, shots, n_qubits):
     np.random.shuffle(samples)
     return samples
 
-
-def generate_fermi_hubbard_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi, Jxy=None):
-    if Jxy is None:
-        Jxy = J
-    z_bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits, omega=omega)
-    beta = beta_formula(t, Jxy)
-    tilted = tilt(z_bias, beta, n_qubits)
-    return sample_from_bias(tilted, shots, n_qubits)
+def generate_fermi_hubbard_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n_qubits=56, shots=100, omega=1.5 * np.pi):
+    z_bias = get_tfim_hamming_distribution(J=J, h=h, z=z, theta=theta, t=t, n_qubits=n_qubits)
+    return sample_from_bias(tilt(z_bias, beta_formula(t, J, h, z), n_qubits), shots, n_qubits)
 
