@@ -254,8 +254,10 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 
 # Fermi-Hubbard "v2" completely by (Anthropic) Claude Sonnet 5
 
-# Fitted closed-form beta(t), 4 free parameters, NOT a per-point lookup:
-A, omega_b, phi, tau = 13.63910749, 4.04434375, -1.47950087, 0.29746355
+# "Nice" constants: A = 27/2, omega = 4, phi = -3/2, tau = 3/10
+# These are actually a "guess" to move from FITTED to analytical closed-form beta(t)
+A, omega_b, phi, tau = 13.5, 4.0, -1.5, 0.3
+
 
 def beta_formula(t, Jxy):
     return A * np.sin(omega_b * Jxy * t + phi) / (1.0 + (t / tau))
