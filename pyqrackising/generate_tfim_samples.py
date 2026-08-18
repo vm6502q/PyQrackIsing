@@ -332,7 +332,7 @@ def sample_from_bias(bias, shots, n_qubits):
         mask = (1 << n_qubits) - 1
         samples += [(mask ^ int(1 << np.random.randint(n_qubits))) for _ in range(counts[-2])]
     for hw in range(2, len(bias) - 2):
-        samples += sample_fixed_hamming_weight(hw, counts[hw], n_rows, n_cols)
+        samples += [random_fixed_hamming_state(n_qubits, hw) for _ in range(counts[hw])]
     np.random.shuffle(samples)
     return samples
 
