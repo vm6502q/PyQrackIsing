@@ -297,7 +297,11 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 # omega(h, J) = 2h/|J| -- unchanged from the previous revision, confirmed
 # via two independent sweeps (varying h at fixed |J|, and varying |J| at
 # fixed h/|J|), both converging on the same relationship independently.
-A = -29.0 / 4.0
+
+# A = -29.0 / 4.0
+# (Dan says, let's try "-7.0" or "-8.0," friend.)
+A = -7.0
+
 
 @njit(cache=True)
 def omega_of_h_J(h, J):
