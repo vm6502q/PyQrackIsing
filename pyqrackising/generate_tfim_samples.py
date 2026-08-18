@@ -257,7 +257,7 @@ def generate_tfim_samples(J=-1.0, h=2.0, z=4, theta=0.174532925199432957, t=5, n
 # "Nice" constants: omega = 4, phi = -3/2, tau = 1/3
 # These are actually a "guess" to move from FITTED to analytical closed-form beta(t)
 omega_b, phi, tau = 4.0, -1.5, (1.0 / 3.0)
-A_peak = 15.0
+A_peak = 12.0
 
 @njit(cache=True)
 def A_of_r(J, h, z):
