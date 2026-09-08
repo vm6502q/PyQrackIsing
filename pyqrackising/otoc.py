@@ -35,30 +35,32 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        if pauli_string.count("I") == n_qubits:
+        signal_frac = pauli_string.count("I")
+        if signal_frac == n_qubits:
             continue
-
-        fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-        diff_theta = rev - fwd
+        signal_frac / n_qubits
 
         phi = theta + np.pi / 2
-        fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
+        fwd = probability_by_hamming_weight(h, J, z, phi, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(-h, -J, z, phi - np.pi, t, n_qubits + 1)
         diff_phi = rev - fwd
+
+        fwd = probability_by_hamming_weight(-J, -h, z, theta, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(J, h, z, theta + np.pi, t, n_qubits + 1)
+        diff_theta = rev - fwd
 
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_x += diff_theta
-                case "Z":
                     diff_x += diff_phi
+                case "Z":
+                    diff_x += diff_theta
                 case "Y":
                     diff_x += diff_theta + diff_phi
                 case _:
                     pass
 
-        diff_z = n_qubits * diff_z + diff_x
+        diff_z = signal_frac * diff_z + (1.0 - signal_frac) * diff_x
         diff_z /= diff_z.sum()
 
     return diff_z
