@@ -28,17 +28,17 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         tot_prob += p
     diff_x *= n_qubits / tot_prob
 
+    diff_z = np.zeros(n_bias, dtype=np.float64)
+    diff_z[0] = n_qubits
     signal_frac = 0.0
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        term_signal = 0.5 * pauli_string.count("X") + pauli_string.count("Z") + 1.5 * pauli_string.count("Y")
-        if term_signal == 0:
+        signal_frac = n_qubits - pauli_string.count("I")
+        if signal_frac == 0:
             continue
-
-        signal_frac -= term_signal
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
@@ -60,15 +60,13 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case _:
                     pass
 
-    # Normalize:
-    diff_x /= diff_x.sum()
+        # Normalize:
+        diff_x /= diff_x.sum()
 
-    signal_frac = 2**signal_frac
-    diff_z = (1 - signal_frac) * diff_x
-    diff_z[0] += signal_frac
+        diff_z = signal_frac * diff_x + (1.0 - signal_frac) * diff_z
 
-    # Normalize:
-    diff_z /= diff_z.sum()
+        # Normalize:
+        diff_z /= diff_z.sum()
 
     return diff_z
 
