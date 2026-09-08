@@ -29,15 +29,13 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     diff_x *= n_qubits / tot_prob
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
-    diff_z[0] = n_qubits
-    signal_frac = 0.0
+    diff_z[0] = 1.0
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        signal_frac = (n_qubits - pauli_string.count("I")) / n_qubits
-        if signal_frac == 0:
+        if pauli_string.count("I") == n_qubits:
             continue
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
@@ -60,12 +58,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case _:
                     pass
 
-        # Normalize:
-        diff_x /= diff_x.sum()
-
-        diff_z = signal_frac * diff_x + (1.0 - signal_frac) * diff_z
-
-        # Normalize:
+        diff_z = n_qubits * diff_z + diff_x
         diff_z /= diff_z.sum()
 
     return diff_z
@@ -148,7 +141,7 @@ def get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t):
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
-    inv_dist = 2 ** (inv_dist / t)
+    inv_dist /= t
 
     return inv_dist
 
@@ -168,7 +161,7 @@ def get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t):
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] -= row_d + col_d
-    inv_dist = 2 ** (inv_dist / t)
+    inv_dist /= t
 
     return inv_dist
 
@@ -188,14 +181,14 @@ def generate_otoc_samples(
     row_len, col_len = factor_width(n_qubits)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for i, pauli_string in enumerate(pauli_strings):
-        if (pauli_string.count("X") + pauli_string.count("Y") + pauli_string.count("Z")) == 0:
+        if pauli_string.count("I") == n_qubits:
             continue
         butterfly_idx_x = find_all_bit_flips(pauli_string)
         if is_orbifold:
-            inv_dist += get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
+            inv_dist = 0.5 * inv_dist + get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
         else:
-            inv_dist += get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
-        inv_dist = inv_dist ** 0.5
+            inv_dist = 0.5 * inv_dist + get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
+    inv_dist = 2 ** inv_dist
 
     qubit_pows = [1 << q for q in range(n_qubits)]
     samples = []
