@@ -97,11 +97,11 @@ def factor_width(width):
 
 
 # Provided by Google search AI
-def find_all_str_occurrences(main_string, sub_string):
+def find_all_bit_flips(main_string):
     indices = []
     start_index = 0
     while True:
-        index = main_string.find(sub_string, start_index)
+        index = main_string.find("X", start_index)
         if index == -1:
             break
         indices.append(index)
@@ -143,24 +143,19 @@ def take_sample(n_qubits, sample, m, inv_dist):
     return sample
 
 
-def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t):
+def get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for idx in butterfly_idx_x:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
             inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
-    for idx in butterfly_idx_z:
-        b_row, b_col = divmod(idx, row_len)
-        for q in range(n_qubits):
-            q_row, q_col = divmod(q, row_len)
-            inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
     inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
 
 
-def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t):
+def get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t):
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     half_row = row_len >> 1
     half_col = col_len >> 1
@@ -175,18 +170,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] -= row_d + col_d
-    for idx in butterfly_idx_z:
-        b_row, b_col = divmod(idx, row_len)
-        for q in range(n_qubits):
-            q_row, q_col = divmod(q, row_len)
-            row_d = abs(q_row - b_row)
-            if row_d > half_row:
-                row_d = row_len - row_d
-            col_d = abs(q_col - b_col)
-            if col_d > half_col:
-                col_d = col_len - col_d
-            inv_dist[q] += row_d + col_d
-    inv_dist = 2 ** (inv_dist / t)
+    inv_dist = 2 ** (inv_dist * t)
 
     return inv_dist
 
@@ -203,19 +187,18 @@ def generate_otoc_samples(
     is_orbifold=True,
 ):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
-
     row_len, col_len = factor_width(n_qubits)
+    lps = len(pauli_strings)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
-    for pauli_string in pauli_strings:
+    for i, pauli_string in enumerate(pauli_strings):
         if (pauli_string.count("X") + pauli_string.count("Y") + pauli_string.count("Z")) == 0:
             continue
-        butterfly_idx_x = find_all_str_occurrences(pauli_string, "X")
-        butterfly_idx_z = find_all_str_occurrences(pauli_string, "Z")
+        butterfly_idx_x = find_all_bit_flips(pauli_string)
         if is_orbifold:
-            inv_dist += get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t)
+            inv_dist += get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t * (lps - i) / lps)
         else:
-            inv_dist += get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t)
-        inv_dist /= 2.0
+            inv_dist += get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t * (lps - i) / lps)
+        inv_dist *= 0.5
 
     qubit_pows = [1 << q for q in range(n_qubits)]
     samples = []
