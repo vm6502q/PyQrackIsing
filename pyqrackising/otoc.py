@@ -42,10 +42,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
 
         signal_frac -= term_signal
 
-        fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-        diff_theta = rev - fwd
-
         phi = theta + np.pi / 2
         fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
         rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
@@ -54,11 +50,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_z += diff_theta
+                    diff_z += diff_phi
                 case "Z":
                     diff_x += diff_phi
                 case "Y":
-                    diff_z += diff_theta
+                    diff_z += diff_phi
                     diff_x += diff_phi
                 case _:
                     pass

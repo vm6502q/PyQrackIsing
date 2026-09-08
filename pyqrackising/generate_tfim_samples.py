@@ -321,7 +321,6 @@ def tilt(bias, beta, n_qubits):
 
 
 def sample_from_bias(bias, shots, n_qubits):
-    n_rows, n_cols = factor_width(n_qubits)
     counts = np.random.multinomial(shots, bias)
     samples = []
     samples += [0] * counts[0]
