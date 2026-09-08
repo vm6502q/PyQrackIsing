@@ -108,7 +108,7 @@ def find_all_str_occurrences(main_string, sub_string):
         start_index = index + 1  # Start searching after the found occurrence
     start_index = 0
     while True:
-        index = main_string.find('Y', start_index)
+        index = main_string.find("Y", start_index)
         if index == -1:
             break
         indices.append(index)
