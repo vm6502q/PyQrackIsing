@@ -188,16 +188,15 @@ def generate_otoc_samples(
 ):
     thresholds = fix_cdf(get_otoc_hamming_distribution(J, h, z, theta, t, n_qubits, pauli_strings))
     row_len, col_len = factor_width(n_qubits)
-    lps = len(pauli_strings)
     inv_dist = np.zeros(n_qubits, dtype=np.float64)
     for i, pauli_string in enumerate(pauli_strings):
         if (pauli_string.count("X") + pauli_string.count("Y") + pauli_string.count("Z")) == 0:
             continue
         butterfly_idx_x = find_all_bit_flips(pauli_string)
         if is_orbifold:
-            inv_dist += get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t * (lps - i) / lps)
+            inv_dist += get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
         else:
-            inv_dist += get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t * (lps - i) / lps)
+            inv_dist += get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
         inv_dist *= 0.5
 
     qubit_pows = [1 << q for q in range(n_qubits)]
