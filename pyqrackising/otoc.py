@@ -34,7 +34,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        term_signal = pauli_string.count("X") + pauli_string.count("Z") + 2 * pauli_string.count("Y")
+        term_signal = 0.5 * pauli_string.count("X") + pauli_string.count("Z") + 1.5 * pauli_string.count("Y")
         if term_signal == 0:
             continue
 
@@ -52,9 +52,9 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_x += diff_phi
-                case "Z":
                     diff_x += diff_theta
+                case "Z":
+                    diff_x += diff_phi
                 case "Y":
                     diff_x += diff_theta + diff_phi
                 case _:
@@ -149,12 +149,12 @@ def get_willow_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
-            inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
+            inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
     for idx in butterfly_idx_z:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
             q_row, q_col = divmod(q, row_len)
-            inv_dist[q] -= abs(q_row - b_row) + abs(q_col - b_col)
+            inv_dist[q] += abs(q_row - b_row) + abs(q_col - b_col)
     inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
@@ -174,7 +174,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t
             col_d = abs(q_col - b_col)
             if col_d > half_col:
                 col_d = col_len - col_d
-            inv_dist[q] += row_d + col_d
+            inv_dist[q] -= row_d + col_d
     for idx in butterfly_idx_z:
         b_row, b_col = divmod(idx, row_len)
         for q in range(n_qubits):
@@ -185,7 +185,7 @@ def get_inv_dist(butterfly_idx_x, butterfly_idx_z, n_qubits, row_len, col_len, t
             col_d = abs(q_col - b_col)
             if col_d > half_col:
                 col_d = col_len - col_d
-            inv_dist[q] -= row_d + col_d
+            inv_dist[q] += row_d + col_d
     inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
