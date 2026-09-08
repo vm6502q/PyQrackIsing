@@ -36,7 +36,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        signal_frac = n_qubits - pauli_string.count("I")
+        signal_frac = (n_qubits - pauli_string.count("I")) / n_qubits
         if signal_frac == 0:
             continue
 
@@ -195,7 +195,7 @@ def generate_otoc_samples(
             inv_dist += get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
         else:
             inv_dist += get_willow_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t)
-        inv_dist *= 0.5
+        inv_dist = inv_dist ** 0.5
 
     qubit_pows = [1 << q for q in range(n_qubits)]
     samples = []
