@@ -168,7 +168,7 @@ def get_inv_dist(butterfly_idx_x, n_qubits, row_len, col_len, t):
             if col_d > half_col:
                 col_d = col_len - col_d
             inv_dist[q] -= row_d + col_d
-    inv_dist = 2 ** (inv_dist * t)
+    inv_dist = 2 ** (inv_dist / t)
 
     return inv_dist
 
