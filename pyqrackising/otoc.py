@@ -8,6 +8,29 @@ import sys
 epsilon = opencl_context.epsilon
 
 
+def hadamard(dist):
+    """Krawtchouk/MacWilliams transform -- the bitwise Hadamard transform
+    restricted to Hamming-weight-symmetric distributions. Built via the
+    stable 3-term Krawtchouk recurrence rather than the closed-form
+    alternating sum of binomial coefficients, which suffers catastrophic
+    cancellation for larger n_qubits.
+
+    Provided by (Anthropic) Claude."""
+    n = len(dist) - 1
+    k_arr = np.arange(n + 1)
+    K_prev = np.ones(n + 1)                 # K_0(x) = 1
+    result = np.empty(n + 1)
+    result[0] = np.dot(dist, K_prev)
+    if n >= 1:
+        K_curr = n - 2 * k_arr              # K_1(x) = n - 2x
+        result[1] = np.dot(dist, K_curr)
+        for j in range(1, n):
+            K_next = ((n - 2 * k_arr) * K_curr - (n - j + 1) * K_prev) / (j + 1)
+            result[j + 1] = np.dot(dist, K_next)
+            K_prev, K_curr = K_curr, K_next
+    return result / (2 ** n)
+
+
 def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings=["X" + "I" * 64]):
     n_bias = n_qubits + 1
     if (abs(h) <= epsilon) or (abs(t) <= epsilon):
@@ -15,45 +38,52 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    diff_z = np.zeros(n_bias, dtype=np.float64)
-    diff_z[0] = 1.0
+    z_basis = np.zeros(n_bias, dtype=np.float64)
+    z_basis[0] = 1.0
+
+    x_basis = np.empty(n_bias, dtype=np.float64)
+    tot_prob = 0
+    p = 1.0
+    for q in range(n_qubits >> 1):
+        x_basis[q] = p
+        x_basis[n_bias - (q + 1)] = p
+        tot_prob += 2 * p
+        p = math.comb(n_qubits, q + 1)
+    if n_qubits & 1:
+        x_basis[n_qubits >> 1] = p
+        tot_prob += p
+    x_basis *= n_qubits / tot_prob
+
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        signal_frac = pauli_string.count("I")
-        if signal_frac == n_qubits:
+        if pauli_string.count("I") == n_qubits:
             continue
-        signal_frac / n_qubits
-
-        diff_x = np.zeros(n_bias, dtype=np.float64)
 
         fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-        diff_theta = rev - fwd
+        diff_theta = (rev - fwd) / n_qubits
 
         phi = theta + np.pi / 2
         fwd = probability_by_hamming_weight(h, J, z, phi, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-h, -J, z, phi - np.pi, t, n_qubits + 1)
-        diff_phi = rev - fwd
+        diff_phi = (rev - fwd) / n_qubits
 
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_x += diff_theta
+                    z_basis += diff_theta
                 case "Z":
-                    diff_x += diff_phi
+                    x_basis += diff_phi
                 case "Y":
-                    diff_x += diff_theta + diff_phi
+                    z_basis += diff_theta
+                    x_basis += diff_phi
                 case _:
                     pass
 
-        diff_x /= diff_x.sum()
-        diff_z = signal_frac * diff_z + (1.0 - signal_frac) * diff_x
-        diff_z /= diff_z.sum()
-
-    return diff_z
+    return 0.5 * (z_basis + hadamard(x_basis))
 
 
 @njit
