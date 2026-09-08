@@ -54,12 +54,12 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_z += diff_phi
+                    diff_x += diff_phi
                 case "Z":
-                    diff_x += diff_theta
+                    diff_z += diff_theta
                 case "Y":
-                    diff_z += diff_phi
-                    diff_x += diff_theta
+                    diff_x += diff_phi
+                    diff_z += diff_theta
                 case _:
                     pass
 
