@@ -1,4 +1,3 @@
-from .generate_tfim_samples import get_tfim_hamming_distribution
 from .maxcut_tfim_util import init_thresholds, probability_by_hamming_weight, sample_mag, opencl_context
 import math
 from numba import njit
