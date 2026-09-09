@@ -669,10 +669,11 @@ def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, 
         h_t = h_mult * (tot_t - t)
         bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias, omega)
         last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias, omega)
-        diff = bias - last_bias
-        diff -= diff.mean()
-        hamming_prob += diff
+        hamming_prob += bias - last_bias
 
+    p_min = hamming_prob.min()
+    if p_min < 0:
+        hamming_prob -= p_min
     hamming_prob /= hamming_prob.sum() - (hamming_prob[0] + hamming_prob[-1])
     tot_prob = 0.0
     n_bias -= 2

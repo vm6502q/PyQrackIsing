@@ -41,13 +41,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
     diff_theta = (rev - fwd) / n_qubits
-    diff_theta -= diff_theta.mean()
 
     phi = theta + np.pi / 2
     fwd = probability_by_hamming_weight(h, J, z, phi, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-h, -J, z, phi - np.pi, t, n_qubits + 1)
     diff_phi = (rev - fwd) / n_qubits
-    diff_phi -= diff_theta.mean()
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
     diff_x = np.zeros(n_bias, dtype=np.float64)
@@ -72,7 +70,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case _:
                     pass
 
-    z_basis = hadamard(init_thresholds(n_qubits) + diff_x) + diff_z
+    x_basis = init_thresholds(n_qubits) + diff_x
+    x_min = x_basis.min()
+    if x_min < 0:
+        x_basis -= x_min
+    z_basis = hadamard(x_basis) + diff_z
     z_min = z_basis.min()
     if z_min < 0:
         z_basis -= z_min
