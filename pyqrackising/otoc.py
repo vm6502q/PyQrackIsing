@@ -61,8 +61,10 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         phi = theta + np.pi / 2
         fwd_x = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
         rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
+        diff_x = rev - fwd_x
+        diff_x -= diff_x.mean()
         signal_frac_x /= n_qubits
-        fwd_x += signal_frac_x * (rev - fwd_x)
+        fwd_x += signal_frac_x * diff_x
         signal_frac_x /= len(pauli_strings)
         x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * fwd_x
         x_min = x_basis.min()
@@ -74,8 +76,10 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     if signal_frac_z:
         fwd_z = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
         rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
+        diff_z = rev - fwd_z
+        diff_z -= diff_z.mean()
         signal_frac_z /= n_qubits
-        fwd_z += signal_frac_z * (rev - fwd_z)
+        fwd_z += signal_frac_z * diff_z
         signal_frac_z /= len(pauli_strings)
         z_basis = (1.0 - signal_frac_z) * z_basis + signal_frac_z * fwd_z
         z_min = z_basis.min()
