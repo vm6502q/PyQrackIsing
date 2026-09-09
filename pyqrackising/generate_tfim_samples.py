@@ -212,7 +212,7 @@ def get_tfim_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.174532925199432957
             bias[0] = 1.0
         return bias
 
-    return probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, normalized=True, omega=omega)
+    return probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1, omega=omega)
 
 
 # ── Public generators ──────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+from .generate_tfim_samples import get_tfim_hamming_distribution
 from .maxcut_tfim_util import init_thresholds, probability_by_hamming_weight, sample_mag, opencl_context
 import math
 from numba import njit
@@ -28,7 +29,10 @@ def hadamard(dist):
             K_next = ((n - 2 * k_arr) * K_curr - (n - j + 1) * K_prev) / (j + 1)
             result[j + 1] = np.dot(dist, K_next)
             K_prev, K_curr = K_curr, K_next
-    return result / (2 ** n)
+    tmp = result / (2 ** n)
+    tmp /= tmp.sum()
+
+    return tmp
 
 
 def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=65, pauli_strings=["X" + "I" * 64]):
@@ -38,17 +42,21 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+    pauli_strings = [item for item in pauli_strings if item != (n_qubits * "I")]
+
+    fwd_z = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-    diff_theta = (rev - fwd) / n_qubits
+    diff_theta = (rev - fwd_z) / n_qubits
 
     phi = theta + np.pi / 2
-    fwd = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
+    fwd_x = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
     rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
-    diff_phi = (rev - fwd) / n_qubits
+    diff_phi = (rev - fwd_x) / n_qubits
 
     diff_z = np.zeros(n_bias, dtype=np.float64)
     diff_x = np.zeros(n_bias, dtype=np.float64)
+    signal_frac_x = 0
+    signal_frac_z = 0
 
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
@@ -59,18 +67,28 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
             match b:
                 case "X":
                     diff_z += diff_theta
+                    signal_frac_z += 1
                 case "Z":
                     diff_x += diff_phi
+                    signal_frac_x += 1
                 case "Y":
                     diff_z += diff_theta
                     diff_x += diff_phi
+                    signal_frac_x += 1
+                    signal_frac_z += 1
                 case _:
                     pass
 
-    x_basis = init_thresholds(n_qubits, theta) + diff_x
-    x_min = x_basis.min()
-    if x_min < 0:
-        x_basis -= x_min
+    x_basis = init_thresholds(n_qubits, theta)
+
+    if signal_frac_x:
+        signal_frac_x /= (n_qubits * len(pauli_strings))
+        x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * (fwd_x + diff_x)
+        x_min = x_basis.min()
+        if x_min < 0:
+            x_basis -= x_min
+        x_basis /= x_basis.sum()
+
     z_basis = hadamard(x_basis) + diff_z
     z_min = z_basis.min()
     if z_min < 0:
