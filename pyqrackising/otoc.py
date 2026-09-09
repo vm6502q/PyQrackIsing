@@ -70,7 +70,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         x_min = x_basis.min()
         if x_min < 0:
             x_basis -= x_min
-        x_basis /= x_basis.sum()
+            x_basis /= x_basis.sum()
 
     z_basis = hadamard(x_basis)
     if signal_frac_z:
@@ -85,7 +85,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         z_min = z_basis.min()
         if z_min < 0:
             z_basis -= z_min
-        z_basis /= z_basis.sum()
+            z_basis /= z_basis.sum()
 
     return z_basis
 
