@@ -41,7 +41,8 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    pauli_strings = [item for item in pauli_strings if item != (n_qubits * "I")]
+    # The removed items are identity operation, round-trip.
+    pauli_strings = [item for item in pauli_strings if item.count("I") != n_qubits]
 
     fwd_z = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
     rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
@@ -52,8 +53,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
     diff_phi = (rev - fwd_x) / n_qubits
 
-    diff_z = np.zeros(n_bias, dtype=np.float64)
-    diff_x = np.zeros(n_bias, dtype=np.float64)
     signal_frac_x = 0
     signal_frac_z = 0
 
@@ -65,14 +64,14 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         for b in pauli_string:
             match b:
                 case "X":
-                    diff_z += diff_theta
+                    fwd_z += diff_theta
                     signal_frac_z += 1
                 case "Z":
-                    diff_x += diff_phi
+                    fwd_x += diff_phi
                     signal_frac_x += 1
                 case "Y":
-                    diff_z += diff_theta
-                    diff_x += diff_phi
+                    fwd_z += diff_theta
+                    fwd_x += diff_phi
                     signal_frac_x += 1
                     signal_frac_z += 1
                 case _:
@@ -81,7 +80,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     x_basis = init_thresholds(n_qubits, theta)
     if signal_frac_x:
         signal_frac_x /= (n_qubits * len(pauli_strings))
-        x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * (fwd_x + diff_x)
+        x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * fwd_x
         x_min = x_basis.min()
         if x_min < 0:
             x_basis -= x_min
@@ -90,7 +89,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     z_basis = hadamard(x_basis)
     if signal_frac_z:
         signal_frac_z /= (n_qubits * len(pauli_strings))
-        z_basis = (1.0 - signal_frac_x) * z_basis + signal_frac_z * (fwd_z + diff_z)
+        z_basis = (1.0 - signal_frac_x) * z_basis + signal_frac_z * fwd_z
         z_min = z_basis.min()
         if z_min < 0:
             z_basis -= z_min
