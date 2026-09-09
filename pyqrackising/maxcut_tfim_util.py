@@ -559,17 +559,17 @@ def init_thresholds(n_qubits):
     n_bias = n_qubits + 1
     thresholds = np.empty(n_bias, dtype=np.float64)
     normalizer = 0
-    for q in range(n_qubits >> 1):
+    for q in range(n_bias >> 1):
         normalizer += math.comb(n_qubits, q) << 1
-    if n_qubits & 1:
+    if n_bias & 1:
         normalizer += math.comb(n_qubits, n_qubits >> 1)
-    p = 1
-    for q in range(n_qubits >> 1):
+    p = 1.0
+    for q in range(n_bias >> 1):
         val = p / normalizer
         thresholds[q] = val
         thresholds[n_bias - (q + 1)] = val
         p = math.comb(n_qubits, q + 1)
-    if n_qubits & 1:
+    if n_bias & 1:
         thresholds[n_qubits >> 1] = p / normalizer
 
     return thresholds
@@ -624,7 +624,7 @@ def _apply_time_envelope(bias, t, n_qubits):
 
 
 @njit(cache=True)
-def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, omega=1.5 * np.pi):
+def probability_by_hamming_weight(J, h, z, theta, t, n_bias, omega=1.5 * np.pi):
     zJ = z * J
     theta_c = ((np.pi if J > 0 else -np.pi) / 2) if abs(zJ) < epsilon else np.arcsin(max(-1.0, min(1.0, h / zJ)))
 
@@ -641,10 +641,7 @@ def probability_by_hamming_weight(J, h, z, theta, t, n_bias, normalized=True, om
         print("[WARN]: probability_by_hamming_weight() went below maximum precision.")
 
     if J > 0.0:
-        return bias[::-1]
-
-    if normalized:
-        bias /= bias.sum()
+        bias = bias[::-1]
 
     # Apply time-dependent envelope: maximum differential at small t,
     # recovers original distribution as t -> inf.
@@ -670,8 +667,8 @@ def maxcut_hamming_cdf(hamming_prob, n_qubits, J_func, degrees, quality, tot_t, 
         t = step * delta_t
         tm1 = (step - 1) * delta_t
         h_t = h_mult * (tot_t - t)
-        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias, False, omega)
-        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias, False, omega)
+        bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, t, n_bias, omega)
+        last_bias = probability_by_hamming_weight(J_eff, h_t, z, theta_eff, tm1, n_bias, omega)
         for i in range(n_bias):
             hamming_prob[i] += bias[i] - last_bias[i]
 

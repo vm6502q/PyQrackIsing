@@ -1,4 +1,4 @@
-from .maxcut_tfim_util import probability_by_hamming_weight, sample_mag, opencl_context
+from .maxcut_tfim_util import init_thresholds, probability_by_hamming_weight, sample_mag, opencl_context
 import math
 from numba import njit
 import numpy as np
@@ -40,19 +40,9 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
 
     z_basis = np.zeros(n_bias, dtype=np.float64)
     z_basis[0] = 1.0
+    z_ref = z_basis.copy()
 
-    x_basis = np.empty(n_bias, dtype=np.float64)
-    tot_prob = 0
-    p = 1.0
-    for q in range(n_qubits >> 1):
-        x_basis[q] = p
-        x_basis[n_bias - (q + 1)] = p
-        tot_prob += 2 * p
-        p = math.comb(n_qubits, q + 1)
-    if n_qubits & 1:
-        x_basis[n_qubits >> 1] = p
-        tot_prob += p
-    x_basis *= n_qubits / tot_prob
+    x_basis = init_thresholds(n_qubits)
 
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
@@ -83,7 +73,12 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case _:
                     pass
 
-    return 0.5 * (z_basis + hadamard(x_basis))
+    z_basis /= z_basis.sum()
+    x_basis /= x_basis.sum()
+    z_basis = z_basis + hadamard(x_basis) - z_ref
+    z_basis /= z_basis.sum()
+
+    return z_basis
 
 
 @njit
