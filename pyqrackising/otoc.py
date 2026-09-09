@@ -38,11 +38,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         bias[0] = 1.0
         return bias
 
-    z_basis = np.zeros(n_bias, dtype=np.float64)
-    z_basis[0] = 1.0
-    z_ref = z_basis.copy()
+    fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+    rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
+    diff_theta = (rev - fwd) / n_qubits
+    diff_theta -= diff_theta.mean()
 
-    x_basis = init_thresholds(n_qubits)
+    phi = theta + np.pi / 2
+    fwd = probability_by_hamming_weight(h, J, z, phi, t, n_qubits + 1)
+    rev = probability_by_hamming_weight(-h, -J, z, phi - np.pi, t, n_qubits + 1)
+    diff_phi = (rev - fwd) / n_qubits
+    diff_phi -= diff_theta.mean()
+
+    diff_z = np.zeros(n_bias, dtype=np.float64)
+    diff_x = np.zeros(n_bias, dtype=np.float64)
 
     for pauli_string in pauli_strings:
         pauli_string = list(pauli_string)
@@ -52,30 +60,19 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if pauli_string.count("I") == n_qubits:
             continue
 
-        fwd = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-        diff_theta = (rev - fwd) / n_qubits
-
-        phi = theta + np.pi / 2
-        fwd = probability_by_hamming_weight(h, J, z, phi, t, n_qubits + 1)
-        rev = probability_by_hamming_weight(-h, -J, z, phi - np.pi, t, n_qubits + 1)
-        diff_phi = (rev - fwd) / n_qubits
-
         for b in pauli_string:
             match b:
                 case "X":
-                    z_basis += diff_theta
+                    diff_z += diff_theta
                 case "Z":
-                    x_basis += diff_phi
+                    diff_x += diff_phi
                 case "Y":
-                    z_basis += diff_theta
-                    x_basis += diff_phi
+                    diff_z += diff_theta
+                    diff_x += diff_phi
                 case _:
                     pass
 
-    z_basis /= z_basis.sum()
-    x_basis /= x_basis.sum()
-    z_basis = z_basis + hadamard(x_basis) - z_ref
+    z_basis = hadamard(init_thresholds(n_qubits) + diff_x) + diff_z
     z_basis /= z_basis.sum()
 
     return z_basis
