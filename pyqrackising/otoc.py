@@ -79,7 +79,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                     pass
 
     x_basis = init_thresholds(n_qubits, theta)
-
     if signal_frac_x:
         signal_frac_x /= (n_qubits * len(pauli_strings))
         x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * (fwd_x + diff_x)
@@ -88,10 +87,13 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
             x_basis -= x_min
         x_basis /= x_basis.sum()
 
-    z_basis = hadamard(x_basis) + diff_z
-    z_min = z_basis.min()
-    if z_min < 0:
-        z_basis -= z_min
+    z_basis = hadamard(x_basis)
+    if signal_frac_z:
+        signal_frac_z /= (n_qubits * len(pauli_strings))
+        z_basis = (1.0 - signal_frac_x) * z_basis + signal_frac_z * (fwd_z + diff_z)
+        z_min = z_basis.min()
+        if z_min < 0:
+            z_basis -= z_min
     z_basis /= z_basis.sum()
 
     return z_basis
