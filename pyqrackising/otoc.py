@@ -44,15 +44,6 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
     # The removed items are identity operation, round-trip.
     pauli_strings = [item for item in pauli_strings if item.count("I") != n_qubits]
 
-    fwd_z = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
-    diff_theta = (rev - fwd_z) / n_qubits
-
-    phi = theta + np.pi / 2
-    fwd_x = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
-    rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
-    diff_phi = (rev - fwd_x) / n_qubits
-
     signal_frac_x = 0
     signal_frac_z = 0
 
@@ -61,25 +52,18 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         if len(pauli_string) != n_qubits:
             raise ValueError("OTOCS pauli_string must be same length as n_qubits! (Use 'I' for qubits that aren't changed.)")
 
-        for b in pauli_string:
-            match b:
-                case "X":
-                    fwd_z += diff_theta
-                    signal_frac_z += 1
-                case "Z":
-                    fwd_x += diff_phi
-                    signal_frac_x += 1
-                case "Y":
-                    fwd_z += diff_theta
-                    fwd_x += diff_phi
-                    signal_frac_x += 1
-                    signal_frac_z += 1
-                case _:
-                    pass
+        count_y = pauli_string.count("Y")
+        signal_frac_x += pauli_string.count("X") + count_y
+        signal_frac_z += pauli_string.count("Z") + count_y
 
     x_basis = init_thresholds(n_qubits, theta)
     if signal_frac_x:
-        signal_frac_x /= (n_qubits * len(pauli_strings))
+        phi = theta + np.pi / 2
+        fwd_x = probability_by_hamming_weight(-h, -J, z, phi, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(h, J, z, phi - np.pi, t, n_qubits + 1)
+        signal_frac_x /= n_qubits
+        fwd_x += signal_frac_x * (rev - fwd_x)
+        signal_frac_x /= len(pauli_strings)
         x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * fwd_x
         x_min = x_basis.min()
         if x_min < 0:
@@ -88,7 +72,11 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
 
     z_basis = hadamard(x_basis)
     if signal_frac_z:
-        signal_frac_z /= (n_qubits * len(pauli_strings))
+        fwd_z = probability_by_hamming_weight(J, h, z, theta, t, n_qubits + 1)
+        rev = probability_by_hamming_weight(-J, -h, z, theta + np.pi, t, n_qubits + 1)
+        signal_frac_z /= n_qubits
+        fwd_z += signal_frac_z * (rev - fwd_z)
+        signal_frac_z /= len(pauli_strings)
         z_basis = (1.0 - signal_frac_z) * z_basis + signal_frac_z * fwd_z
         z_min = z_basis.min()
         if z_min < 0:
