@@ -68,8 +68,15 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         signal_frac_x /= len(pauli_strings)
         x_basis = (1.0 - signal_frac_x) * x_basis + signal_frac_x * fwd_x
         x_min = x_basis.min()
+        x_max = x_basis.max()
+        is_norm = False
         if x_min < 0:
             x_basis -= x_min
+            is_norm = True
+        elif x_max > 1:
+            x_basis -= x_max - 1
+            is_norm = True
+        if is_norm:
             x_basis /= x_basis.sum()
 
     z_basis = hadamard(x_basis)
@@ -83,8 +90,15 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
         signal_frac_z /= len(pauli_strings)
         z_basis = (1.0 - signal_frac_z) * z_basis + signal_frac_z * fwd_z
         z_min = z_basis.min()
+        z_max = z_basis.max()
+        is_norm = False
         if z_min < 0:
             z_basis -= z_min
+            is_norm = True
+        elif z_max > 1:
+            z_basis -= z_max - 1
+            is_norm = True
+        if is_norm:
             z_basis /= z_basis.sum()
 
     return z_basis
