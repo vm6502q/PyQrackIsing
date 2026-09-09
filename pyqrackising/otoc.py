@@ -67,7 +67,7 @@ def get_otoc_hamming_distribution(J=-1.0, h=2.0, z=4, theta=0.0, t=5, n_qubits=6
                 case _:
                     pass
 
-    x_basis = init_thresholds(n_qubits) + diff_x
+    x_basis = init_thresholds(n_qubits, theta) + diff_x
     x_min = x_basis.min()
     if x_min < 0:
         x_basis -= x_min

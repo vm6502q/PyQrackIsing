@@ -555,24 +555,10 @@ def init_theta(h_mult, n_qubits, J_eff, degrees):
     return theta
 
 
-def init_thresholds(n_qubits):
+def init_thresholds(n_qubits, theta=0.0):
     n_bias = n_qubits + 1
-    thresholds = np.empty(n_bias, dtype=np.float64)
-    normalizer = 0
-    for q in range(n_bias >> 1):
-        normalizer += math.comb(n_qubits, q) << 1
-    if n_bias & 1:
-        normalizer += math.comb(n_qubits, n_qubits >> 1)
-    p = 1.0
-    for q in range(n_bias >> 1):
-        val = p / normalizer
-        thresholds[q] = val
-        thresholds[n_bias - (q + 1)] = val
-        p = math.comb(n_qubits, q + 1)
-    if n_bias & 1:
-        thresholds[n_qubits >> 1] = p / normalizer
-
-    return thresholds
+    p = (1.0 - np.sin(theta)) / 2.0
+    return np.array([math.comb(n_qubits, k) * (p ** k * (1.0 - p) ** (n_qubits - k)) for k in range(n_bias)])
 
 
 @njit(cache=True)
